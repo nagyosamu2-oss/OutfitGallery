@@ -1,4 +1,4 @@
-#include "Presets.h"
+﻿#include "Presets.h"
 #include "PresetEditing.h"
 #include <chrono>
 #include <atomic>
@@ -60,27 +60,29 @@ AutoOutfitSettings ReadAutoOutfitSettings(const std::filesystem::path& path) {
         throw std::runtime_error("Invalid auto outfit toggle setting");
     settings.hideAssignButtons=j.value("hideAssignButtons",false); settings.enabled=j.value("enabled",false); settings.paused=j.value("paused",false); settings.combatEnabled=j.value("combatEnabled",false);
     ValidateAutoSlots(settings.slots);
-    for(const auto* key:{"delaySeconds","columns","ostimRecoverySeconds","sneakDelaySeconds"}) if(j.contains(key) && !j.at(key).is_number_integer())
+    for(const auto* key:{"delaySeconds","columns","ostimRecoverySeconds","sneakDelaySeconds","combatIntervalSeconds"}) if(j.contains(key) && !j.at(key).is_number_integer())
         throw std::runtime_error("Invalid auto outfit numeric setting");
     if((j.contains("ostimRecoverySeconds") && (j["ostimRecoverySeconds"]<5 || j["ostimRecoverySeconds"]>30)) ||
        (j.contains("delaySeconds") && (j["delaySeconds"]<0 || j["delaySeconds"]>10)) ||
        (j.contains("columns") && (j["columns"]<3 || j["columns"]>5)))
         throw std::runtime_error("Auto outfit setting out of range");
     if(j.contains("sneakDelaySeconds") && (j["sneakDelaySeconds"]<0 || j["sneakDelaySeconds"]>5)) throw std::runtime_error("Auto outfit setting out of range");
+    if(j.contains("combatIntervalSeconds") && (j["combatIntervalSeconds"]<2 || j["combatIntervalSeconds"]>10)) throw std::runtime_error("Auto outfit setting out of range");
+    settings.combatIntervalSeconds=j.value("combatIntervalSeconds",5);
     settings.sneakDelaySeconds=j.value("sneakDelaySeconds",2);
     settings.ostimRecoverySeconds=j.value("ostimRecoverySeconds",10);
     settings.delaySeconds=j.value("delaySeconds",3); settings.columns=j.value("columns",3);
-    if(settings.sneakDelaySeconds<0 || settings.sneakDelaySeconds>5 || settings.ostimRecoverySeconds<5 || settings.ostimRecoverySeconds>30 || settings.delaySeconds<0 || settings.delaySeconds>10 || settings.columns<3 || settings.columns>5)
+    if(settings.combatIntervalSeconds<2 || settings.combatIntervalSeconds>10 || settings.sneakDelaySeconds<0 || settings.sneakDelaySeconds>5 || settings.ostimRecoverySeconds<5 || settings.ostimRecoverySeconds>30 || settings.delaySeconds<0 || settings.delaySeconds>10 || settings.columns<3 || settings.columns>5)
         throw std::runtime_error("Auto outfit setting out of range");
     return settings;
 }
 void WriteAutoOutfitSettings(const AutoOutfitSettings& settings,const std::filesystem::path& path) {
     ValidateAutoSlots(settings.slots);
-    if(settings.sneakDelaySeconds<0 || settings.sneakDelaySeconds>5 || settings.ostimRecoverySeconds<5 || settings.ostimRecoverySeconds>30 || settings.delaySeconds<0 || settings.delaySeconds>10 || settings.columns<3 || settings.columns>5)
+    if(settings.combatIntervalSeconds<2 || settings.combatIntervalSeconds>10 || settings.sneakDelaySeconds<0 || settings.sneakDelaySeconds>5 || settings.ostimRecoverySeconds<5 || settings.ostimRecoverySeconds>30 || settings.delaySeconds<0 || settings.delaySeconds>10 || settings.columns<3 || settings.columns>5)
         throw std::runtime_error("Auto outfit setting out of range");
     // Keep schema-1's original three slots so earlier trial versions can still read them.
     const std::array<std::string,3> legacySlots{settings.slots[0],settings.slots[1],settings.slots[2]};
-    Json j={{"schema",1},{"slots",legacySlots},{"innPhoto",settings.slots[3]},{"combatPhoto",settings.slots[4]},{"nightPhoto",settings.slots[5]},{"rainPhoto",settings.slots[6]},{"snowPhoto",settings.slots[7]},{"dungeonPhoto",settings.slots[8]},{"templePhoto",settings.slots[9]},{"swimmingPhoto",settings.slots[10]},{"dawnguardPhoto",settings.slots[11]},{"collegePhoto",settings.slots[12]},{"brotherhoodPhoto",settings.slots[13]},{"companionsPhoto",settings.slots[14]},{"bardsPhoto",settings.slots[15]},{"thievesPhoto",settings.slots[16]},{"bluePalacePhoto",settings.slots[17]},{"meleePhoto",settings.slots[18]},{"magicPhoto",settings.slots[19]},{"archeryPhoto",settings.slots[20]},{"unarmedPhoto",settings.slots[21]},{"sneakingPhoto",settings.slots[22]},{"smithingPhoto",settings.slots[23]},{"alchemyPhoto",settings.slots[24]},{"enchantingPhoto",settings.slots[25]},{"shopPhoto",settings.slots[26]},{"delaySeconds",settings.delaySeconds},{"sneakDelaySeconds",settings.sneakDelaySeconds},{"columns",settings.columns},{"ostimRecoverySeconds",settings.ostimRecoverySeconds},{"enabled",settings.enabled},{"paused",settings.paused},{"combatEnabled",settings.combatEnabled},{"hideAssignButtons",settings.hideAssignButtons}};
+    Json j={{"schema",1},{"slots",legacySlots},{"innPhoto",settings.slots[3]},{"combatPhoto",settings.slots[4]},{"nightPhoto",settings.slots[5]},{"rainPhoto",settings.slots[6]},{"snowPhoto",settings.slots[7]},{"dungeonPhoto",settings.slots[8]},{"templePhoto",settings.slots[9]},{"swimmingPhoto",settings.slots[10]},{"dawnguardPhoto",settings.slots[11]},{"collegePhoto",settings.slots[12]},{"brotherhoodPhoto",settings.slots[13]},{"companionsPhoto",settings.slots[14]},{"bardsPhoto",settings.slots[15]},{"thievesPhoto",settings.slots[16]},{"bluePalacePhoto",settings.slots[17]},{"meleePhoto",settings.slots[18]},{"magicPhoto",settings.slots[19]},{"archeryPhoto",settings.slots[20]},{"unarmedPhoto",settings.slots[21]},{"sneakingPhoto",settings.slots[22]},{"smithingPhoto",settings.slots[23]},{"alchemyPhoto",settings.slots[24]},{"enchantingPhoto",settings.slots[25]},{"shopPhoto",settings.slots[26]},{"combatIntervalSeconds",settings.combatIntervalSeconds},{"delaySeconds",settings.delaySeconds},{"sneakDelaySeconds",settings.sneakDelaySeconds},{"columns",settings.columns},{"ostimRecoverySeconds",settings.ostimRecoverySeconds},{"enabled",settings.enabled},{"paused",settings.paused},{"combatEnabled",settings.combatEnabled},{"hideAssignButtons",settings.hideAssignButtons}};
     std::filesystem::create_directories(path.parent_path()); auto tmp=path; tmp+=".tmp";
     {std::ofstream out(tmp,std::ios::binary); out.exceptions(std::ios::failbit|std::ios::badbit); out<<j.dump(2); out.close();}
     if(!MoveFileExW(tmp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))
@@ -216,6 +218,12 @@ Library ReadLibrary(const std::filesystem::path& path) {
         if(selected.size()>64) throw std::runtime_error("Invalid exchange slots.");
         for(const auto& id:selected) if(id.empty() || id.size()>280) throw std::runtime_error("Invalid exchange slots.");
         l.labels[key].exchangeSlotless=std::move(selected);
+    }
+    for(const auto& [key,value]:j.at("labels").items()) if(value.contains("outfitItems")) {
+        auto selected=value.at("outfitItems").get<std::vector<std::string>>();
+        if(selected.size()>256) throw std::runtime_error("Invalid exchange slots.");
+        for(const auto& id:selected) if(id.empty() || id.size()>280) throw std::runtime_error("Invalid exchange slots.");
+        l.labels[key].outfitItems=std::move(selected);
     }
     CheckLibrary(l); return l;
 }
@@ -368,6 +376,7 @@ void WriteLibrary(const Library& l,const std::filesystem::path& path) {
     j["order"]=l.order;
     for(const auto& c:l.categories) j["categories"].push_back({{"id",c.id},{"name",c.name}});
     for(const auto& [key,value]:l.labels) j["labels"][key]={{"name",value.name},{"categories",value.categories},{"deleted",value.deleted}};
+    for(const auto& [key,value]:l.labels) if(value.outfitItems) j["labels"][key]["outfitItems"]=*value.outfitItems;
     for(const auto& [key,value]:l.labels) if(value.exchangeSlots) {j["labels"][key]["exchangeSlots"]=*value.exchangeSlots;j["labels"][key]["exchangeSlotless"]=value.exchangeSlotless;}
     std::filesystem::create_directories(path.parent_path()); auto tmp=path; tmp+=".tmp";
     {std::ofstream out(tmp,std::ios::binary|std::ios::trunc); out.exceptions(std::ios::failbit|std::ios::badbit); out<<j.dump(2); out.close();}

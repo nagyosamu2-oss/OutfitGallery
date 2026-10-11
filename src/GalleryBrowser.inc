@@ -21,6 +21,8 @@ bool CommitLibrary(Library next) {
     catch(const std::exception& e) { SetStatus(e.what()); return false; }
 }
 
+#include "GalleryOrganizeUI.inc"
+
 void RenderBrowser(bool& addMissing) {
     static char search[160]{}, editName[241]{}, tabName[241]{};
     static std::string category, selected, contextPhoto, editCategory;
@@ -32,17 +34,20 @@ void RenderBrowser(bool& addMissing) {
     static std::uint32_t scopeDraft{};
     static std::vector<std::string> scopeSlotless;
     static bool scopeDraftInitialized{};
+    static std::optional<std::vector<std::string>> scopeItems;
 
     static std::vector<std::string> loaded;
     static std::string oldFilter;
     static bool tabsFocused{}, columnsFocused{};
     static unsigned lastOpen{};
     if(lastOpen!=studioOpenSerial.load()) {
+        EndOrganizer();
         SetMissingCheckMode(false);
         lastOpen=studioOpenSerial.load(); tabsFocused=false; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; selected.clear(); oldFilter.clear(); search[0]=0;
         category=ResolveStartupTab(startupTab,library);
         UI::ClearActiveID();
     }
+    if(organizer.active) {RenderOrganizer(); return;}
     std::optional<Preset> reveal;
     {std::scoped_lock lock(presetsMutex); reveal=std::move(revealAfterSave); revealAfterSave.reset();}
     if(reveal) {
@@ -154,18 +159,20 @@ void RenderBrowser(bool& addMissing) {
     ReceiveMissingCheck();
     if(missingCheckMode) UpdateMissingCounts();
     const auto* searchStyle=UI::GetStyle();
-    const float checkWidth=UI::GetFrameHeight()+searchStyle->ItemInnerSpacing.x+UI::CalcTextSize(Tr("Check missing gear")).x;
+    const float checkWidth=UI::GetFrameHeight()+searchStyle->ItemInnerSpacing.x+UI::CalcTextSize(Tr("Organize gallery")).x;
     const float searchGap=std::max(searchStyle->ItemSpacing.x*2.f,UI::GetFontSize()*.65f);
     const float checkX=UI::GetCursorPosX()+UI::GetContentRegionAvail().x-checkWidth;
     UI::SetNextItemWidth(std::max(32.f,checkX-searchGap-UI::CalcTextSize(Tr("Search outfits")).x-searchStyle->ItemInnerSpacing.x-UI::GetCursorPosX()));
     UI::InputText(Label("Search outfits"),search,sizeof(search));
     UI::SameLine(); UI::SetCursorPosX(checkX);
     UI::BeginDisabled(saveBusy);
-    bool requestedCheck=missingCheckMode;
-    if(UI::Checkbox(Label("Check missing gear"),&requestedCheck)) SetMissingCheckMode(requestedCheck);
+    if(UI::Button(Label("Organize gallery"))) {
+        for(const auto& path:loaded) DisposePortraitView(path);
+        loaded.clear(); StartOrganizer(category);
+    }
     if(missingCheckFocused) UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,3.f);
-    if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Marks outfits with missing parts, for example after removing a mod, with an X. Right-click a photo for details."));
     UI::EndDisabled();
+    if(organizer.active) {RenderOrganizer(); return;}
     if(missingCheckMode) {
         if(missingCheckPending) UI::TextColored({1.f,.8f,.35f,1.f},"%s",Tr("Missing-data check mode: checking..."));
         else if(!missingCheckError.empty()) {
@@ -177,8 +184,10 @@ void RenderBrowser(bool& addMissing) {
     }
 
     const bool modal=UI::IsPopupOpen(nullptr,UI::ImGuiPopupFlags_AnyPopupId);
-    const bool padIntent=framePadEdges || framePadRepeat;
-    if(padIntent && !modal && !bindingMode && !UI::IsMouseDown(0)) UI::ClearActiveID();
+    const bool padIntent=framePadEdges!=0;
+    if(PadInputPolicy::MayReleaseFocus(framePadEdges,modal,bindingMode!=0,UI::IsMouseDown(0))) {
+        UI::ClearActiveID();
+    }
     const bool navigating=!modal && !helpOpen && !bindingMode && (!UI::GetIO()->WantTextInput || padIntent) && !UI::IsAnyItemActive() && !saveBusy;
     const bool down=PadPressed(UI::ImGuiKey_GamepadDpadDown,true)||PadPressed(UI::ImGuiKey_GamepadLStickDown,true);
     const bool up=PadPressed(UI::ImGuiKey_GamepadDpadUp,true)||PadPressed(UI::ImGuiKey_GamepadLStickUp,true);
@@ -213,7 +222,10 @@ void RenderBrowser(bool& addMissing) {
     if(browse && tabsFocused && layoutButtonFocused && PadPressed(UI::ImGuiKey_GamepadFaceDown,false)) {
         portraitThumbnails=!portraitThumbnails; thumbnailModeChanged=true; SaveSettingsIfDue(true);
     }
-    if(browse && tabsFocused && missingCheckFocused && PadPressed(UI::ImGuiKey_GamepadFaceDown,false)) SetMissingCheckMode(!missingCheckMode);
+    if(browse && tabsFocused && missingCheckFocused && PadPressed(UI::ImGuiKey_GamepadFaceDown,false)) {
+        for(const auto& path:loaded) DisposePortraitView(path);
+        loaded.clear(); StartOrganizer(category); RenderOrganizer(); return;
+    }
     const auto* style=UI::GetStyle();
     const float tabHeight=UI::GetTextLineHeightWithSpacing();
     const auto categoryWidth=[&](const auto& c) {
@@ -356,7 +368,7 @@ void RenderBrowser(bool& addMissing) {
         if(saveBusy || category=="#trash") return;
         if(autoPanel) {autoSelectedPhoto=p.photo; return;}
         std::scoped_lock lock(presetsMutex); requestedPreset=p;
-        {const auto label=library.labels.find(p.photo); if(label!=library.labels.end()) {requestedPreset.exchangeSlots=label->second.exchangeSlots;requestedPreset.exchangeSlotless=label->second.exchangeSlotless;}}
+        {const auto label=library.labels.find(p.photo); if(label!=library.labels.end()) {requestedPreset.exchangeSlots=label->second.exchangeSlots;requestedPreset.exchangeSlotless=label->second.exchangeSlotless;requestedPreset.outfitItems=label->second.outfitItems;}}
         requestedAddMissing=addMissing; command=4;
     };
     if(browse && !cards.empty() && !tabsFocused && !enteredPhotos) {
@@ -432,8 +444,8 @@ void RenderBrowser(bool& addMissing) {
         // A full outfit override changes full replacement into selected-slot
         // replacement even when all saved slots are selected. For partial
         // outfits an explicit selection equal to the original is unchanged.
-        const bool editedScope=label!=library.labels.end() && label->second.exchangeSlots.has_value() &&
-            (!p.slotMask || *label->second.exchangeSlots!=p.slotMask);
+        const bool editedScope=label!=library.labels.end() && (label->second.outfitItems.has_value() || (label->second.exchangeSlots.has_value() &&
+            (!p.slotMask || *label->second.exchangeSlots!=p.slotMask)));
         if(editedScope) {
             auto* draw=UI::GetWindowDrawList();
             const float radius=std::clamp(w*.024f,3.5f,5.5f);
@@ -610,6 +622,7 @@ void RenderBrowser(bool& addMissing) {
                 scopeRequest=scopeEditing; scopeReady=false; scopeMasks.clear(); scopeError.clear();
             }
             const auto label=library.labels.find(contextPhoto);
+            scopeItems=label!=library.labels.end()?label->second.outfitItems:std::nullopt;
             scopeDraftInitialized=label!=library.labels.end() && label->second.exchangeSlots.has_value();
             scopeDraft=scopeDraftInitialized ? *label->second.exchangeSlots : 0;
             scopeSlotless=scopeDraftInitialized?label->second.exchangeSlotless:std::vector<std::string>{};
@@ -646,7 +659,8 @@ void RenderBrowser(bool& addMissing) {
         const float row=UI::GetFrameHeightWithSpacing();
         const float lowerRows=(scopeEditing.slotMask || scopeEditing.accessories)?10.f:9.f;
         const float scopeChoicesHeight=std::max(row*4.f,UI::GetContentRegionAvail().y-row*lowerRows-UI::GetStyle()->ItemSpacing.y*8.f);
-        UI::Spacing();BeginEquipmentSection("Scope section","Exchange slots",false);
+        const bool fullOutfit=!scopeEditing.slotMask && !scopeEditing.accessories;
+        UI::Spacing();BeginEquipmentSection("Scope section",fullOutfit?"Equipment to wear":"Exchange slots",false);
         bool readyScope; std::vector<std::uint32_t> masks; std::string error;
         {std::scoped_lock lock(presetsMutex); readyScope=scopeReady; masks=scopeMasks; error=scopeError;}
         if(!readyScope) UI::TextUnformatted(Tr("Loading equipment slots..."));
@@ -656,7 +670,24 @@ void RenderBrowser(bool& addMissing) {
             std::vector<std::string> allSlotless;
             for(std::size_t n=0;n<masks.size();++n) if(!masks[n] && scopeEditing.items[n].kind=="armor") allSlotless.push_back(ExchangeItemKey(scopeEditing.items[n]));
             if(!scopeDraftInitialized) {scopeDraft=available;scopeSlotless=allSlotless;scopeDraftInitialized=true;}
+            if(fullOutfit && !scopeItems) {
+                auto legacy=scopeEditing;
+                if(scopeDraftInitialized) {legacy.exchangeSlots=scopeDraft;legacy.exchangeSlotless=scopeSlotless;}
+                const auto filtered=FilterExchangeSlots(legacy,masks);
+                scopeItems=std::vector<std::string>{};
+                for(const auto& item:filtered.items) if(item.kind=="armor") scopeItems->push_back(ExchangeItemKey(item));
+            }
             UI::BeginChild("Scope choices",{0,scopeChoicesHeight});
+            if(fullOutfit) {
+                for(std::size_t n=0;n<scopeEditing.items.size();++n) {
+                    const auto& item=scopeEditing.items[n]; if(item.kind!="armor") continue;
+                    const auto key=ExchangeItemKey(item);
+                    bool checked=std::find(scopeItems->begin(),scopeItems->end(),key)!=scopeItems->end();
+                    UI::PushID(static_cast<int>(n));
+                    if(UI::Checkbox(item.name.c_str(),&checked)) {if(checked) scopeItems->push_back(key);else std::erase(*scopeItems,key);}
+                    UI::PopID();
+                }
+            } else {
             for(unsigned bit=0;bit<32;++bit) if(available&(1u<<bit)) {
                 bool checked=(scopeDraft&(1u<<bit))!=0;
                 if(UI::Checkbox(std::to_string(bit+30).c_str(),&checked)) {
@@ -671,17 +702,20 @@ void RenderBrowser(bool& addMissing) {
                 if(UI::Checkbox(scopeEditing.items[n].name.c_str(),&checked)) {if(checked) scopeSlotless.push_back(key);else std::erase(scopeSlotless,key);}
                 UI::PopID();UI::SameLine();UI::TextUnformatted(Tr("Slotless equipment"));
             }
+            }
             UI::EndChild();
-            if(UI::Button(Label("Select all slots"))) {scopeDraft=available;scopeSlotless=allSlotless;}
-            UI::SameLine(); if(UI::Button(Label("Clear slot selection"))) {scopeDraft=0;scopeSlotless.clear();}
-            if(!scopeDraft && scopeSlotless.empty()) UI::TextUnformatted(Tr("No exchange slots selected. Equipment unchanged."));
-            if(UI::Button(Label("Save exchange slots"))) {
-                auto next=library; next.labels[scopeEditing.photo].exchangeSlots=scopeDraft;next.labels[scopeEditing.photo].exchangeSlotless=scopeSlotless;
-                if(CommitLibrary(std::move(next))) {SetStatus("Exchange slots saved. Applies on the next outfit change."); UI::CloseCurrentPopup();}
+            if(UI::Button(Label("Select all slots"))) {scopeDraft=available;scopeSlotless=allSlotless;if(fullOutfit) {scopeItems=std::vector<std::string>{};for(const auto& item:scopeEditing.items) if(item.kind=="armor") scopeItems->push_back(ExchangeItemKey(item));}}
+            UI::SameLine(); if(UI::Button(Label("Clear slot selection"))) {scopeDraft=0;scopeSlotless.clear();if(fullOutfit) scopeItems=std::vector<std::string>{};}
+            if(fullOutfit?scopeItems->empty():(!scopeDraft && scopeSlotless.empty())) UI::TextUnformatted(Tr(fullOutfit?"No equipment selected. Equipment unchanged.":"No exchange slots selected. Equipment unchanged."));
+            if(UI::Button(Label(fullOutfit?"Save equipment selection":"Save exchange slots"))) {
+                auto next=library;
+                if(fullOutfit) {auto& label=next.labels[scopeEditing.photo];label.outfitItems=scopeItems;label.exchangeSlots.reset();label.exchangeSlotless.clear();}
+                else {next.labels[scopeEditing.photo].exchangeSlots=scopeDraft;next.labels[scopeEditing.photo].exchangeSlotless=scopeSlotless;}
+                if(CommitLibrary(std::move(next))) {SetStatus(fullOutfit?"Equipment selection saved. Applies on the next outfit change.":"Exchange slots saved. Applies on the next outfit change."); UI::CloseCurrentPopup();}
             }
         }
-        if(UI::Button(Label("Restore original slot range"))) {
-            auto next=library; next.labels[scopeEditing.photo].exchangeSlots.reset();next.labels[scopeEditing.photo].exchangeSlotless.clear();
+        if(UI::Button(Label(fullOutfit?"Use all saved equipment":"Restore original slot range"))) {
+            auto next=library; next.labels[scopeEditing.photo].exchangeSlots.reset();next.labels[scopeEditing.photo].exchangeSlotless.clear();next.labels[scopeEditing.photo].outfitItems.reset();
             if(CommitLibrary(std::move(next))) UI::CloseCurrentPopup();
         }
         UI::EndChild();UI::Spacing();UI::Spacing();
@@ -689,9 +723,12 @@ void RenderBrowser(bool& addMissing) {
         if(RenderPresetEditor(scopeEditing,libraryWritable && !editPending)) UI::CloseCurrentPopup();
         UI::EndChild();UI::Spacing();
         if(UI::CollapsingHeader(Label("Equipment help"))) {
+        if(fullOutfit) UI::TextWrapped("%s",Tr("Replace the full outfit with checked equipment. Unchecked equipment stays saved but is not worn. Previous outfit items are removed."));
+        else {
         UI::TextWrapped("%s",Tr("Slot selection changes only the exchange range. Equipment editing changes the saved outfit contents."));
         UI::TextWrapped(Tr("Items sharing a slot change together. Multi-slot items require all their slots."));
         UI::TextWrapped(Tr("Worn items overlapping selected slots are replaced as whole items, including their other slots."));
+        }
         }
         UI::EndChild();
         UI::BeginDisabled(editPending);

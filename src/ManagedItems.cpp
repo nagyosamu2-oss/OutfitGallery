@@ -331,7 +331,7 @@ void TrackNewManagedItems(RE::Actor* actor, bool compatibility) {
 void ReclaimManagedItems(RE::Actor* actor) {
     CleanupTiming timing{"reclaim"};
     if(!actor || !actor->Get3D() || actor->IsDead() || actor->IsDisabled()) return;
-    if(actor!=RE::PlayerCharacter::GetSingleton() && (!actor->IsPlayerTeammate() || actor->IsInCombat())) return;
+    if(actor!=RE::PlayerCharacter::GetSingleton() && (!IsCurrentOutfitFollower(actor) || actor->IsInCombat())) return;
     try {InspectDepartedItems(actor);} catch(...) {GALLERY_DIAG("OG-TRANSFER-DIAG inspection failed; ordinary cleanup unchanged");}
     std::set<Identity> copy;
     {

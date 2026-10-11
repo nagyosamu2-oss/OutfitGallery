@@ -37,17 +37,39 @@ void SaveInputSettings(const InputSettings& s) {
     hotkey=s.keyboard; keyboardModifiers=s.keyboardModifiers; gamepadHotkey=s.gamepad; padHoldSeconds=s.holdSeconds;
     for(unsigned n=0;n<3;++n) {captureKeys[n]=s.captureKeys[n];capturePads[n]=s.capturePads[n];}
 }
+#include "PadInputPolicy.h"
 unsigned framePadEdges{},framePadRepeat{};
+PadInputPolicy::RepeatState padRepeatState;
+unsigned appliedPadReset{};
+
 void UpdatePadFrame() {
-    framePadEdges=padEdges.exchange(0); framePadRepeat=framePadEdges;
-    const auto held=padHeld.load(); const auto now=GetTickCount64();
-    static std::array<ULONGLONG,18> next{};
-    for(unsigned n=0;n<18;++n) {const auto bit=1u<<n;
-        if(framePadEdges&bit) next[n]=now+350;
-        else if((held&bit) && now>=next[n]) {framePadRepeat|=bit;next[n]=now+100;}
-        if(!(held&bit)) next[n]=now+350;
+    const auto serial=padResetSerial.load();
+    if(appliedPadReset!=serial) {
+        appliedPadReset=serial; padRepeatState.Reset();
+        framePadEdges=framePadRepeat=0;
+        return; // Do not treat the opening button as gallery navigation.
     }
+    framePadEdges=padEdges.exchange(0);
+    // Use one authoritative source for mapped UI buttons. Raw and translated
+    // events can arrive in different frames; merging both double-counts a press.
+    const std::pair<UI::ImGuiKey,unsigned> keys[]={
+        {UI::ImGuiKey_GamepadDpadUp,1},{UI::ImGuiKey_GamepadDpadDown,2},
+        {UI::ImGuiKey_GamepadDpadLeft,4},{UI::ImGuiKey_GamepadDpadRight,8},
+        {UI::ImGuiKey_GamepadL1,256},{UI::ImGuiKey_GamepadR1,512},
+        {UI::ImGuiKey_GamepadL2,0x10000},{UI::ImGuiKey_GamepadR2,0x20000},
+        {UI::ImGuiKey_GamepadFaceDown,4096},{UI::ImGuiKey_GamepadFaceRight,8192},
+        {UI::ImGuiKey_GamepadR3,128}};
+    unsigned mapped=0, translatedEdges=0, translatedHeld=0;
+    for(const auto& [key,bit]:keys) {
+        mapped|=bit;
+        if(UI::IsKeyPressed(key,false)) translatedEdges|=bit;
+        if(UI::IsKeyDown(key)) translatedHeld|=bit;
+    }
+    framePadEdges=PadInputPolicy::SelectSource(framePadEdges,translatedEdges,mapped);
+    const auto held=PadInputPolicy::SelectSource(padHeld.load(),translatedHeld,mapped);
+    framePadRepeat=padRepeatState.Update(framePadEdges,held,GetTickCount64());
 }
+
 bool RawPadPressed(unsigned code,bool repeat=false) {
     const unsigned bit=code==9?0x10000u:code==10?0x20000u:code;
     return code && ((repeat?framePadRepeat:framePadEdges)&bit)!=0;

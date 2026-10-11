@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <array>
 #include <string>
 #include <cstdint>
@@ -83,11 +83,11 @@ struct Policy {
     std::string lastPhoto;
     void Block() {candidate=-1;}
     void Manual(int place) {manual=place; stable=place; handled=true; lastPhoto.clear(); candidate=-1;}
-    bool Observe(int place,std::uint64_t now,std::uint64_t delayMs=3000) {
+    bool Observe(int place,std::uint64_t now,std::uint64_t delayMs=3000,std::uint64_t combatIntervalMs=5000) {
         if(candidate!=place) {candidate=place; since=now;}
         if(now-since<delayMs) return false;
         if(stable!=place) {stable=place; handled=false; if(manual!=place) manual=-1;}
-        return manual!=place && !handled && (!lastAttempt || now-lastAttempt>=5000);
+        return manual!=place && !handled && (!lastAttempt || now-lastAttempt>=(IsCombat(static_cast<Place>(place))?combatIntervalMs:5000));
     }
     bool Attempt(const std::string& photo,std::uint64_t now) {
         handled=true; lastAttempt=now;

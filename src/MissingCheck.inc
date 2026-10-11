@@ -28,7 +28,7 @@ void SetMissingCheckMode(bool enabled) {
             response.results=CheckMissingPresetData(snapshot,[&](const Item& item) {
                 if(!current()) throw std::runtime_error("Cancelled");
                 ++lookups;
-                auto* form=handler->LookupForm(item.localID,item.plugin);
+                auto* form=ResolveItem(item);
                 return form && form->As<RE::TESObjectARMO>();
             });
         } catch(const std::exception& e) {response.results.clear(); response.error=e.what();}

@@ -1,4 +1,4 @@
-#include "Presets.h"
+﻿#include "Presets.h"
 #include <iostream>
 #include <stdexcept>
 int main() {
@@ -28,11 +28,11 @@ int main() {
         p.items[0].preferred={true,123,5,"enchantment"};
         if(AvailableExchangeSlots(p,{2,2,8})!=10) throw std::runtime_error("full outfit slots missing");
         result=FilterExchangeSlots(p,{2,2,8});
-        if(result.slotMask!=2 || result.items.size()!=2 || result.items[0].preferred.signature!="enchantment" || p.slotMask || p.items.size()!=3)
+        if(result.slotMask!=0 || result.accessories || result.items.size()!=2 || result.items[0].preferred.signature!="enchantment" || p.slotMask || p.items.size()!=3)
             throw std::runtime_error("full outfit subset changed original or enchantment");
         if(ReplaceWornForScope(8,result.slotMask)) throw std::runtime_error("unselected armor replaced");
         p.exchangeSlots=10; result=FilterExchangeSlots(p,{2,2,8});
-        if(result.slotMask!=10 || result.items.size()!=3) throw std::runtime_error("select all reverted to full replacement");
+        if(result.slotMask!=0 || result.items.size()!=3) throw std::runtime_error("select all reverted to full replacement");
         p.exchangeSlots=0; result=FilterExchangeSlots(p,{2,2,8});
         if(!result.items.empty() || !result.exchangeSlots || *result.exchangeSlots) throw std::runtime_error("full outfit clear is not explicit no-op");
         p.exchangeSlots=4; caught=false;try{FilterExchangeSlots(p,{2,2,8});}catch(const std::exception&){caught=true;}
@@ -43,6 +43,13 @@ int main() {
         p.exchangeSlots=10; result=FilterExchangeSlots(p,{2,2,8,0});
         if(result.items.size()!=3) throw std::runtime_error("legacy weapon entered armor selection");
         if(AvailableExchangeSlots(p,{2,2,8,0x80000000u})!=10) throw std::runtime_error("legacy weapon contributed slots");
+        p.outfitItems=std::vector<std::string>{ExchangeItemKey(p.items[1])};
+        result=FilterExchangeSlots(p,{});
+        if(result.items.size()!=1 || result.items[0].localID!=2 || result.slotMask || result.accessories) throw std::runtime_error("independent item sharing slot failed");
+        p.outfitItems.reset();p.items.back().kind="armor";
+        p.exchangeSlots=0;p.exchangeSlotless={ExchangeItemKey(p.items.back())};
+        result=FilterExchangeSlots(p,{2,2,8,0});
+        if(result.slotMask || result.accessories || result.items.size()!=1) throw std::runtime_error("full slotless selection became partial");
         std::cout<<"PASS: linked slots, shared slots, high bit, conflict boundaries, invalid scope resolution\n";
         return 0;
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}

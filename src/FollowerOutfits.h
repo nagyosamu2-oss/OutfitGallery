@@ -1,5 +1,7 @@
 #pragma once
 namespace Gallery {
+const char* FollowerUnsafeReason(RE::Actor*); // nullptr means ordinary usable state; game thread
+bool IsCurrentOutfitFollower(RE::Actor*); // game thread; includes Sofia sandbox compatibility
 unsigned MaintainedFollowerCount(); // thread-safe count, no actor lookup
 void ClearFollowerOutfits();
 void SaveFollowerOutfits(SKSE::SerializationInterface*);

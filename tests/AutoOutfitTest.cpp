@@ -189,6 +189,26 @@ int main() {
         bool rejected=false;try{ReadAutoOutfitSettings(file);}catch(const std::exception&){rejected=true;}
         require(rejected,"invalid persisted sneak delay rejected");
     }
+
+    {std::ofstream out(file);out<<R"({"schema":1,"slots":["old.png","",""]})";}
+    require(ReadAutoOutfitSettings(file).combatIntervalSeconds==5,"legacy combat interval defaults to five");
+    for(int interval:{2,5,10}) {
+        AutoOutfitSettings settings{extended,3,4,12,true,false,true,true};
+        settings.combatIntervalSeconds=interval;
+        WriteAutoOutfitSettings(settings,file);
+        const auto read=ReadAutoOutfitSettings(file);
+        require(read.combatIntervalSeconds==interval && read.slots==extended && read.delaySeconds==3 && read.combatEnabled,"combat interval roundtrip preserves preferences");
+    }
+    for(int interval:{1,11}) {
+        auto settings=ReadAutoOutfitSettings(file);settings.combatIntervalSeconds=interval;
+        bool invalid=false;try{WriteAutoOutfitSettings(settings,file);}catch(const std::exception&){invalid=true;}
+        require(invalid && ReadAutoOutfitSettings(file).combatIntervalSeconds==10,"invalid interval write preserves settings");
+    }
+    for(const auto* value:{"1","11","2.5","true","null","4294967298"}) {
+        {std::ofstream out(file);out<<"{\"schema\":1,\"slots\":[\"\",\"\",\"\"],\"combatIntervalSeconds\":"<<value<<"}";}
+        bool invalid=false;try{ReadAutoOutfitSettings(file);}catch(const std::exception&){invalid=true;}
+        require(invalid,"invalid persisted combat interval rejected");
+    }
     std::filesystem::remove(file); std::filesystem::remove(folder);
     require(Classify(false,false,false,true,false,false)==Place::Normal,"outdoor dungeon approach stays normal");
     require(Classify(false,false,true,true,false,false)==Place::Town,"outdoor dungeon retains town");

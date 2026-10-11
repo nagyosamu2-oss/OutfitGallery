@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <functional>
 #include <algorithm>
 #include <filesystem>
@@ -13,7 +13,7 @@
 namespace RE { class Actor; }
 namespace Gallery {
 using AutoOutfitSlots=std::array<std::string,27>; // Default, Town, Home, Inn, Combat, Night, Rain, Snow, Dungeon, Temple, Swimming, six guild bases; existing indices stay stable
-struct AutoOutfitSettings { AutoOutfitSlots slots; int delaySeconds{3}; int columns{3}; int ostimRecoverySeconds{10}; bool enabled{}, paused{}, combatEnabled{}, hideAssignButtons{}; int sneakDelaySeconds{2}; };
+struct AutoOutfitSettings { AutoOutfitSlots slots; int delaySeconds{3}; int columns{3}; int ostimRecoverySeconds{10}; bool enabled{}, paused{}, combatEnabled{}, hideAssignButtons{}; int sneakDelaySeconds{2}; int combatIntervalSeconds{5}; };
 AutoOutfitSettings ReadAutoOutfitSettings(const std::filesystem::path&);
 void WriteAutoOutfitSettings(const AutoOutfitSettings&,const std::filesystem::path&);
 struct InputSettings { unsigned keyboard{66}, gamepad{32}; float holdSeconds{0.8f}; std::array<unsigned,3> captureKeys{67,68,87}; std::array<unsigned,3> capturePads{32768,16384,64}; unsigned keyboardModifiers{}; unsigned autoKeyboard{}, autoModifiers{}, autoGamepad{}; float autoHoldSeconds{.8f}; };
@@ -24,7 +24,7 @@ using CameraBank=std::array<std::optional<StudioSettings>,7>;
 CameraBank ReadCameraBank(const std::filesystem::path&);
 void WriteCameraBank(const CameraBank&,const std::filesystem::path&);
 struct Category { std::string id, name; };
-struct PresetLabel { std::string name; std::vector<std::string> categories; bool deleted{}; std::optional<std::uint32_t> exchangeSlots; std::vector<std::string> exchangeSlotless; };
+struct PresetLabel { std::string name; std::vector<std::string> categories; bool deleted{}; std::optional<std::uint32_t> exchangeSlots; std::vector<std::string> exchangeSlotless; std::optional<std::vector<std::string>> outfitItems; };
 struct Library { std::vector<Category> categories; std::map<std::string,PresetLabel> labels; std::vector<std::string> order; };
 inline std::string ResolveStartupTab(const std::string& preferred,const Library& library) {
     if(preferred.empty() || preferred=="#head" || preferred=="#accessories" || preferred=="#trash") return preferred;
@@ -43,7 +43,7 @@ void WriteLibrary(const Library&,const std::filesystem::path&);
 StudioSettings ReadStudioSettings(const std::filesystem::path&);
 void WriteStudioSettings(const StudioSettings&, const std::filesystem::path&);
 struct Item { std::string plugin; std::uint32_t localID{}; std::string name; std::string kind; std::string hand; PreferredItem preferred; };
-struct Preset { std::string name; std::string photo; std::vector<Item> items; std::uint32_t slotMask{}; bool accessories{}; std::optional<std::uint32_t> exchangeSlots; bool equipmentEdited{}; std::vector<std::string> exchangeSlotless; };
+struct Preset { std::string name; std::string photo; std::vector<Item> items; std::uint32_t slotMask{}; bool accessories{}; std::optional<std::uint32_t> exchangeSlots; bool equipmentEdited{}; std::vector<std::string> exchangeSlotless; std::optional<std::vector<std::string>> outfitItems; };
 inline std::string ExchangeItemKey(const Item& item) {return item.plugin+":"+std::to_string(item.localID);}
 // Old presets may contain weapons/ammo. Keep their files readable, but never
 // apply those entries or include them in post-apply verification.
@@ -95,20 +95,26 @@ inline std::uint32_t AvailableExchangeSlots(const Preset& source,const std::vect
 }
 // Pure scope policy; no inventory mutation. Zero override always means no-op.
 inline Preset FilterExchangeSlots(const Preset& source,const std::vector<std::uint32_t>& masks) {
+    if(!source.slotMask && !source.accessories && source.outfitItems) {
+        auto result=source; result.items.clear();
+        for(const auto& item:source.items) if(item.kind=="armor" &&
+            std::find(source.outfitItems->begin(),source.outfitItems->end(),ExchangeItemKey(item))!=source.outfitItems->end()) result.items.push_back(item);
+        return result;
+    }
     if(!source.exchangeSlots) return source;
     if(*source.exchangeSlots & ~AvailableExchangeSlots(source,masks))
         throw std::runtime_error("Invalid exchange slots.");
-    auto result=source; result.slotMask=*source.exchangeSlots; result.items.clear();
+    auto result=source; const auto selectedMask=*source.exchangeSlots; result.slotMask=(source.slotMask || source.accessories)?selectedMask:0; result.items.clear();
     for(std::size_t n=0;n<masks.size();++n) {
         if(source.items[n].kind!="armor") continue;
         if(!masks[n] && std::find(source.exchangeSlotless.begin(),source.exchangeSlotless.end(),ExchangeItemKey(source.items[n]))!=source.exchangeSlotless.end()) {
-            result.items.push_back(source.items[n]);result.accessories=true;continue;
+            result.items.push_back(source.items[n]);if(source.slotMask || source.accessories) result.accessories=true;continue;
         }
-        if(!SlotIntersects(masks[n],result.slotMask)) continue;
-        if(!SlotFits(masks[n],result.slotMask)) throw std::runtime_error("Select all slots used by each item.");
+        if(!SlotIntersects(masks[n],selectedMask)) continue;
+        if(!SlotFits(masks[n],selectedMask)) throw std::runtime_error("Select all slots used by each item.");
         result.items.push_back(source.items[n]);
     }
-    if((result.slotMask || !source.exchangeSlotless.empty()) && result.items.empty()) throw std::runtime_error("No saved items in the selected slots.");
+    if((selectedMask || !source.exchangeSlotless.empty()) && result.items.empty()) throw std::runtime_error("No saved items in the selected slots.");
     return result;
 }
 std::vector<std::uint32_t> ResolvePresetSlots(const Preset&); // game thread only

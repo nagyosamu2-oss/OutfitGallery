@@ -1,4 +1,4 @@
-# Building Outfit Gallery 1.0.13
+# Building Outfit Gallery 1.0.14
 
 Use Windows x64, Visual Studio 2022 C++ tools (tested MSVC 19.44), CMake 3.24+, Ninja and C++23 support.
 

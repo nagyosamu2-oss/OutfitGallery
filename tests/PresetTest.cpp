@@ -1,4 +1,4 @@
-#include "Presets.h"
+﻿#include "Presets.h"
 #include "HoldButton.h"
 #include "DiagnosticSettings.h"
 #include <fstream>
@@ -265,6 +265,16 @@ int main() {
         WriteLibrary(selectedItems,folder/"selected-items.json");
         const auto selectedRead=ReadLibrary(folder/"selected-items.json");
         if(selectedRead.labels.at("mixed.png").exchangeSlots!=0 || selectedRead.labels.at("mixed.png").exchangeSlotless!=std::vector<std::string>{"Gear.esp:2"}) throw std::runtime_error("Slotless selection persistence failed");
+        Library itemChoice; itemChoice.labels["full.png"].outfitItems=std::vector<std::string>{"Gear.esp:2"};
+        itemChoice.labels["empty.png"].outfitItems=std::vector<std::string>{};
+        WriteLibrary(itemChoice,folder/"item-choice.json");
+        const auto choiceRead=ReadLibrary(folder/"item-choice.json");
+        if(choiceRead.labels.at("full.png").outfitItems!=itemChoice.labels.at("full.png").outfitItems || !choiceRead.labels.at("empty.png").outfitItems || !choiceRead.labels.at("empty.png").outfitItems->empty()) throw std::runtime_error("Full item selection persistence failed");
+        auto full=mixed;full.slotMask=0;full.accessories=false;full.outfitItems=std::vector<std::string>{"Gear.esp:2"};
+        const auto selectedFull=FilterExchangeSlots(full,{});
+        if(selectedFull.slotMask || selectedFull.accessories || selectedFull.items.size()!=1 || selectedFull.items[0].localID!=2 || full.items.size()!=3) throw std::runtime_error("Full selection lost replacement mode or changed source");
+        full.outfitItems=std::vector<std::string>{"Gear.esp:1"};
+        if(FilterExchangeSlots(full,{}).items[0].localID!=1) throw std::runtime_error("Item selection requires slot resolution");
         Library scopes; scopes.labels["portrait-1.png"].exchangeSlots=0;
         WriteLibrary(scopes,folder/"scopes.json");
         auto scopeLoaded=ReadLibrary(folder/"scopes.json");

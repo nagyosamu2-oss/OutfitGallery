@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(OutfitGallery VERSION 1.0.13 LANGUAGES CXX)
+project(OutfitGallery VERSION 1.0.14 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)
 set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
@@ -152,3 +152,29 @@ endif()
 
 
 
+
+if(GALLERY_TESTS)
+  add_executable(GalleryOrganizeTest tests/GalleryOrganizeTest.cpp)
+  target_include_directories(GalleryOrganizeTest PRIVATE src)
+  target_compile_options(GalleryOrganizeTest PRIVATE /utf-8 /EHsc)
+  add_test(NAME GalleryOrganizeTransactions COMMAND GalleryOrganizeTest)
+endif()
+
+if(GALLERY_TESTS)
+ add_executable(PadInputPolicyTest tests/PadInputPolicyTest.cpp)
+ target_include_directories(PadInputPolicyTest PRIVATE src)
+ add_test(NAME PadInputFocusPolicy COMMAND PadInputPolicyTest)
+endif()
+
+if(GALLERY_TESTS)
+add_executable(CombatIntervalTest tests/CombatIntervalTest.cpp)
+target_include_directories(CombatIntervalTest PRIVATE src)
+add_test(NAME CombatMinimumInterval COMMAND CombatIntervalTest)
+endif()
+
+if(GALLERY_TESTS)
+ add_executable(FormIdentityTest tests/FormIdentityTest.cpp)
+ target_include_directories(FormIdentityTest PRIVATE src)
+ target_compile_options(FormIdentityTest PRIVATE /utf-8 /EHsc)
+ add_test(NAME InjectedFormIdentity COMMAND FormIdentityTest)
+endif()

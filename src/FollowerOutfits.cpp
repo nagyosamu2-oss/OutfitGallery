@@ -1,5 +1,7 @@
+#include "ItemIdentity.h"
 #include "Presets.h"
 #include "FollowerOutfits.h"
+#include "StudioSafety.h"
 #include "FollowerOutfitState.h"
 #include "ManagedItems.h"
 #include <mutex>
@@ -8,6 +10,33 @@
 #include <atomic>
 
 namespace Gallery {
+const char* FollowerUnsafeReason(RE::Actor* actor) {
+    if(!actor) return FollowerStateReason({.unavailable=true});
+    const auto* state=actor->AsActorState();
+    return FollowerStateReason({!actor->Get3D() || actor->IsDisabled(), actor->IsDead(),
+        actor->IsInKillMove(), actor->IsInRagdollState(), state->IsUnconscious(),
+        actor->IsOnMount(), state->IsSwimming(), actor->IsInMidair()});
+}
+bool IsCurrentOutfitFollower(RE::Actor* actor) {
+    if(!actor || actor==RE::PlayerCharacter::GetSingleton()) return false;
+    const bool teammate=actor->IsPlayerTeammate();
+    bool sofiaMatch=false, forms=false, hired=false, dismissed=false;
+    if(auto* data=RE::TESDataHandler::GetSingleton()) {
+        constexpr auto plugin="SofiaFollower.esp";
+        sofiaMatch=actor==data->LookupForm<RE::Actor>(0x001827,plugin);
+        if(sofiaMatch) {
+            auto* hireFaction=data->LookupForm<RE::TESFaction>(0x060480,plugin);
+            auto* dismissFaction=data->LookupForm<RE::TESFaction>(0x060481,plugin);
+            forms=hireFaction && dismissFaction;
+            hired=hireFaction && actor->IsInFaction(hireFaction);
+            dismissed=dismissFaction && actor->IsInFaction(dismissFaction);
+        }
+    }
+    const bool fallback=sofiaMatch && forms && hired && !dismissed;
+    const bool accepted=teammate || fallback;
+    return accepted;
+}
+
 namespace {
 constexpr std::uint32_t record=0x464F5554; // FOUT, actor + count + armor IDs
 std::mutex stateMutex;
@@ -17,15 +46,12 @@ std::atomic<bool> hasOutfits{};
 std::atomic<ULONGLONG> nextPoll{};
 
 bool Eligible(RE::Actor* actor) {
-    return actor && actor!=RE::PlayerCharacter::GetSingleton() && actor->IsPlayerTeammate() &&
-        actor->Get3D() && !actor->IsDisabled() && !actor->IsDead() && !actor->IsInCombat() &&
-        !actor->IsOnMount() && !actor->AsActorState()->IsSwimming() &&
-        actor->AsActorState()->GetSitSleepState()==RE::SIT_SLEEP_STATE::kNormal && !actor->GetCurrentScene();
+    return IsCurrentOutfitFollower(actor) && !FollowerUnsafeReason(actor) && !actor->IsInCombat();
 }
 Item ArmorItem(RE::TESObjectARMO* armor) {
-    auto* file=armor?armor->GetFile(0):nullptr;
+    auto* file=armor?ItemOwner(armor):nullptr;
     if(!file || (armor->GetFormID()>>24)==0xFF) throw std::runtime_error("Cannot save a dynamically generated item");
-    return {std::string(file->GetFilename()),armor->GetFormID() & (file->IsLight()?0xFFFu:0xFFFFFFu),armor->GetName()?armor->GetName():"","armor",""};
+    return {std::string(file->GetFilename()),LocalFormID(armor->GetFormID()),armor->GetName()?armor->GetName():"","armor",""};
 }
 Preset Desired(const FollowerOutfitState& state) {
     Preset p; p.name="Maintained follower outfit";
@@ -86,7 +112,7 @@ void RememberFollowerOutfit(RE::Actor* actor) {
     // Validate a restorable armor-only snapshot, including library persistence.
     const auto snapshot=SnapshotEquipment(actor);
     for(const auto& item:snapshot.items) {
-        auto* form=RE::TESDataHandler::GetSingleton()->LookupForm(item.localID,item.plugin);
+        auto* form=ResolveItem(item);
         if(!form || !form->As<RE::TESObjectARMO>()) throw std::runtime_error("Maintained follower armor is unavailable");
         state.armor.push_back(form->GetFormID());
     }

@@ -1,4 +1,4 @@
-// Game-thread session state. Event callbacks retain handles/values only.
+﻿// Game-thread session state. Event callbacks retain handles/values only.
 Craft::Session craft;
 RE::ObjectRefHandle craftFurniture;
 std::atomic<unsigned> craftMenuSerial{};
@@ -57,7 +57,9 @@ bool MaintainCraft(RE::PlayerCharacter* player,RE::UI* ui,ULONGLONG now) {
                 const auto labels=ReadLibrary(file);const auto it=labels.labels.find(photo);
                 if(it!=labels.labels.end() && (it->second.deleted || it->second.exchangeSlots))
                     throw std::runtime_error("Assigned preset is deleted or has slot overrides");
+                if(it!=labels.labels.end()) p.outfitItems=it->second.outfitItems;
             }
+            if(p.outfitItems) p=FilterExchangeSlots(p,{});
             (void)ResolvePresetSlots(p);
             if(ClothingPreset(p).items.empty()) throw std::runtime_error("Assigned outfit has no armor");
             // Recheck after disk work. A menu that opened and closed also invalidates the attempt.

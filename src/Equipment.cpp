@@ -1,3 +1,4 @@
+#include "ItemIdentity.h"
 #include "Presets.h"
 #include "Diagnostics.h"
 #include "ManagedItems.h"
@@ -18,10 +19,10 @@ const RE::BGSEquipSlot* Slot(const std::string& hand) {
         hand == "left" ? RE::DEFAULT_OBJECT::kLeftHandEquip : RE::DEFAULT_OBJECT::kRightHandEquip);
 }
 Item Encode(RE::TESBoundObject* obj, const std::string& hand) {
-    auto* file = obj->GetFile(0);
+    auto* file = ItemOwner(obj);
     if (!file || (obj->GetFormID() >> 24) == 0xFF) throw std::runtime_error("Cannot save a dynamically generated item");
     // Strip the load index, including the ESL light-plugin index.
-    const auto id = obj->GetFormID() & (file->IsLight() ? 0xFFFu : 0xFFFFFFu);
+    const auto id = LocalFormID(obj->GetFormID());
     return {std::string(file->GetFilename()),id,obj->GetName() ? obj->GetName() : "",Kind(obj),hand};
 }
 }
@@ -31,7 +32,7 @@ std::vector<std::uint32_t> ResolvePresetSlots(const Preset& p) {
     std::vector<std::uint32_t> masks;
     for(const auto& i:p.items) {
         if(i.kind!="armor") {masks.push_back(0); continue;} // Legacy weapon/ammo entries are never applied.
-        auto* form=handler->LookupForm(i.localID,i.plugin);
+        auto* form=ResolveItem(i);
         auto* armor=form?form->As<RE::TESObjectARMO>():nullptr;
         if(!armor) throw std::runtime_error("Missing or changed mod item: "+i.plugin+" / "+i.name);
         const auto mask=armor->GetSlotMask().underlying();
@@ -101,7 +102,7 @@ std::string VerifyPreferredEquipment(RE::Actor* actor,const Preset& p) {
     const auto inventory=actor->GetInventory(); std::string missing;
     for(const auto& item:p.items) {
         if(!item.preferred.custom) continue;
-        auto* form=RE::TESDataHandler::GetSingleton()->LookupForm(item.localID,item.plugin);
+        auto* form=ResolveItem(item);
         auto* obj=form?form->As<RE::TESBoundObject>():nullptr;
         const auto found=inventory.find(obj);
         std::vector<PreferredCandidate> candidates; std::vector<bool> worn;
@@ -139,7 +140,7 @@ std::string ApplyEquipment(RE::Actor* actor, const Preset& source, bool addMissi
     std::uint32_t resolvedMask=0;
     // Resolve every item before changing inventory or removing any equipment.
     for (const auto& i : p.items) {
-        auto* form = handler->LookupForm(i.localID,i.plugin);
+        auto* form = ResolveItem(i);
         auto* obj = form ? form->As<RE::TESBoundObject>() : nullptr;
         if (!obj || Kind(obj) != i.kind) throw std::runtime_error("Missing or changed mod item: " + i.plugin + " / " + i.name);
         if(p.slotMask || p.accessories) {
@@ -244,7 +245,7 @@ void RememberSelectedEnchanted(RE::Actor* actor,Preset& selected,bool remember) 
     if(!actor) throw std::runtime_error("Target unavailable");
     const auto inventory=actor->GetInventory();
     for(auto& item:selected.items) {
-        auto* form=RE::TESDataHandler::GetSingleton()->LookupForm(item.localID,item.plugin);
+        auto* form=ResolveItem(item);
         auto* object=form?form->As<RE::TESObjectARMO>():nullptr;
         const auto found=object?inventory.find(object):inventory.end();
         if(found==inventory.end() || found->second.first<=0 || !found->second.second || !found->second.second->IsWorn())

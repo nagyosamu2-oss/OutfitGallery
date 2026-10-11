@@ -1,4 +1,18 @@
-# Outfit Gallery 1.0.13
+## Changes in 1.0.14
+
+- Added a wide gallery organizer with multiple selection, group moves, destination previews and 4–30 columns. Missing-set checking is now in the organizer.
+- Added organizer-only name visibility and reduced spacing when names are hidden. Successful moves clear the selection.
+- Improved recognition during Sofia's free-time behavior and allowed more everyday follower activities.
+- Fixed text-input focus loss and gamepad double-step navigation; held-button navigation remains available.
+- Full-outfit management now selects equipment to wear: checked items form a full replacement, unchecked items are excluded. Head/accessory presets remain partial changes. An empty selection does nothing.
+- Added a 2–10 second minimum combat switch interval (default/recommended: 5). Weapon stabilization and attack/casting waits remain.
+- Reopening the gallery returns to the normal outfit view, respecting the independent-preview setting.
+- Fixed some equipment added by patches being incorrectly reported as missing, including support for affected existing presets.
+
+Lower intervals may increase load or interactions with other mods. Existing photos, presets and settings are retained. Back up data before updating; restore pre-update data when downgrading.
+If a full outfit uses an old edited exchange-slot selection, resave its selection in Equipment Management before assigning it to automatic switching.
+
+# Outfit Gallery 1.0.14
 
 A photo-based SKSE outfit gallery for full outfits, head equipment and accessories. Weapons and ammo are preserved. Includes conditional automatic outfits, follower selection/maintenance, preset editing and an optional independent preview.
 
@@ -28,13 +42,13 @@ The dedicated shortcut in the automatic-outfit options toggles automatic switchi
 
 ## Equipment management
 
-Choose exchange slots in a photo's management screen. Zero-slot armor can be selected individually. Accessories capture worn armor too; clear the selection and select just the desired ring/item when needed. An empty saved selection does nothing. Unrelated equipment is preserved for partial changes. Full outfit presets can be edited from currently worn armor; review before saving. One initial original is kept for restoration, not a growing edit history. Windows resize and scroll; outside clicks do not close them.
+Full outfits use individual equipment selection; head/accessory presets use exchange slots in the management screen. Zero-slot armor can be selected individually. Accessories capture worn armor too; clear the selection and select just the desired ring/item when needed. An empty saved selection does nothing. Unrelated equipment is preserved for partial changes. Full outfit presets can be edited from currently worn armor; review before saving. One initial original is kept for restoration, not a growing edit history. Windows resize and scroll; outside clicks do not close them.
 
 ## Data and limitations
 
 Missing base items can be generated if enabled; custom enchantments, tempering and custom names are not cloned into new items. Player enchanted-item preference uses owned registered items. Save the game after registering them. Removed mods or changed form/slot definitions can invalidate a preset. Missing-set checking reports unavailable records, not missing inventory items.
 
-Follower selection targets loaded humanoid player teammates. The header count refers to maintained follower outfits; turning selection off does not cancel maintenance. Other follower managers may compete with outfit control. Independent preview shares the rendered game image; it does not create a second camera or clone the actor. Rendering-mod and HDR combinations are not comprehensively tested.
+Follower selection targets loaded humanoid followers, including the hired Sofia fallback. The header count refers to maintained follower outfits; turning selection off does not cancel maintenance. Other follower managers may compete with outfit control. Independent preview shares the rendered game image; it does not create a second camera or clone the actor. Rendering-mod and HDR combinations are not comprehensively tested.
 
 Diagnostics are in OutfitGallery.log in the SKSE log directory. Detailed logging is optional and resets on restart. Logs can include preset names and local paths.
 

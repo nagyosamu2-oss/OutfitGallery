@@ -1,10 +1,11 @@
-// Included in Gallery before Tick. Engine state is read only on the game thread.
+﻿// Included in Gallery before Tick. Engine state is read only on the game thread.
 std::atomic<bool> autoEnabled{}, autoPaused{}, autoPanelVisible{}, autoCombatEnabled{}; // persisted preferences; transition state remains session-only
 bool autoPanel{}; // renderer only
 std::string autoSelectedPhoto; // renderer only
 std::mutex autoMutex;
 AutoOutfitSlots autoSlots;
 std::atomic<int> autoDelaySeconds{3};
+std::atomic<int> autoCombatIntervalSeconds{5};
 std::atomic<int> autoSneakDelaySeconds{2};
 bool autoHideAssignButtons=false; // renderer only after initialization
 int autoColumns=3; // renderer only after initialization
@@ -195,7 +196,7 @@ void MaintainAutoOutfits() {
     if((styled || condition==AutoOutfit::Place::Sneaking) && (player->IsAttacking() || CombatCastingBusy(player))) {
         autoPolicy.Block();AutoStatus("Waiting for attack or casting to finish",place,where.name);return;
     }
-    if(!autoPolicy.Observe(place,now,AutoOutfit::ConditionDelay(condition,static_cast<std::uint64_t>(autoDelaySeconds.load())*1000,static_cast<std::uint64_t>(autoSneakDelaySeconds.load())*1000))) {
+    if(!autoPolicy.Observe(place,now,AutoOutfit::ConditionDelay(condition,static_cast<std::uint64_t>(autoDelaySeconds.load())*1000,static_cast<std::uint64_t>(autoSneakDelaySeconds.load())*1000),static_cast<std::uint64_t>(autoCombatIntervalSeconds.load())*1000)) {
         if(autoPolicy.manual==place) AutoStatus("Manual outfit until the selected condition changes",place,where.name);
         else if(!autoPolicy.handled) AutoStatus("Waiting for a stable condition",place,where.name);
         else AutoStatus(autoOutcome,place,where.name);
@@ -215,11 +216,13 @@ void MaintainAutoOutfits() {
             if(it!=labels.labels.end()) {
                 if(it->second.deleted) throw std::runtime_error("Assigned preset is in Trash");
                 if(it->second.exchangeSlots) throw std::runtime_error("Assign a full outfit without slot overrides");
+                p.outfitItems=it->second.outfitItems;
                 if(!it->second.name.empty()) p.name=it->second.name;
             }
         }
         // All records are resolved before ApplyEquipment can change the actor.
-        (void)ResolvePresetSlots(p);
+        if(p.outfitItems) p=FilterExchangeSlots(p,{});
+            (void)ResolvePresetSlots(p);
         if(ClothingPreset(p).items.empty()) throw std::runtime_error("Assigned outfit has no armor");
         bool already=false;
         try {already=SameEquipment(ClothingPreset(p),SnapshotEquipment(player));} catch(const std::exception&) {}

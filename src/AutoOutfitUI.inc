@@ -1,4 +1,4 @@
-// Renderer-only panel. No engine pointers, no game mutations.
+﻿// Renderer-only panel. No engine pointers, no game mutations.
 const char* AutoPlaceLabel(unsigned n) {
     static constexpr std::array<const char*,27> labels{"Default","Town / City","Player home","Inn","Combat base","Night","Rain","Snow","Dungeon","Temple","Swimming","Fort Dawnguard","College of Winterhold","Dark Brotherhood sanctuaries","Jorrvaskr","Bards College","Ragged Flagon","Blue Palace","Combat: Melee","Combat: Magic","Combat: Archery","Combat: Unarmed","Sneaking","Smithing (test)","Alchemy (test)","Enchanting (test)","Shop"};
     return n<labels.size()?labels[n]:"Default";
@@ -9,12 +9,13 @@ static_assert([] {std::array<bool,27> seen{};for(auto slot:AutoDisplayOrder){if(
 const char* AutoCardLabel(unsigned slot) {
     return slot==12?"Mage College":slot==13?"Dark Brotherhood":AutoPlaceLabel(slot);
 }
-bool SaveAutoOutfitPreferences(const AutoOutfitSlots& slots,int seconds,int columns,bool rearm,int recovery=-1,int sneak=-1) {
+bool SaveAutoOutfitPreferences(const AutoOutfitSlots& slots,int seconds,int columns,bool rearm,int recovery=-1,int sneak=-1,int combatInterval=-1) {
     try {
         if(recovery<0) recovery=ostimRecoverySeconds.load();
+        if(combatInterval<0) combatInterval=autoCombatIntervalSeconds.load();
         if(sneak<0) sneak=autoSneakDelaySeconds.load();
-        WriteAutoOutfitSettings({slots,seconds,columns,recovery,autoEnabled.load(),autoPaused.load(),autoCombatEnabled.load(),autoHideAssignButtons,sneak},autoFile);
-        ostimRecoverySeconds=recovery;autoSneakDelaySeconds=sneak;
+        WriteAutoOutfitSettings({slots,seconds,columns,recovery,autoEnabled.load(),autoPaused.load(),autoCombatEnabled.load(),autoHideAssignButtons,sneak,combatInterval},autoFile);
+        autoCombatIntervalSeconds=combatInterval;ostimRecoverySeconds=recovery;autoSneakDelaySeconds=sneak;
         {std::scoped_lock lock(autoMutex); autoSlots=slots;}
         autoDelaySeconds=seconds; autoColumns=columns;
         if(rearm) ++autoRevision;
@@ -39,7 +40,7 @@ bool AssignAutoPhoto(unsigned slot,const std::string& photo) {
 bool SaveAutoOutfitToggles(bool enabled,bool paused,bool combat) {
     try {
         AutoOutfitSlots slots; {std::scoped_lock lock(autoMutex);slots=autoSlots;}
-        WriteAutoOutfitSettings({slots,autoDelaySeconds.load(),autoColumns,ostimRecoverySeconds.load(),enabled,paused,combat,autoHideAssignButtons,autoSneakDelaySeconds.load()},autoFile);
+        WriteAutoOutfitSettings({slots,autoDelaySeconds.load(),autoColumns,ostimRecoverySeconds.load(),enabled,paused,combat,autoHideAssignButtons,autoSneakDelaySeconds.load(),autoCombatIntervalSeconds.load()},autoFile);
         const bool rearm=enabled!=autoEnabled.load() || combat!=autoCombatEnabled.load();
         autoEnabled=enabled; autoPaused=paused; autoCombatEnabled=combat;
         if(rearm) ++autoRevision;
@@ -100,7 +101,7 @@ void RenderAutoOutfitHelp() {
         UI::TextWrapped("%s",Tr("Shops use indoor locations tagged LocTypeStore. Home, inn, temple and dungeon take priority. An empty Shop slot uses Town inside towns, otherwise Default."));
         UI::TextWrapped("%s",Tr("Crafting trial: assign a full outfit to Smithing, Alchemy or Enchanting. Missing base items are generated before the crafting menu; carry your custom-enchanted items. Late or blocked attempts are skipped until the next use. Check the equipped outfit and its active effects."));
         UI::TextWrapped("%s",Tr("Sneaking uses its own delay in Options (0-5 seconds, default 2). Combat and swimming take priority; otherwise sneaking overrides weather and locations. Empty slots keep existing rules."));
-        UI::TextWrapped("%s",Tr("Styles must stay stable for 1 second, or 2 seconds for Unarmed. Attack/casting and weapon draw transitions wait. The usual delay and 5-second attempt interval still apply. Manual changes last until combat ends."));
+        UI::TextWrapped("%s",Tr("Styles must stay stable for 1 second, or 2 seconds for Unarmed. Attack/casting and weapon draw transitions wait. The usual delay and configured combat interval still apply. Manual changes last until combat ends."));
         UI::TextWrapped("%s",Tr("Combat styles follow the right hand; bows use either hand. Unarmed requires both hands empty. Empty style slots use Combat. Leave all four empty for the original once-per-combat behavior."));
         UI::TextWrapped("%s",Tr("Outdoors: Snow > Rain > Night > location. Night is 20:00-06:00. Home, inn, temple and dungeon keep dedicated location rules."));
         UI::TextWrapped("%s",Tr("Empty temple/dungeon slots use Town only inside a town, otherwise Default. Overlapping locations: Home > Inn > Temple > Dungeon > Town."));
@@ -143,12 +144,19 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
         UI::SetNextItemWidth(std::max(90.f,UI::GetContentRegionAvail().x*.42f));
         if(UI::SliderInt(Label("Change delay (seconds)"),&seconds,0,10,"%d",UI::ImGuiSliderFlags_AlwaysClamp))
             SaveAutoOutfitPreferences(slots,seconds,autoColumns,false);
-        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("0 seconds: change on the next location check (about once per second). The 5-second minimum between attempts still applies."));
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("0 seconds: change on the next check (about once per second). The minimum attempt interval is 5 seconds outside combat; combat uses its configured interval."));
         UI::EndDisabled();
         if(UI::CollapsingHeader(Label("Options"))) {
             RenderAutoHotkeys();
             UI::Separator();
             UI::BeginDisabled(!autoSlotsWritable || !libraryWritable);
+        int combatInterval=autoCombatIntervalSeconds.load();
+        UI::SetNextItemWidth(std::max(90.f,UI::GetContentRegionAvail().x*.42f));
+        if(UI::SliderInt(Label("Minimum combat switch interval (seconds)"),&combatInterval,2,10,"%d",UI::ImGuiSliderFlags_AlwaysClamp)) {
+            AutoOutfitSlots slots; {std::scoped_lock lock(autoMutex);slots=autoSlots;}
+            SaveAutoOutfitPreferences(slots,autoDelaySeconds.load(),autoColumns,false,-1,-1,combatInterval);
+        }
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Default: 5 seconds (recommended). Lower values respond faster to repeated weapon changes, but may increase outfit-change load or interactions with other mods. Stability and attack/casting waits still apply."));
         int sneak=autoSneakDelaySeconds.load();
         UI::SetNextItemWidth(std::max(90.f,UI::GetContentRegionAvail().x*.42f));
         if(UI::SliderInt(Label("Sneaking delay (seconds)"),&sneak,0,5,"%d",UI::ImGuiSliderFlags_AlwaysClamp))
