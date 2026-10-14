@@ -1,3 +1,31 @@
+## Changes in 1.0.15
+
+- Added camera preset names: edit them in Camera Settings and hover over numbered buttons to see them.
+- Added biped slot numbers to the equipment selection list.
+- Expanded the normal gallery to six columns. Start/Menu cycles columns when not assigned to another OG action.
+- Added optional Compact display to hide the registration-name and search fields. Follower controls share a row when space permits.
+- Added experimental automatic outfits for up to two followers, with individual assignments and timing settings.
+- Added outfit checks after travel, including early recovery when continuing the same outfit. Ready player changes take priority over waiting follower changes.
+- Added bulk Move to Trash from selected photos or the gallery organizer toolbar, and bulk restoration from Trash.
+- Fixed the gallery selection border alignment.
+- L2/R2 category switching now focuses the photos for immediate navigation.
+- Added Japanese translations for Empty Trash and Delete permanently.
+- Added protection against the held opening button immediately closing the gallery.
+
+## 1.0.15 の更新内容
+
+- カメラプリセットの名前を設定可能に。カメラ設定内で編集し、数字ボタンにマウスを重ねると表示します。
+- 装備管理の「着替えに使用する装備」にスロット番号を表示。
+- 通常表示を最大6列に拡張。Start／Menuは他のOG操作に未割り当ての場合、列数を切り替えます。
+- 登録名・検索欄を隠す「コンパクト表示」を追加。フォロワー操作は幅に余裕がある場合に同じ行へまとめます。
+- 最大2人のフォロワーに自動着替えを追加（試験機能）。対象別に割り当てと待機時間を設定できます。
+- 移動後の装備確認と、同じ服装を継続する場合の早期再適用に対応。着替え可能なプレイヤーを待機中のフォロワーより優先します。
+- 整理画面の選択画像を右クリック、または上段のごみ箱から一括移動。ごみ箱内では一括復元にも対応。
+- ギャラリーの選択枠のずれを修正。
+- L2／R2で分類を切り替えた直後から画像を選択・移動できるように改善。
+- 「ごみ箱を空にする」「完全に削除」の日本語表記を追加。
+- ゲームパッド長押し起動時、起動ボタンでそのまま閉じてしまう現象への対策を追加。
+
 ## Changes in 1.0.14
 
 - Added a wide gallery organizer with multiple selection, group moves, destination previews and 4–30 columns. Missing-set checking is now in the organizer.

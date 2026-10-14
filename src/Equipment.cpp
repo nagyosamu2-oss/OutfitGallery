@@ -120,6 +120,8 @@ std::string VerifyPreferredEquipment(RE::Actor* actor,const Preset& p) {
 }
 std::string ApplyEquipment(RE::Actor* actor, const Preset& source, bool addMissing, bool preferEnchanted,
     const std::function<bool()>& mayMutate) {
+    if(actor && actor->GetFormID()!=0x14)
+        GALLERY_DIAG("OG-ARRIVAL-DIAG og-apply-enter tick={} actor={:08X} photo={} preset={}",GetTickCount64(),actor->GetFormID(),source.photo,source.name);
     const auto checkDeadline=[&] {
         if(mayMutate && !mayMutate())
             throw std::runtime_error("Crafting menu or scene started during equipment preparation; stopped until next use");
@@ -236,6 +238,8 @@ std::string ApplyEquipment(RE::Actor* actor, const Preset& source, bool addMissi
     // Refresh once after the complete outfit, on the game task thread. CommonLib
     // also dispatches NiNodeUpdateEvent for consumers such as appearance plugins.
     actor->Update3DModel();
+    if(actor->GetFormID()!=0x14)
+        GALLERY_DIAG("OG-ARRIVAL-DIAG og-apply-return tick={} actor={:08X}",GetTickCount64(),actor->GetFormID());
     return "Equip requests sent: " + p.name + ". Check the preview."+(missing.empty()?std::string{}:" Registered enchantment not restored: "+missing);
 }
 }

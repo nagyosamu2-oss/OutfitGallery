@@ -18,7 +18,7 @@ int autoPlace{};
 struct AutoEnvironmentInfo {AutoOutfit::Environment flags; float hour{12.f}; bool ready{};};
 struct AutoEnvironmentDisplay {AutoEnvironmentInfo environment; int locationPlace{}, selectedSlot{-1};};
 AutoEnvironmentDisplay autoEnvironment; // autoMutex, values only; no engine pointers in UI
-AutoEnvironmentInfo ReadAutoEnvironment(RE::PlayerCharacter* player) {
+AutoEnvironmentInfo ReadAutoEnvironment(RE::Actor* player) {
     AutoEnvironmentInfo info;
     auto* cell=player->GetParentCell();auto* sky=RE::Sky::GetSingleton();auto* calendar=RE::Calendar::GetSingleton();
     info.flags.outside=cell && !cell->IsInteriorCell();
@@ -49,6 +49,7 @@ void AutoStatus(const std::string& text,int place,const std::string& location) {
     autoState=text; autoPlace=place; autoLocation=location;
 }
 void AutoVerificationDone(bool ok) {
+    if(FollowerAutoVerificationDone(ok)) return;
     if(!autoVerifying) return;
     autoVerifying=false;
     if(!ok) autoPolicy.lastPhoto.clear();
@@ -71,7 +72,7 @@ void InitializeGuildLocations() {
     }
 }
 struct AutoPlaceInfo { AutoOutfit::Place place=AutoOutfit::Place::Normal, guild=AutoOutfit::Place::Normal; bool town{}; std::string name; };
-AutoPlaceInfo ClassifyAutoPlace(RE::PlayerCharacter* player) {
+AutoPlaceInfo ClassifyAutoPlace(RE::Actor* player) {
     AutoPlaceInfo result;
     auto* loc=player->GetCurrentLocation();
     if(loc && loc->GetName()) result.name=loc->GetName();
@@ -101,7 +102,7 @@ void ResetCraft();
 bool MaintainCraft(RE::PlayerCharacter*,RE::UI*,ULONGLONG);
 std::atomic<bool> craftActive{};
 void ResetAutoOutfits() {
-    ResetCraft();
+    ResetCraft(); ResetFollowerAutoRuntime();
     // Preserve user preferences across loads; discard old-world transition history.
     autoCombat={}; autoStyle={}; autoPolicy={}; autoDue=0; autoVerifying=false; autoOutcome="Ready";
     ostimSuspend={};
@@ -110,6 +111,10 @@ void ResetAutoOutfits() {
     AutoStatus(!autoEnabled?"Disabled":autoPaused?"Paused":"Waiting for normal play",0,"");
 }
 void AutoManualChange(RE::Actor* actor) {
+    // A manual request owns the shared verification lane from this point.
+    if(autoVerifying) AutoVerificationDone(false);
+    (void)FollowerAutoVerificationDone(false);
+    FollowerAutoManualChange(actor);
     if(actor && actor==RE::PlayerCharacter::GetSingleton()) {
         // Manual apply supersedes any pending automatic verification.
         autoVerifying=false;
@@ -135,10 +140,10 @@ AutoOutfit::Hand ReadCombatHand(RE::TESForm* form) {
     if(form->As<RE::SpellItem>() || form->As<RE::ScrollItem>()) return AutoOutfit::Hand::Magic;
     return AutoOutfit::Hand::Other;
 }
-AutoOutfit::Place ReadCombatStyle(RE::PlayerCharacter* player) {
+AutoOutfit::Place ReadCombatStyle(RE::Actor* player) {
     return AutoOutfit::CombatStyle(ReadCombatHand(player->GetEquippedObject(false)),ReadCombatHand(player->GetEquippedObject(true)));
 }
-bool CombatCastingBusy(RE::PlayerCharacter* player) {
+bool CombatCastingBusy(RE::Actor* player) {
     for(auto source:{RE::MagicSystem::CastingSource::kLeftHand,RE::MagicSystem::CastingSource::kRightHand,RE::MagicSystem::CastingSource::kOther}) {
         const auto* caster=player->GetMagicCaster(source);
         if(caster && caster->state!=RE::MagicCaster::State::kNone) return true;
@@ -146,8 +151,8 @@ bool CombatCastingBusy(RE::PlayerCharacter* player) {
     return false;
 }
 bool AutoDue() {return (craftActive || autoEnabled || (active && autoPanelVisible)) && GetTickCount64()>=autoDue.load();}
-void MaintainAutoOutfits() {
-    const auto now=GetTickCount64(); if(now<autoDue.load()) return; autoDue=now+1000;
+void MaintainAutoOutfits(bool beforeFollowers=false) {
+    const auto now=GetTickCount64(); if(!FollowerAuto::PollPlayer(now,autoDue.load(),beforeFollowers)) return; autoDue=now+1000;
     auto* player=RE::PlayerCharacter::GetSingleton();
     auto* ui=RE::UI::GetSingleton(); auto* camera=RE::PlayerCamera::GetSingleton();
     if(!player || !player->Get3D() || !player->GetParentCell() || !ui || !camera || ui->IsMenuOpen("Loading Menu") || ui->IsMenuOpen("Main Menu")) {autoPolicy.Block();autoStyle.Block(); return;}
@@ -171,7 +176,7 @@ void MaintainAutoOutfits() {
     if(sceneBlocked) {autoPolicy.Block();autoStyle.Block();AutoStatus(OStimStateLabel(ostimSceneState.load()),place,where.name);return;}
     if(!fighting && !environment.ready) {autoPolicy.Block();autoStyle.Block();AutoStatus("Waiting for environment data",place,where.name);return;}
     auto* controls=RE::ControlMap::GetSingleton(); const auto* state=player->AsActorState();
-    const bool blocked=active || verificationTicks || saveBusy || ui->GameIsPaused() || ui->numItemMenus || ui->numApplicationMenus ||
+    const bool blocked=active || saveBusy || ui->GameIsPaused() || ui->numItemMenus || ui->numApplicationMenus ||
         ui->IsMenuOpen("Dialogue Menu") || ui->IsMenuOpen("Console") || ui->IsMenuOpen("PhotoMode") ||
         player->IsDead() || player->IsDisabled() || player->IsInKillMove() || player->IsInRagdollState() || state->IsUnconscious() || state->IsStaggered() || player->IsOnMount() || !AutoOutfit::SwimmingChangeAllowed(state->IsSwimming(),condition,slots) ||
         state->GetSitSleepState()!=RE::SIT_SLEEP_STATE::kNormal ||
@@ -201,6 +206,11 @@ void MaintainAutoOutfits() {
         else if(!autoPolicy.handled) AutoStatus("Waiting for a stable condition",place,where.name);
         else AutoStatus(autoOutcome,place,where.name);
         return;
+    }
+    // A busy equipment lane is not a change in the player's condition. Keep
+    // stability timers and do not consume the attempt until the lane is free.
+    if(!FollowerAuto::MayApply(now,equipmentLaneDue,verificationTicks.load()!=0)) {
+        AutoStatus("Waiting for another outfit change",place,where.name);return;
     }
     const auto photo=AutoOutfit::Choose(condition,slots,where.town);
     if(fighting) autoCombat.Consume(styled?place:-1); // Retry only after a different stable style or a new battle.
@@ -234,6 +244,7 @@ void MaintainAutoOutfits() {
         enchantNotice.clear(); verificationPrefer=preferEnchanted.load();
         // A partial failure must not let the pre-combat photo cache suppress restoration.
         if(fighting) autoPolicy.lastPhoto.clear();
+        equipmentLaneDue=now+1000;
         const auto result=ApplyEquipment(player,p,true,verificationPrefer);
         if(styled) {
             const auto after=ReadCombatStyle(player);

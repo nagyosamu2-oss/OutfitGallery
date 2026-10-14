@@ -14,6 +14,8 @@
 #include "ManagedItems.h"
 #include "Diagnostics.h"
 #include "FollowerOutfits.h"
+#include "FollowerAutoOutfits.h"
+#include "FollowerAutoState.h"
 #include "AutoOutfitPolicy.h"
 #include "CraftSession.h"
 #include "GuildLocationRules.h"
@@ -35,7 +37,7 @@
 
 using namespace REL::literals;
 SKSEPluginInfo(
-    .Version = "1.0.14.0"_v,
+    .Version = "1.0.15.0"_v,
     .Name = "OutfitGallery",
     .Author = "Outfit Gallery contributors",
     // SKSE's final component is the store identifier: GOG is 1, not 0.
@@ -60,6 +62,7 @@ const StudioSettings initialCamera{};
 std::string startupTab=initialCamera.startupTab;
 std::atomic<float> distance{initialCamera.distance}, height{initialCamera.height}, orbit{initialCamera.orbit}, pitch{initialCamera.pitch}, fov{initialCamera.fov}, lateral{initialCamera.lateral}, elevation{initialCamera.elevation};
 bool showNames=true, showCounts=true;
+bool compactGallery{}, compactOrganizeRequested{};
 bool addMissing{true}, showCameraSettings{}; std::atomic<bool> preferEnchanted{true}; std::string enchantNotice;
 std::atomic<bool> detachedPreview{}, cameraCentered{}, followerTargeting{};
 RE::ActorHandle studioActor, verificationActor; // game-thread only, never raw retained pointers
@@ -67,6 +70,7 @@ std::atomic<bool> followerMaintained{};
 float targetHeading{}; // follower camera does not chase idle turning
 std::string studioActorName; // statusMutex, copied for UI
 std::atomic<bool> studioFollower{};
+std::atomic<std::uint32_t> studioActorID{};
 std::array<float,4> previewRect{.54f,.08f,.45f,.84f};
 bool resetPreviewRect=true;
 unsigned previewSettled{}; // render-thread only
@@ -84,7 +88,7 @@ ULONGLONG settingsChangedAt{};
 const std::filesystem::path settingsFile="Data/SKSE/Plugins/OutfitGallery/StudioSettings.json";
 void SaveSettingsIfDue(bool force=false) {
     if (!force && (!settingsChangedAt || GetTickCount64()-settingsChangedAt<600)) return;
-    try { WriteStudioSettings({distance.load(),height.load(),orbit.load(),pitch.load(),fov.load(),gridColumns,showNames,showCounts,language,allowFreeCamera.load(),addMissing,lateral.load(),elevation.load(),partialSlots.load(),startupTab,detachedPreview.load(),previewRect,followerTargeting.load(),preferEnchanted.load(),portraitThumbnails,cleanupCompatibility.load(),allowCombatGallery.load()},settingsFile); }
+    try { WriteStudioSettings({distance.load(),height.load(),orbit.load(),pitch.load(),fov.load(),gridColumns,showNames,showCounts,language,allowFreeCamera.load(),addMissing,lateral.load(),elevation.load(),partialSlots.load(),startupTab,detachedPreview.load(),previewRect,followerTargeting.load(),preferEnchanted.load(),portraitThumbnails,cleanupCompatibility.load(),allowCombatGallery.load(),compactGallery},settingsFile); }
     catch(const std::exception& e) { SKSE::log::error("Settings save: {}",e.what()); }
     settingsChangedAt=0;
 }
@@ -96,6 +100,8 @@ std::atomic<unsigned> hotkey{66}; // DIK_F8, configurable in the INI.
 unsigned saveHotkey = 67; // legacy INI fallback
 std::array<std::atomic<unsigned>,3> captureKeys{67,68,87}, capturePads{32768,16384,64};
 std::atomic<unsigned> padEdges{}, padHeld{};
+// Physical state also tracks the opening press while the gallery is closed.
+std::atomic<unsigned> physicalPadHeld{}, openingPadBlock{};
 std::atomic<unsigned> padResetSerial{};
 void ResetGalleryPadInput(const char*) {
     padHeld.exchange(0); padEdges.exchange(0);
@@ -194,6 +200,7 @@ void Release() {
 // Game-thread only. Also called before a save is loaded so no previous-session
 // camera snapshot is ever applied to the newly loaded game.
 void Close() {
+    openingPadBlock=0;
     ResetGalleryPadInput("close/preload");
     editPending=false;
     bindingMode=0;
@@ -224,7 +231,7 @@ void Close() {
         if (auto* ui = RE::UI::GetSingleton()) ui->ShowMenus(saved.menusVisible);
         saved.valid = false;
     }
-    studioActor.reset(); studioFollower=false;
+    studioActor.reset(); studioFollower=false; studioActorID=0;
     Release();
 }
 
@@ -319,7 +326,7 @@ void Open() {
     if(!wasFree) {camera->ForceThirdPerson(); camera->ToggleFreeCameraMode(false);}
     if (!camera->IsInFreeCameraMode()) { Close(); SetStatus("Could not enter the studio camera."); return; }
     studioActor=target->CreateRefHandle(); targetHeading=target->GetAngleZ();
-    studioFollower=target.get()!=player;
+    studioFollower=target.get()!=player; studioActorID=target->GetFormID();
     followerMaintained=IsFollowerOutfitMaintained(target.get());
     {std::scoped_lock lock(statusMutex); studioActorName=target->GetName()?target->GetName():"";}
     SKSE::log::info("Studio target: {} ({:08X}), follower={}",target->GetName(),target->GetFormID(),studioFollower.load());
@@ -332,11 +339,16 @@ void Open() {
 }
 
 #include "OStimCompatibility.inc"
+ULONGLONG equipmentLaneDue{}; // game-thread shared apply spacing
+bool FollowerAutoVerificationDone(bool);
+void ResetFollowerAutoRuntime();
+void FollowerAutoManualChange(RE::Actor*);
+bool FollowerAutoVerificationBlocked(RE::Actor*);
 bool autoVerifying{}; // game thread only
 void AutoVerificationDone(bool ok);
 void VerifyEquipment(bool immediate=false) {
     if(!verificationTicks) return;
-    if(autoVerifying && OStimBlocksAutomatic(RE::PlayerCharacter::GetSingleton())) {
+    if((autoVerifying && OStimBlocksAutomatic(RE::PlayerCharacter::GetSingleton())) || FollowerAutoVerificationBlocked(verificationActor.get().get())) {
         verificationTicks=0; AutoVerificationDone(false);
         SKSE::log::info("OG-AUTO OStim: pending automatic verification/cleanup cancelled");
         return;
@@ -368,18 +380,27 @@ void VerifyEquipment(bool immediate=false) {
 #include "PresetEditRuntime.inc"
 #include "AutoOutfits.inc"
 #include "CraftOutfits.inc"
+#include "FollowerAutoOutfits.inc"
 void Tick() {
     const unsigned requested = command.exchange(0);
+    if(requested==1 || requested==2) GALLERY_DIAG("OG-OPEN-DIAG tick command={} active={}",requested,active.load());
     // Pending ownership cleanup outlives the camera window, but is cancelled
     // explicitly at save/new-game boundaries before touching another character.
     VerifyEquipment(requested==2 || requested==4);
     if (requested == 2) { Close(); return; }
     if (requested == 1) Open();
-    if (!active) {MaintainFollowerOutfits(); MaintainAutoOutfits(); return;}
+    if (!active) {
+        if(!verificationTicks && GetTickCount64()>=equipmentLaneDue) MaintainFollowerOutfits();
+        // Poll the player before every follower pass, even if their one-second
+        // polling clocks differ. Ready player work claims the lane first;
+        // an unsafe or not-yet-ready player never holds followers back.
+        MaintainAutoOutfits(FollowerAutoDue()); MaintainFollowerAutoOutfits(); return;
+    }
+    MaintainFollowerAutoOutfits();
     if(AutoDue()) MaintainAutoOutfits();
     auto* player = RE::PlayerCharacter::GetSingleton();
     auto* camera = RE::PlayerCamera::GetSingleton();
-    if (!window->IsOpen || StudioActorUnsafe(player) || !camera || !camera->IsInFreeCameraMode() || (tdm && tdm->GetTargetLockState())) { Close(); return; }
+    if (!window->IsOpen || StudioActorUnsafe(player) || !camera || !camera->IsInFreeCameraMode() || (tdm && tdm->GetTargetLockState())) { GALLERY_DIAG("OG-OPEN-DIAG state-close window={} unsafe={} camera={} free={} lock={}",window->IsOpen.load(),StudioActorUnsafe(player),camera!=nullptr,camera && camera->IsInFreeCameraMode(),tdm && tdm->GetTargetLockState()); Close(); return; }
     auto subject=studioActor.get();
     const bool follower=subject.get()!=player;
     const char* targetReason=follower?FollowerUnsafeReason(subject.get()):nullptr;
@@ -426,6 +447,7 @@ void Tick() {
     if(studioFollower && !saveBusy && (requested==7 || requested==8 || requested==9)) {
         try {
             if(requested==7) {
+                if(FollowerAutomaticOwns(subject->GetFormID())) throw std::runtime_error("Disable automatic outfits before fixed maintenance.");
                 RememberFollowerOutfit(subject.get());
                 SetStatus("Follower outfit maintenance enabled.");
             } else {
@@ -433,6 +455,7 @@ void Tick() {
                 if(requested==8) SetStatus("Follower outfit maintenance disabled.");
                 else {
                     verificationTicks=0;
+                    AutoManualChange(subject.get());
                     const auto original=DefaultFollowerOutfit(subject.get());
                     SetStatus(ApplyEquipment(subject.get(),original,true));
                     verificationActor=subject->CreateRefHandle(); verificationTarget=original;
@@ -464,7 +487,7 @@ void Tick() {
 }
 
 void QueueTick() {
-    if ((active || command.load() || verificationTicks.load() || FollowerMaintenanceDue() || AutoDue()) && !pending.exchange(true)) {
+    if ((active || command.load() || verificationTicks.load() || FollowerMaintenanceDue() || AutoDue() || FollowerAutoDue()) && !pending.exchange(true)) {
         const unsigned generation = epoch.load();
         SKSE::GetTaskInterface()->AddTask([generation] {
             if (generation == epoch && ready) Tick();
@@ -530,6 +553,21 @@ void RenderCameraSettings() {
     UI::TextUnformatted(Tr("Camera and display settings save automatically."));
     int shownSlot=cameraSlot+1;
     if(UI::SliderInt(Label("Camera preset slot"),&shownSlot,1,7)) cameraSlot=shownSlot-1;
+    static int nameSlot=-1;
+    static char cameraName[256]{};
+    if(nameSlot!=cameraSlot) {
+        nameSlot=cameraSlot;
+        const auto& name=cameraBank.names[cameraSlot];
+        std::copy(name.begin(),name.end(),cameraName);cameraName[name.size()]='\0';
+    }
+    UI::BeginDisabled(!cameraBankWritable);
+    UI::InputText(Label("Camera preset name"),cameraName,sizeof(cameraName));
+    if(UI::Button(Label("Save camera preset name"))) {
+        auto next=cameraBank;next.names[cameraSlot]=cameraName;
+        try {WriteCameraBank(next,cameraBankFile);cameraBank=std::move(next);SetStatus("Camera preset saved: "+std::to_string(cameraSlot+1));}
+        catch(const std::exception& e) {SetStatus(e.what());}
+    }
+    UI::EndDisabled();
     UI::BeginDisabled(cameraSlot==0);
     if(UI::Button(Label("Save current camera to selected slot"))) SaveCameraSlot();
     UI::EndDisabled();
@@ -566,7 +604,8 @@ void RenderCameraSlots() {
         const bool clicked=UI::Button((std::to_string(n+1)+"##camera").c_str(),{UI::GetFrameHeight(),0});
         if(n==cameraSlot) UI::PopStyleColor();
         if(UI::IsItemHovered()) {
-            if(n==0) UI::SetTooltip("%s",Tr("Default camera (fixed)"));
+            if(!cameraBank.names[n].empty()) UI::SetTooltip("%s",cameraBank.names[n].c_str());
+            else if(n==0) UI::SetTooltip("%s",Tr("Default camera (fixed)"));
             else UI::SetTooltip(Tr(cameraBank[n]?"Load camera preset %d":"Camera preset %d is empty"),n+1);
         }
         if(clicked) {
@@ -601,6 +640,7 @@ void __stdcall RenderStudio() {
     ProcessCapturedHotkey();
     static char name[160]{};
     UpdatePadFrame();
+    if(UI::IsKeyPressed(UI::ImGuiKey_Escape,false)) GALLERY_DIAG("OG-OPEN-DIAG UI Escape");
     static unsigned openedSerial{};
 
 
@@ -634,21 +674,26 @@ void __stdcall RenderStudio() {
                 screen.x!=display.x || screen.y!=display.y,size.x,size.y,pos.x,pos.y,UI::GetFontSize(),detachedPreview.load());
         }
         UI::BeginChild("Gallery contents",{0,0},0,UI::ImGuiWindowFlags_NoNavInputs);
+        float targetRowRight=-1.f;
         if(studioFollower) {
             std::string targetName; {std::scoped_lock lock(statusMutex); targetName=studioActorName;}
             UI::Text(Tr("Follower: %s"),targetName.c_str());
             UI::SameLine(0.f,UI::GetStyle()->ItemSpacing.x*2.f);
             UI::TextWrapped("%s",Tr("Experimental: Other mods may change the outfit."));
-            UI::BeginDisabled(saveBusy || verificationTicks.load()!=0);
+            UI::BeginDisabled(saveBusy || verificationTicks.load()!=0 || FollowerAutomaticOwns(studioActorID.load()));
             bool keep=followerMaintained.load();
             if(UI::Checkbox(Tr("Maintain this follower's outfit"),&keep)) command=keep?7:8;
             if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Checks every 5 seconds while closed. Missing items or repeated conflicts disable maintenance."));
             UI::SameLine();
             if(UI::Button(Tr("Restore standard outfit"))) command=9;
+            targetRowRight=UI::GetItemRectMax().x-UI::GetWindowPos().x;
             UI::EndDisabled();
             if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Disables maintenance and restores standard armor. Given items and weapons are kept."));
         }
-        if(!studioFollower && followerTargeting) UI::TextUnformatted(Tr("Target: Player"));
+        if(!studioFollower && followerTargeting) {
+            UI::TextUnformatted(Tr("Target: Player"));
+            targetRowRight=UI::GetItemRectMax().x-UI::GetWindowPos().x;
+        }
         const auto* rowStyle=UI::GetStyle();
         const float modeWidth=std::max(UI::CalcTextSize(Tr("Normal")).x,UI::CalcTextSize(Tr("Portrait")).x)+rowStyle->FramePadding.x*2.f;
         const float nameLabelWidth=UI::CalcTextSize(Tr("Preset name")).x;
@@ -659,9 +704,24 @@ void __stdcall RenderStudio() {
         const float rowRight=rowStart+UI::GetContentRegionAvail().x;
         const float helpX=rowRight-UI::GetFrameHeight();
         const float modeX=helpX-rowStyle->ItemSpacing.x*2.f-modeWidth*2.f;
-        UI::SetNextItemWidth(std::max(32.f,modeX-nameGap-nameLabelWidth-rowStyle->ItemInnerSpacing.x-rowStart));
-        UI::InputText(Label("Preset name"),name,sizeof(name));
-        UI::SameLine(); UI::SetCursorPosX(modeX);
+        if(!compactGallery) {
+            UI::SetNextItemWidth(std::max(32.f,modeX-nameGap-nameLabelWidth-rowStyle->ItemInnerSpacing.x-rowStart));
+            UI::InputText(Label("Preset name"),name,sizeof(name));
+            UI::SameLine();
+        } else {
+            const float organizeWidth=UI::CalcTextSize(Tr("Organize gallery")).x+rowStyle->FramePadding.x*2.f;
+            const float organizeX=std::max(rowStart,modeX-rowStyle->ItemSpacing.x-organizeWidth);
+            // Use measured item bounds: translations and font scaling may need a second row.
+            if(targetRowRight>=0.f && targetRowRight+rowStyle->ItemSpacing.x*2.f<=organizeX)
+                UI::SameLine();
+            UI::SetCursorPosX(organizeX);
+            UI::BeginDisabled(saveBusy);
+            if(UI::Button(Label("Organize gallery"))) compactOrganizeRequested=true;
+            if(missingCheckFocused) UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,3.f);
+            UI::EndDisabled();
+            UI::SameLine();
+        }
+        UI::SetCursorPosX(modeX);
         UI::BeginDisabled(saveBusy);
         for(int mode=0;mode<2;++mode) {
             if(mode) UI::SameLine();
@@ -683,7 +743,7 @@ void __stdcall RenderStudio() {
 
         if (UI::Button(Label("Save outfit"))) {
             if (!saveBusy.exchange(true)) {
-                { std::scoped_lock lock(presetsMutex); requestedName = name; }
+                { std::scoped_lock lock(presetsMutex); requestedName = compactGallery ? "" : name; }
                 command = 3;
             }
         }
@@ -692,14 +752,14 @@ void __stdcall RenderStudio() {
         UI::SameLine();
         UI::BeginDisabled(saveBusy);
         if(UI::Button(Label("Save headgear")) && !saveBusy.exchange(true)) {
-            {std::scoped_lock lock(presetsMutex); requestedName=name;} command=5;
+            {std::scoped_lock lock(presetsMutex); requestedName=compactGallery ? "" : name;} command=5;
         }
         if(UI::IsItemHovered()) UI::SetTooltip("%s\n%s",Tr("Register head equipment. Applying keeps clothes and weapons."),CaptureHint(1).c_str());
         UI::EndDisabled();
         UI::SameLine();
         UI::BeginDisabled(saveBusy);
         if(UI::Button(Label("Save accessories")) && !saveBusy.exchange(true)) {
-            {std::scoped_lock lock(presetsMutex); requestedName=name;} command=6;
+            {std::scoped_lock lock(presetsMutex); requestedName=compactGallery ? "" : name;} command=6;
         }
         if(UI::IsItemHovered()) UI::SetTooltip("%s\n%s",Tr("Wear only the accessories to register. Applying adds or replaces their slots."),CaptureHint(2).c_str());
         UI::EndDisabled();
@@ -849,6 +909,7 @@ bool __stdcall Input(RE::InputEvent* event) {
     }
     if(device==RE::INPUT_DEVICE::kGamepad) {
         const unsigned bit=code==9?0x10000u:code==10?0x20000u:code;
+        if(button->IsPressed()) physicalPadHeld.fetch_or(bit); else physicalPadHeld.fetch_and(~bit);
         if(button->IsDown() && active) padEdges.fetch_or(bit);
         if(button->IsDown() && active) padHeld.fetch_or(bit); else if(!button->IsPressed()) padHeld.fetch_and(~bit);
     }
@@ -858,11 +919,16 @@ bool __stdcall Input(RE::InputEvent* event) {
     }
     if(device==RE::INPUT_DEVICE::kGamepad && gamepadHotkey && code==gamepadHotkey) {
         if(padHold.Update(button->IsDown(),button->IsPressed(),button->HeldDuration(),padHoldSeconds.load())) {
+            GALLERY_DIAG("OG-OPEN-DIAG hold-fired code={} active={} duration={}",code,active.load(),button->HeldDuration());
+            if(!active) openingPadBlock=code==9?0x10000u:code==10?0x20000u:code;
             command=active?2:1; QueueTick();
         }
         // Observe, never consume: short presses and release reach the game/other mods.
         return false;
     }
+    // Start is a gallery shortcut only when no user binding owns it.
+    if(device==RE::INPUT_DEVICE::kGamepad && code==16 && active &&
+       gamepadHotkey!=16 && autoGamepad!=16 && capturePads[0]!=16 && capturePads[1]!=16 && capturePads[2]!=16) return true;
     if(device!=RE::INPUT_DEVICE::kKeyboard || !button->IsDown()) return false;
     if(autoKeyboard && code==autoKeyboard && HotkeyChord::Matches(autoModifiers.load(),HeldKeyboardModifiers() & ~HotkeyChord::ModifierForKey(code))) {
         autoToggleRequested=true;return true;
@@ -876,6 +942,7 @@ bool __stdcall Input(RE::InputEvent* event) {
     }
     if(active && code==1 && organizerInputActive.load()) return false; // Let the organizer handle Escape without closing the studio.
     if ((code == hotkey && HotkeyChord::Matches(keyboardModifiers.load(),HeldKeyboardModifiers() & ~HotkeyChord::ModifierForKey(code))) || (active && code == 1)) {
+        GALLERY_DIAG("OG-OPEN-DIAG keyboard-toggle code={} active={}",code,active.load());
         command = active ? 2 : 1;
         // Closing must also work if the next UI render callback never arrives.
         QueueTick();
@@ -902,6 +969,7 @@ void Message(SKSE::MessagingInterface::Message* message) {
         InitializeOStimCompatibility();
         InitializeGuildLocations();
         RegisterCraftEvents();
+        RegisterFollowerArrivalDiagnostics();
         if (!GetMenuFrameworkModule() || !GetProcAddress(GetMenuFrameworkModule(), "RegisterEventPriority") || !GetProcAddress(GetMenuFrameworkModule(), "RegisterInpoutEvent")) {
             SetStatus("A compatible SKSE Menu Framework is required."); break;
         }
@@ -915,7 +983,7 @@ void Message(SKSE::MessagingInterface::Message* message) {
         try {
             if(std::filesystem::exists(settingsFile)) {
                 const auto s=ReadStudioSettings(settingsFile);
-                distance=s.distance; height=s.height; orbit=s.orbit; pitch=s.pitch; fov=s.fov; lateral=s.lateral; elevation=s.elevation; gridColumns=s.columns; showNames=s.showNames; showCounts=s.showCounts; language=s.language; allowFreeCamera=s.allowFreeCamera; addMissing=s.addMissing; partialSlots=s.headSlots; startupTab=s.startupTab; detachedPreview=s.detachedPreview; previewRect=s.previewRect; followerTargeting=s.followerTargeting; preferEnchanted=s.preferEnchanted; portraitThumbnails=s.portraitThumbnails; cleanupCompatibility=s.cleanupCompatibility; allowCombatGallery=s.allowCombatGallery;
+                distance=s.distance; height=s.height; orbit=s.orbit; pitch=s.pitch; fov=s.fov; lateral=s.lateral; elevation=s.elevation; gridColumns=s.columns; showNames=s.showNames; showCounts=s.showCounts; language=s.language; allowFreeCamera=s.allowFreeCamera; addMissing=s.addMissing; partialSlots=s.headSlots; startupTab=s.startupTab; detachedPreview=s.detachedPreview; previewRect=s.previewRect; followerTargeting=s.followerTargeting; preferEnchanted=s.preferEnchanted; portraitThumbnails=s.portraitThumbnails; cleanupCompatibility=s.cleanupCompatibility; allowCombatGallery=s.allowCombatGallery; compactGallery=s.compactGallery;
                 SKSE::log::info("Loaded persistent studio settings");
             }
         } catch(const std::exception& e) { SetStatus(std::string("Camera settings: ")+e.what()); }
@@ -948,7 +1016,7 @@ void Message(SKSE::MessagingInterface::Message* message) {
         ++epoch; autoToggleRequested=false; command = 0; verificationTicks=0; ResetAutoOutfits(); Close(); ready = false; break;
     case SKSE::MessagingInterface::kPostLoadGame:
     case SKSE::MessagingInterface::kNewGame:
-        ++epoch; ResetGalleryPadInput("postload/newgame"); autoToggleRequested=false; command = 0; verificationTicks=0; ResetAutoOutfits(); ready = window != nullptr; break;
+        ++epoch; physicalPadHeld=0; openingPadBlock=0; ResetGalleryPadInput("postload/newgame"); autoToggleRequested=false; command = 0; verificationTicks=0; ResetAutoOutfits(); ready = window != nullptr; break;
     default: break;
     }
 }
@@ -969,7 +1037,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
         SKSE::log::error("Unsupported Skyrim runtime {}. Supported targets: 1.5.97, 1.6.353, 1.6.640, 1.6.1130, 1.6.1170, GOG 1.6.1179, Steam 1.7.104. VR is not enabled.",runtime.string());
         return false;
     }
-    SKSE::log::info("Runtime {} accepted; 1.0.14 runtime target; Steam 1.7.104 user-tested; GOG 1.6.1179 untested.",runtime.string());
+    SKSE::log::info("Runtime {} accepted; 1.0.15 runtime target; Steam 1.7.104 user-tested; GOG 1.6.1179 untested.",runtime.string());
     SKSE::Init(skse, false);
     Gallery::InitializeManagedItems();
     const auto ini = std::filesystem::absolute("Data/SKSE/Plugins/OutfitGallery.ini");
@@ -977,7 +1045,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     Gallery::saveHotkey = GetPrivateProfileIntW(L"Input", L"SaveHotkey", 67, ini.c_str());
     Gallery::captureKeys[0]=Gallery::saveHotkey;
     Gallery::gamepadHotkey = GetPrivateProfileIntW(L"Input", L"GamepadHotkey", 32, ini.c_str());
-    SKSE::log::info("OutfitGallery 1.0.14 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
+    SKSE::log::info("OutfitGallery 1.0.15");
+    SKSE::log::info("OutfitGallery 1.0.15 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
     return SKSE::GetMessagingInterface()->RegisterListener(Gallery::Message);
 }
 

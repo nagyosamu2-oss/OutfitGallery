@@ -124,7 +124,7 @@ void RenderOrganizer() {
     const bool down=pad(UI::ImGuiKey_GamepadDpadDown,true)||pad(UI::ImGuiKey_GamepadLStickDown,true);
     bool scrolled=false;
     if(organizer.toolbar) {
-        if(left||right)organizer.action=(organizer.action+(right?1:8))%9;
+        if(left||right)organizer.action=(organizer.action+(right?1:9))%10;
         if(down){organizer.toolbar=false;scrolled=true;}
     } else {
         if(up && organizer.focus<organizerColumns)organizer.toolbar=true;
@@ -148,22 +148,47 @@ void RenderOrganizer() {
             organizer.selection.clear();organizer.anchor.clear();organizer.destination=false;
         }
     };
+    std::vector<std::string> trashTargets;
+    const bool canTrash=!conflict && libraryWritable;
+    auto trashLabel=[&](std::size_t count) {
+        return std::string(Tr(organizer.category=="#trash"?"Restore from Trash":"Move to Trash"))+" ("+std::to_string(count)+")";
+    };
     const bool canMove=!missingCheckMode && !organizer.selection.empty() && !conflict;
     if(button("Select visible",0))organizer.selection.insert(view.begin(),view.end());UI::SameLine();
     if(button("Clear selection",1)){organizer.selection.clear();organizer.destination=false;}UI::SameLine();
     if(button("Move to first",2,canMove))moveSelection();UI::SameLine();
     if(button("Move to last",3,canMove))moveSelection({},true);UI::SameLine();
     if(button("Choose destination",4,canMove))organizer.destination=!organizer.destination;UI::SameLine();
+    const auto selectedTrash=Organize::TrashTargets(view,organizer.selection);
+    UI::BeginDisabled(!canTrash || selectedTrash.empty());
+    const float trashSize=UI::GetFrameHeight();
+    const bool trashClick=organizer.category=="#trash"?
+        UI::Button(Label("Restore from Trash")):UI::Button("##OrganizerTrash",{trashSize,trashSize});
+    const auto trashMin=UI::GetItemRectMin(),trashMax=UI::GetItemRectMax();
+    auto* trashDraw=UI::GetWindowDrawList();
+    if(organizer.category!="#trash") {
+        const float u=trashSize/24.f,x=trashMin.x,y=trashMin.y;
+        const auto color=canTrash && !selectedTrash.empty()?0xFFE0E0E0:0xFF707070;
+        UI::ImDrawListManager::AddRect(trashDraw,{x+7*u,y+8*u},{x+17*u,y+20*u},color,0,0,2.f);
+        UI::ImDrawListManager::AddLine(trashDraw,{x+5*u,y+6*u},{x+19*u,y+6*u},color,2.f);
+        UI::ImDrawListManager::AddLine(trashDraw,{x+9*u,y+3*u},{x+15*u,y+3*u},color,2.f);
+        for(int k:{10,14})UI::ImDrawListManager::AddLine(trashDraw,{x+k*u,y+10*u},{x+k*u,y+18*u},color,1.5f);
+    }
+    if(organizer.toolbar && organizer.action==5)UI::ImDrawListManager::AddRect(trashDraw,trashMin,trashMax,0xFF30C8FF,0,0,3.f);
+    UI::EndDisabled();
+    if(UI::IsItemHovered())UI::SetTooltip("%s",trashLabel(selectedTrash.size()).c_str());
+    if(canTrash && !selectedTrash.empty() && (trashClick || (organizer.toolbar && organizer.action==5 && confirm)))trashTargets=selectedTrash;
+    UI::SameLine();
     UI::Text(Tr("Selected: %u / Visible: %u"),static_cast<unsigned>(organizer.selection.size()),static_cast<unsigned>(cards.size()));
     UI::SameLine(0,UI::GetStyle()->ItemSpacing.x*4.f);
     bool checking=missingCheckMode;
     if(UI::Checkbox(Label("Check missing gear"),&checking)) {SetMissingCheckMode(checking);organizer.destination=false;}
-    if(organizer.toolbar && organizer.action==5)UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,3.f);
-    if(organizer.toolbar && organizer.action==5 && confirm){SetMissingCheckMode(!missingCheckMode);organizer.destination=false;}
+    if(organizer.toolbar && organizer.action==6)UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,3.f);
+    if(organizer.toolbar && organizer.action==6 && confirm){SetMissingCheckMode(!missingCheckMode);organizer.destination=false;}
     if(UI::IsItemHovered())UI::SetTooltip("%s",Tr("Marks outfits with missing parts, for example after removing a mod, with an X. Right-click a photo for details."));
     UI::SameLine(0,UI::GetStyle()->ItemSpacing.x*4.f);
     bool namesChanged=UI::Checkbox(Label("Show names in organizer"),&organizerShowNames);
-    if(organizer.toolbar && organizer.action==6) {
+    if(organizer.toolbar && organizer.action==7) {
         UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,3.f);
         if(confirm){organizerShowNames=!organizerShowNames;namesChanged=true;}
     }
@@ -286,13 +311,23 @@ void RenderOrganizer() {
             auto it=missingResults.find(organizer.context);
             if(it!=missingResults.end())for(const auto& item:it->second){UI::TextWrapped("%s",item.name.c_str());UI::TextWrapped("%s / %06X",item.plugin.c_str(),item.localID);}
         }
-        if(UI::Button(Label(organizer.category=="#trash"?"Restore from Trash":"Move to Trash"))) {
-            organizer.draft.labels[organizer.context].deleted=organizer.category!="#trash";organizer.selection.erase(organizer.context);UI::CloseCurrentPopup();
+        const auto targets=Organize::TrashTargets(view,organizer.selection,organizer.context);
+        UI::BeginDisabled(!canTrash || targets.empty());
+        if(UI::Button((trashLabel(targets.size())+"##ContextTrash").c_str())) {
+            trashTargets=targets;UI::CloseCurrentPopup();
         }
+        UI::EndDisabled();
         UI::TextWrapped("%s",Tr("Trash changes are also applied only when saved."));UI::EndPopup();
     }
-    if(button("Save and close",7,!conflict && libraryWritable))save=true;UI::SameLine();
-    if(button("Cancel",8))close=true;
+    if(!trashTargets.empty() && canTrash) {
+        for(const auto& photo:trashTargets) {
+            organizer.draft.labels[photo].deleted=organizer.category!="#trash";
+            organizer.selection.erase(photo);
+        }
+        organizer.anchor.clear();organizer.destination=false;
+    }
+    if(button("Save and close",8,!conflict && libraryWritable))save=true;UI::SameLine();
+    if(button("Cancel",9))close=true;
     UI::SameLine(0,UI::GetStyle()->ItemSpacing.x*3.f);
 UI::TextWrapped("%s",Tr("Select photos without equipping. Changes are applied only when saved. Filtered views keep hidden photos in place."));
     if(save) {

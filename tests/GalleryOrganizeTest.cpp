@@ -6,6 +6,12 @@ void Check(bool ok){if(!ok)throw std::runtime_error("Organizer test failed");}
 int main(){try {
     const std::vector<std::string> original{"a","hidden1","b","c","hidden2","d","e"};
     const std::vector<std::string> view{"a","b","c","d","e"};
+    Check(TrashTargets(view,{"b","d"},"b")==std::vector<std::string>({"b","d"}));
+    Check(TrashTargets(view,{"b","d"},"c")==std::vector<std::string>({"c"}));
+    Check(TrashTargets(view,{"b","hidden1"})==std::vector<std::string>({"b"}));
+    Check(TrashTargets(view,{},"b")==std::vector<std::string>({"b"}));
+    Check(TrashTargets(view,{}).empty());
+    Check(TrashTargets(view,{"b"},"missing").empty());
     auto order=original;
     Check(Move(order,view,{"b","d"},{},false));
     Check(order==std::vector<std::string>({"b","hidden1","d","a","hidden2","c","e"}));

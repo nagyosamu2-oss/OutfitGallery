@@ -1,6 +1,7 @@
 #include "ItemIdentity.h"
 #include "Presets.h"
 #include "FollowerOutfits.h"
+#include "FollowerAutoOutfits.h"
 #include "StudioSafety.h"
 #include "FollowerOutfitState.h"
 #include "ManagedItems.h"
@@ -69,7 +70,7 @@ void Maintain() {
     {std::scoped_lock lock(stateMutex); copy=outfits;}
     const auto now=GetTickCount64();
     for(auto& [id,state]:copy) {
-        if(now<state.nextCheck) continue;
+        if(now<state.nextCheck || FollowerAutomaticOwns(id)) continue;
         // Resolve on the game thread each time; never keep an actor pointer.
         auto* actor=RE::TESForm::LookupByID<RE::Actor>(id);
         if(!Eligible(actor)) continue;
@@ -126,7 +127,7 @@ void ReleaseFollowerOutfit(RE::Actor* actor) {
     std::scoped_lock lock(stateMutex); outfits.erase(actor->GetFormID()); hasOutfits=!outfits.empty();
 }
 void RefreshFollowerOutfit(RE::Actor* actor) {
-    if(IsFollowerOutfitMaintained(actor)) RememberFollowerOutfit(actor);
+    if(actor && !FollowerAutomaticOwns(actor->GetFormID()) && IsFollowerOutfitMaintained(actor)) RememberFollowerOutfit(actor);
 }
 bool FollowerMaintenanceDue() {return hasOutfits && GetTickCount64()>=nextPoll.load();}
 void MaintainFollowerOutfits() {

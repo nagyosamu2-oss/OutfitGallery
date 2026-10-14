@@ -10,6 +10,19 @@ int main() {
     check(SelectSource(8,0,8)==0); // delayed raw cannot replay translated press
     check(SelectSource(32,0,8)==32); // unlisted custom bindings retain raw path
     check(SelectSource(8,0,8)==0); // translated release clears stale raw held bit
+    // Replay the reported sequence: UI sees no B at reset, then a fresh B.
+    unsigned block=8192;
+    block=RemainingOpeningBlock(block,8192,0); check(block==8192);
+    check((SelectSource(0,8192,8192)&~block)==0);
+    block=RemainingOpeningBlock(block,8192,8192); check(block==8192);
+    block=RemainingOpeningBlock(block,0,8192); check(block==8192);
+    // Release frame is masked, next independent press is allowed.
+    check((8192u&~block)==0);
+    block=RemainingOpeningBlock(block,0,0); check(block==0);
+    check((SelectSource(0,8192,8192)&~block)==8192);
+    check(RemainingOpeningBlock(8192,0,8192)==8192); // UI press after physical release
+    check(RemainingOpeningBlock(0x10000,0x10000,0)==0x10000);
+    check((8u&~8192u)==8); // other buttons are not suppressed
     RepeatState r;
     check(r.Update(1,1,1000)==1);
     check(r.Update(0,1,1200)==0);

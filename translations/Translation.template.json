@@ -535,6 +535,21 @@
     "Equipment selection saved. Applies on the next outfit change.": "Equipment selection saved. Applies on the next outfit change.",
     "Minimum combat switch interval (seconds)": "Minimum combat switch interval (seconds)",
     "Default: 5 seconds (recommended). Lower values respond faster to repeated weapon changes, but may increase outfit-change load or interactions with other mods. Stability and attack/casting waits still apply.": "Default: 5 seconds (recommended). Lower values respond faster to repeated weapon changes, but may increase outfit-change load or interactions with other mods. Stability and attack/casting waits still apply.",
-    "Styles must stay stable for 1 second, or 2 seconds for Unarmed. Attack/casting and weapon draw transitions wait. The usual delay and configured combat interval still apply. Manual changes last until combat ends.": "Styles must stay stable for 1 second, or 2 seconds for Unarmed. Attack/casting and weapon draw transitions wait. The usual delay and configured combat interval still apply. Manual changes last until combat ends."
+    "Styles must stay stable for 1 second, or 2 seconds for Unarmed. Attack/casting and weapon draw transitions wait. The usual delay and configured combat interval still apply. Manual changes last until combat ends.": "Styles must stay stable for 1 second, or 2 seconds for Unarmed. Attack/casting and weapon draw transitions wait. The usual delay and configured combat interval still apply. Manual changes last until combat ends.",
+    "Waiting for another outfit change": "Waiting for another outfit change",
+    "Target": "Target",
+    "Player": "Player",
+    "Follower": "Follower",
+    "Follower trial: settings are saved with the game. Up to two followers. Automatic outfits replace fixed outfit maintenance. Crafting is player-only.": "Follower trial: settings are saved with the game. Up to two followers. Automatic outfits replace fixed outfit maintenance. Crafting is player-only.",
+    "Follower settings belong to this game save. Closing the panel keeps automatic outfits running.": "Follower settings belong to this game save. Closing the panel keeps automatic outfits running.",
+    "The automatic outfit hotkey controls the player only.": "The automatic outfit hotkey controls the player only.",
+    "Registered automatic followers": "Registered automatic followers",
+    "Remove automatic settings": "Remove automatic settings",
+    "Automatic outfits support up to two followers. Remove another follower's settings first.": "Automatic outfits support up to two followers. Remove another follower's settings first.",
+    "Disable automatic outfits before fixed maintenance.": "Disable automatic outfits before fixed maintenance.",
+    "Camera preset name": "Camera preset name",
+    "Save camera preset name": "Save camera preset name",
+    "Compact display": "Compact display",
+    "Hide the name and search fields. New outfits use automatic names. Turn off to enter names or search.": "Hide the name and search fields. New outfits use automatic names. Turn off to enter names or search."
   }
 }

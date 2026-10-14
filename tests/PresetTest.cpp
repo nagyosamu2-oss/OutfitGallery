@@ -2,6 +2,7 @@
 #include "HoldButton.h"
 #include "DiagnosticSettings.h"
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <iostream>
 #include <chrono>
 #include <stdexcept>
@@ -226,6 +227,12 @@ int main() {
         if(!ReadStudioSettings(folder/"portrait.json").portraitThumbnails) throw std::runtime_error("portrait mode lost");
         settings.portraitThumbnails=false; WriteStudioSettings(settings,folder/"portrait.json");
         if(ReadStudioSettings(folder/"portrait.json").portraitThumbnails) throw std::runtime_error("normal mode lost");
+        settings.columns=6;WriteStudioSettings(settings,folder/"six-columns.json");
+        if(ReadStudioSettings(folder/"six-columns.json").columns!=6) throw std::runtime_error("Six columns did not persist");
+        settings.columns=3;
+        settings.compactGallery=true; WriteStudioSettings(settings,folder/"compact.json");
+        if(!ReadStudioSettings(folder/"compact.json").compactGallery) throw std::runtime_error("Compact display did not persist");
+        settings.compactGallery=false;
         CameraBank bank{}; bank[0]=settings; bank[6]=settings; bank[6]->height=140;
         settings.lateral=42; settings.elevation=-35;
         WriteStudioSettings(settings,folder/"settings.json");
@@ -235,7 +242,21 @@ int main() {
         if(legacyCamera.lateral!=0 || legacyCamera.elevation!=0) throw std::runtime_error("legacy composition changed");
         bank[6]->lateral=-55; bank[6]->elevation=40;
         WriteCameraBank(bank,folder/"camera.json");
+        nlohmann::json legacyBank;
+        {std::ifstream input(folder/"camera.json");input>>legacyBank;}
+        legacyBank.erase("names");
+        {std::ofstream output(folder/"legacy-camera.json");output<<legacyBank;}
+        auto legacySlots=ReadCameraBank(folder/"legacy-camera.json");
+        if(!legacySlots.names[6].empty() || legacySlots[6]->height!=140) throw std::runtime_error("Legacy camera bank changed");
         auto cameras=ReadCameraBank(folder/"camera.json");
+        cameras.names[0]="既定の構図";cameras.names[6]="Close-up 100%";
+        WriteCameraBank(cameras,folder/"camera.json");
+        cameras=ReadCameraBank(folder/"camera.json");
+        if(cameras.names[0]!="既定の構図" || cameras.names[6]!="Close-up 100%" || cameras[6]->height!=140) throw std::runtime_error("Camera names did not roundtrip");
+        auto badNames=cameras;badNames.names[2]=std::string(256,'x');
+        bool rejectedName=false;try {WriteCameraBank(badNames,folder/"camera.json");} catch(const std::exception&) {rejectedName=true;}
+        if(!rejectedName || ReadCameraBank(folder/"camera.json").names[6]!="Close-up 100%") throw std::runtime_error("Invalid camera name overwrote bank");
+
         if(cameras[6]->lateral!=-55 || cameras[6]->elevation!=40) throw std::runtime_error("camera movement preset lost");
         if(!cameras[0] || cameras[1] || !cameras[6] || cameras[6]->height!=140 || cameras[0]->height!=settings.height) throw std::runtime_error("camera slots roundtrip failed");
         cameras[0]->distance=350; WriteCameraBank(cameras,folder/"camera.json");

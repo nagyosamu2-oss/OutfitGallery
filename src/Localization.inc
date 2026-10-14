@@ -18,6 +18,18 @@ void LoadExternalTranslation() {
     }
 }
 const std::map<std::string,std::string> japanese{
+ {"Waiting for another outfit change","他の対象の着替え完了を待っています"},
+ {"Target","対象"},
+ {"Player","プレイヤー"},
+ {"Follower","フォロワー"},
+ {"Settings are saved when you save the game (up to two followers).\nEnabling automatic outfits disables fixed outfit maintenance.","設定はゲームのセーブ時に保存します（最大2人）。\n自動着替えを有効にすると固定の服装維持を解除します。"},
+ {"Follower settings belong to this game save. Closing the panel keeps automatic outfits running.","フォロワー設定はこのゲームのセーブに保存します。画面を閉じても自動着替えは継続します。"},
+ {"The automatic outfit hotkey controls the player only.","自動着替えのホットキーはプレイヤーのみを操作します。"},
+ {"Registered automatic followers","自動着替え登録中のフォロワー"},
+ {"Remove automatic settings","自動着替え設定を解除"},
+ {"Automatic outfits support up to two followers. Remove another follower's settings first.","自動着替えは最大2人です。先に他のフォロワーの設定を解除してください。"},
+ {"Disable automatic outfits before fixed maintenance.","固定の服装維持を使う前に自動着替えを無効にしてください。"},
+
  {"Organize gallery","整理・並べ替え"},
  {"Gallery organizer","ギャラリー整理"},
  {"Select photos without equipping. Changes are applied only when saved. Filtered views keep hidden photos in place.","写真を選択して整理します。着替えは行いません。変更は保存時に反映します。絞り込み中は表示外の写真の位置を保ちます。"},
@@ -338,6 +350,7 @@ const std::map<std::string,std::string> japanese{
  {"Navigation buttons are reserved. Disable a conflicting capture binding before assigning it.","移動・決定・終了用のボタンは使用できません。登録キー同士を交換する場合は、先に重複する割り当てを無効化してください。"},
  {"Capture key conflicts with another action.","そのキーは別の操作で使用しています。"},{"Capture button is reserved or already assigned.","そのボタンは移動などの操作、または別の登録操作で使用しています。"},
  {"Click to open or close camera settings.","クリックでカメラ設定を開閉します。"},
+ {"Camera preset name","カメラプリセット名"},{"Save camera preset name","名前を保存"},
  {"Camera presets","カメラプリセット"},{"Help","使い方"},
  {"1. Wear the items to register, then use a registration button or its assigned key.","希望の装備を身につけて、登録ボタンまたは設定したキーで写真と装備を登録します。"},
  {"Outfit: register worn armor and clothing; weapons and ammunition are excluded.","装備：身につけている防具・衣服を登録します。武器と矢は対象外です。"},
@@ -372,6 +385,7 @@ const std::map<std::string,std::string> japanese{
  {"Columns: %d (click to cycle)","現在%d列・クリックで切り替え"},
  {"Selected slots:","対象スロット："},{"Full outfit","装備一式"},{"[Selected slots]","［部分装備］"},
  {"Confirm permanent deletion","完全削除の確認"},
+ {"Empty Trash","ごみ箱を空にする"},{"Delete permanently","完全に削除する"},
  {"Permanently delete these presets, photos and their edit backups? This cannot be undone.","装備プリセット・写真・関連する復元用データと編集バックアップを完全に削除します。元に戻せません。"},
  {"Horizontal position","左右位置"},{"Vertical position","上下位置"},{"Look up / down","見上げ（−）／見下ろし（＋）"},{"Fine angle adjustment","角度の微調整"},
  {"Default camera (fixed)","1 は初期構図です（上書き不可）"},{"Load previous custom slot 1","以前 1 に登録した構図を読み込む"},
@@ -381,7 +395,7 @@ const std::map<std::string,std::string> japanese{
  {"Allow opening from free camera (experimental)","フリーカメラ中の起動を許可（試用）"},
  {"Use a normal first/third-person view, or enable free-camera entry.","通常視点で開くか、オプションでフリーカメラ中の起動を許可してください。"},
  {"Options","オプション"},{"Preset name","登録名"},{"Save outfit + photo","装備と写真を保存"},{"Close studio","閉じる"},
- {"Show preset names","プリセット名を表示"},{"Show item counts","アイテム数を表示"},{"Columns","列数"},{"+ Tab","＋ 分類タブ"},{"Edit tab","タブを編集"},
+ {"Compact display","コンパクト表示"},{"Hide the name and search fields. New outfits use automatic names. Turn off to enter names or search.","登録名・検索欄を隠します。新規登録には自動名を使用します。名前入力や検索を行うときはOFFにしてください。"},{"Show preset names","プリセット名を表示"},{"Show item counts","アイテム数を表示"},{"Columns","列数"},{"+ Tab","＋ 分類タブ"},{"Edit tab","タブを編集"},
  {"Camera settings","カメラ設定"},{"Distance","距離"},{"Height","高さ"},{"Orbit","回り込み"},{"Pitch","上下角度"},{"Field of view","視野角"},
  {"Camera and display settings save automatically.","カメラ・表示設定は自動保存されます。"},
  {"Add missing base items (new game)","不足している装備を追加して復元（ニューゲーム用）"},

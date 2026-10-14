@@ -40,7 +40,7 @@ bool MaintainCraft(RE::PlayerCharacter* player,RE::UI* ui,ULONGLONG now) {
     std::string photo;{std::scoped_lock lock(autoMutex);photo=autoSlots[slot];}
     const bool scene=OStimBlocksAutomatic(player);
     const bool allowed=target && CraftFurnitureKind(target.get())==craft.kind && autoEnabled && !autoPaused && !photo.empty() &&
-        !scene && !active && !editPending && !saveBusy && !verificationTicks && !player->IsInCombat() &&
+        !scene && !active && !editPending && !saveBusy && now>=equipmentLaneDue && !verificationTicks && !player->IsInCombat() &&
         !player->IsDead() && !player->IsDisabled() && !player->IsInKillMove() && !player->IsInRagdollState() &&
         !state->IsUnconscious() && !state->IsStaggered() && !state->IsSwimming() && !player->IsOnMount() &&
         !player->IsAttacking() && !CombatCastingBusy(player) && !ui->GameIsPaused() && !ui->numItemMenus &&
@@ -70,6 +70,7 @@ bool MaintainCraft(RE::PlayerCharacter* player,RE::UI* ui,ULONGLONG now) {
             // No delayed verification/reclamation is scheduled inside crafting menus.
             // Mark first: a partial engine failure must still permit ordinary restoration on exit.
             craft.changed=true;
+            equipmentLaneDue=now+1000;
             const auto result=ApplyEquipment(player,p,true,preferEnchanted.load(),[&] {
                 return craftMenuSerial.load()==craft.menuSerial &&
                     !ui->IsMenuOpen(RE::CraftingMenu::MENU_NAME) && !OStimBlocksAutomatic(player);

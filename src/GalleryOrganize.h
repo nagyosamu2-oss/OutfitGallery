@@ -4,6 +4,15 @@
 #include <string>
 #include <vector>
 namespace Gallery::Organize {
+// A selected context item acts on the visible selection; an unselected one
+// acts only on itself. Empty context denotes the toolbar selection action.
+inline std::vector<std::string> TrashTargets(const std::vector<std::string>& visible,
+        const std::set<std::string>& selected,const std::string& context={}) {
+    std::vector<std::string> result;
+    const bool group=context.empty() || selected.contains(context);
+    for(const auto& id:visible) if(group?selected.contains(id):id==context) result.push_back(id);
+    return result;
+}
 // Replace only the slots occupied by the visible subset. Hidden photos never move.
 inline bool Move(std::vector<std::string>& order,const std::vector<std::string>& visible,
                  const std::set<std::string>& selected,const std::string& target={},bool after=false,bool fixedSlot=false) {

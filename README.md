@@ -1,18 +1,26 @@
-## Changes in 1.0.14
+## Changes in 1.0.15
 
-- Added a wide gallery organizer with multiple selection, group moves, destination previews and 4–30 columns. Missing-set checking is now in the organizer.
-- Added organizer-only name visibility and reduced spacing when names are hidden. Successful moves clear the selection.
-- Improved recognition during Sofia's free-time behavior and allowed more everyday follower activities.
-- Fixed text-input focus loss and gamepad double-step navigation; held-button navigation remains available.
-- Full-outfit management now selects equipment to wear: checked items form a full replacement, unchecked items are excluded. Head/accessory presets remain partial changes. An empty selection does nothing.
-- Added a 2–10 second minimum combat switch interval (default/recommended: 5). Weapon stabilization and attack/casting waits remain.
-- Reopening the gallery returns to the normal outfit view, respecting the independent-preview setting.
-- Fixed some equipment added by patches being incorrectly reported as missing, including support for affected existing presets.
+- Added experimental automatic outfits for up to two followers, with individual assignments and timing settings.
+- Added outfit checks after travel, including early recovery when continuing the same outfit. Ready player changes take priority over waiting follower changes.
+- Added bulk Move to Trash from selected photos or the gallery organizer toolbar, and bulk restoration from Trash.
+- Fixed the gallery selection border alignment.
+- L2/R2 category switching now focuses the photos for immediate navigation.
+- Added Japanese translations for Empty Trash and Delete permanently.
+- Added protection against the held opening button immediately closing the gallery.
 
-Lower intervals may increase load or interactions with other mods. Existing photos, presets and settings are retained. Back up data before updating; restore pre-update data when downgrading.
-If a full outfit uses an old edited exchange-slot selection, resave its selection in Equipment Management before assigning it to automatic switching.
+### Automatic follower outfits (experimental)
 
-# Outfit Gallery 1.0.14
+Enable follower selection, aim at an accompanying follower, open OG and switch to automatic outfits. Check the target name, assign full outfits and enable automation.
+
+- Register up to two followers. Disabled configurations still occupy a slot; remove one under the registered-followers list to free it.
+- Assignments and enabled state are stored when saving the game. Save after editing; loading restores the configuration in that save.
+- Enabling automation disables fixed outfit maintenance for that follower. Turning automation off does not automatically re-enable maintenance.
+- Conditions are evaluated for the follower: location, weather, time, sneaking, swimming and combat. Clothing/armor changes preserve weapons and spells. Missing inventory items are generated.
+- Crafting outfits and the automation toggle hotkey remain player-only.
+- Changes are processed sequentially. Travel recovery is bounded; it does not continuously override another mod's outfit changes.
+- Enable detailed diagnostic logging in Options when investigating problems. Travel/equipment diagnostics are included. Logging resets to OFF on game restart; diagnostic inventory scans do not run while OFF.
+
+# Outfit Gallery 1.0.15
 
 A photo-based SKSE outfit gallery for full outfits, head equipment and accessories. Weapons and ammo are preserved. Includes conditional automatic outfits, follower selection/maintenance, preset editing and an optional independent preview.
 
@@ -55,3 +63,13 @@ Diagnostics are in OutfitGallery.log in the SKSE log directory. Detailed logging
 ## License and provenance
 
 GPL-3.0; see LICENSE, THIRD_PARTY.md and LICENSES. The matching source archive is provided separately. This project was authored with substantial AI assistance. See VALIDATION.md for the tested scope.
+
+## Gallery display and camera preset names (1.0.15)
+
+Normal thumbnails support 2–6 columns; portrait thumbnails support 3–10. Start/Menu cycles the gallery columns only when it is not assigned to opening Gallery, toggling automatic outfits or capturing outfits in OG. Existing assignments take priority.
+
+Options → Compact display hides the preset-name and search fields and moves Organize gallery next to Normal/Portrait. It defaults to OFF and is remembered. Enabling it clears the search filter; registration uses automatic names. Turn it OFF to enter names or search. Photo names and item counts retain their separate visibility settings. Follower maintenance controls share the row only when the translated controls fit.
+
+Open Camera Settings using the camera icon, select a preset slot and save its name. Numbered buttons remain unchanged; hover to see the name. Saving an empty name restores the default tooltip. Renaming does not change the camera position or capture it. Names persist across restarts.
+
+Equipment to wear now shows all biped slot numbers before each item name. This is a display change; selection behavior is unchanged.

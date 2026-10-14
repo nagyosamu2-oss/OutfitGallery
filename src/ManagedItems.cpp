@@ -9,6 +9,7 @@
 #include "Diagnostics.h"
 #include "Presets.h"
 #include "FollowerOutfits.h"
+#include "FollowerAutoOutfits.h"
 #include <mutex>
 #include <set>
 #include <map>
@@ -69,9 +70,11 @@ void Forget(const Identity& key) {std::scoped_lock lock(ledgerMutex); ledger.ite
 void Revert(SKSE::SerializationInterface*) {
     {std::scoped_lock lock(ledgerMutex); ledger.Clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); preferredScopes.clear(); reservedPreferredIDs.clear();}
     ClearFollowerOutfits();
+    ClearFollowerAutoOutfits();
 }
 void Save(SKSE::SerializationInterface* s) {
     SaveFollowerOutfits(s);
+    SaveFollowerAutoOutfits(s);
     if(!preferredScopes.empty()) {
         const auto count=static_cast<std::uint32_t>(preferredScopes.size());
         if(!s->OpenRecord(preferredRecord,2) || !s->WriteRecordData(count)) {SKSE::log::error("Enchanted item: identity scope save failed"); return;}
@@ -87,6 +90,7 @@ void Save(SKSE::SerializationInterface* s) {
 }
 void Load(SKSE::SerializationInterface* s) {
     ClearFollowerOutfits();
+    ClearFollowerAutoOutfits();
     preferredScopes.clear(); reservedPreferredIDs.clear();
     std::set<Identity> next;
     std::uint32_t type{},version{},length{};
@@ -100,6 +104,7 @@ void Load(SKSE::SerializationInterface* s) {
             continue;
         }
         if(LoadFollowerOutfit(s,type,version,length)) continue;
+        if(LoadFollowerAutoOutfit(s,type,version,length)) continue;
         if(type!=itemRecord || (version!=1 && version!=2) || length!=10) continue;
         Identity old, current;
         if(s->ReadRecordData(old.form)!=4 || s->ReadRecordData(old.owner)!=4 || s->ReadRecordData(old.id)!=2) continue;

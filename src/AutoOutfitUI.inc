@@ -9,12 +9,32 @@ static_assert([] {std::array<bool,27> seen{};for(auto slot:AutoDisplayOrder){if(
 const char* AutoCardLabel(unsigned slot) {
     return slot==12?"Mage College":slot==13?"Dark Brotherhood":AutoPlaceLabel(slot);
 }
-bool SaveAutoOutfitPreferences(const AutoOutfitSlots& slots,int seconds,int columns,bool rearm,int recovery=-1,int sneak=-1,int combatInterval=-1) {
+// Snapshot settings for the current studio subject; global hotkeys remain player-only.
+std::uint32_t autoUITarget{}; // renderer-only target snapshot for one gallery frame
+std::uint32_t PanelFollowerID() {return autoUITarget;}
+AutoOutfitSettings PanelAutoSettings() {
+    if(const auto id=PanelFollowerID()) return GetFollowerAuto(id).settings;
+    AutoOutfitSlots slots;{std::scoped_lock lock(autoMutex);slots=autoSlots;}
+    return {slots,autoDelaySeconds.load(),autoColumns,ostimRecoverySeconds.load(),autoEnabled.load(),autoPaused.load(),autoCombatEnabled.load(),autoHideAssignButtons,autoSneakDelaySeconds.load(),autoCombatIntervalSeconds.load()};
+}
+bool SaveAutoOutfitPreferences(const AutoOutfitSlots& slots,int seconds,int columns,bool rearm,int recovery=-1,int sneak=-1,int combatInterval=-1,int hidden=-1) {
+    if(const auto id=PanelFollowerID()) {
+        if(!active || studioActorID.load()!=id) return false;
+        auto settings=GetFollowerAuto(id).settings;
+        settings.slots=slots;settings.delaySeconds=seconds;settings.columns=columns;
+        if(recovery>=0) settings.ostimRecoverySeconds=recovery;
+        if(sneak>=0) settings.sneakDelaySeconds=sneak;
+        if(combatInterval>=0) settings.combatIntervalSeconds=combatInterval;
+        if(hidden>=0) settings.hideAssignButtons=hidden!=0;
+        return SetFollowerAuto(id,settings,rearm);
+    }
     try {
+        const bool nextHidden=hidden>=0?hidden!=0:autoHideAssignButtons;
         if(recovery<0) recovery=ostimRecoverySeconds.load();
         if(combatInterval<0) combatInterval=autoCombatIntervalSeconds.load();
         if(sneak<0) sneak=autoSneakDelaySeconds.load();
-        WriteAutoOutfitSettings({slots,seconds,columns,recovery,autoEnabled.load(),autoPaused.load(),autoCombatEnabled.load(),autoHideAssignButtons,sneak,combatInterval},autoFile);
+        WriteAutoOutfitSettings({slots,seconds,columns,recovery,autoEnabled.load(),autoPaused.load(),autoCombatEnabled.load(),nextHidden,sneak,combatInterval},autoFile);
+        autoHideAssignButtons=nextHidden;
         autoCombatIntervalSeconds=combatInterval;ostimRecoverySeconds=recovery;autoSneakDelaySeconds=sneak;
         {std::scoped_lock lock(autoMutex); autoSlots=slots;}
         autoDelaySeconds=seconds; autoColumns=columns;
@@ -24,7 +44,7 @@ bool SaveAutoOutfitPreferences(const AutoOutfitSlots& slots,int seconds,int colu
     }catch(const std::exception& e) {SetStatus(e.what()); return false;}
 }
 bool AssignAutoPhoto(unsigned slot,const std::string& photo) {
-    if(!autoSlotsWritable || !libraryWritable) return false;
+    if((!PanelFollowerID() && !autoSlotsWritable) || !libraryWritable || slot>=27 || (PanelFollowerID() && slot>=23 && slot<=25)) return false;
     if(!photo.empty()) {
         std::scoped_lock lock(presetsMutex);
         const auto it=std::find_if(presets.begin(),presets.end(),[&](const auto& p){return p.photo==photo;});
@@ -34,10 +54,17 @@ bool AssignAutoPhoto(unsigned slot,const std::string& photo) {
             SetStatus("Assign a full outfit without slot overrides"); return false;
         }
     }
-    AutoOutfitSlots next; {std::scoped_lock lock(autoMutex); next=autoSlots;} next[slot]=photo;
-    return SaveAutoOutfitPreferences(next,autoDelaySeconds.load(),autoColumns,true);
+    auto settings=PanelAutoSettings();settings.slots[slot]=photo;
+    return SaveAutoOutfitPreferences(settings.slots,settings.delaySeconds,settings.columns,true);
 }
-bool SaveAutoOutfitToggles(bool enabled,bool paused,bool combat) {
+bool SaveAutoOutfitToggles(bool enabled,bool paused,bool combat,bool playerOnly=false) {
+    if(const auto id=playerOnly?0:PanelFollowerID()) {
+        if(!active || studioActorID.load()!=id) return false;
+        auto settings=GetFollowerAuto(id).settings;
+        const bool rearm=enabled!=settings.enabled || combat!=settings.combatEnabled;
+        settings.enabled=enabled;settings.paused=paused;settings.combatEnabled=combat;
+        return SetFollowerAuto(id,settings,rearm);
+    }
     try {
         AutoOutfitSlots slots; {std::scoped_lock lock(autoMutex);slots=autoSlots;}
         WriteAutoOutfitSettings({slots,autoDelaySeconds.load(),autoColumns,ostimRecoverySeconds.load(),enabled,paused,combat,autoHideAssignButtons,autoSneakDelaySeconds.load(),autoCombatIntervalSeconds.load()},autoFile);
@@ -53,7 +80,7 @@ void ProcessAutoToggle() {
     if(!autoToggleRequested.exchange(false)) return;
     if(!autoSlotsWritable || !libraryWritable) {SetStatus("Automatic outfit settings are not writable.");return;}
     const bool enabled=!autoEnabled.load() || autoPaused.load();
-    if(!SaveAutoOutfitToggles(enabled,false,autoCombatEnabled.load())) return;
+    if(!SaveAutoOutfitToggles(enabled,false,autoCombatEnabled.load(),true)) return;
     const std::string message=Tr(enabled?"Automatic outfits: ON":"Automatic outfits: OFF");
     SetStatus(message);
     noticeCompact=true;
@@ -65,6 +92,7 @@ void AutoSameLineIfFits(float width) {
     if(UI::GetItemRectMax().x+UI::GetStyle()->ItemSpacing.x+width<=end) UI::SameLine();
 }
 void RenderGalleryTitle(bool& opened) {
+    autoUITarget=studioFollower.load()?studioActorID.load():0;
     const auto start=UI::GetCursorPos();
     const float buttonWidth=UI::CalcTextSize(Tr("Automatic outfits")).x+UI::GetStyle()->FramePadding.x*2.f;
     const std::string followerLabel=std::format("{} {}",Tr("Follower selection"),MaintainedFollowerCount());
@@ -85,7 +113,8 @@ void RenderGalleryTitle(bool& opened) {
         UI::SetTooltip("%s\n%s\n%s",Tr("Select a follower as the outfit target."),Tr("Aim at a following companion and open the gallery."),Tr("The number counts enabled followers. Their outfits are maintained even when selection is OFF."));
     }
     UI::SameLine();
-    const bool enabled=autoEnabled.load(),paused=autoPaused.load();
+    const auto targetSettings=PanelAutoSettings();
+    const bool enabled=targetSettings.enabled,paused=targetSettings.paused;
     if(enabled) {
         const UI::ImVec4 color=paused?UI::ImVec4{.22f,.36f,.48f,1.f}:UI::ImVec4{.55f,.43f,.19f,1.f};
         UI::PushStyleColor(UI::ImGuiCol_Button,color);
@@ -97,9 +126,9 @@ void RenderGalleryTitle(bool& opened) {
     UI::SameLine();if(UI::Button("X##closeGallery",{closeWidth,closeWidth})) opened=false;
     UI::Separator();
 }
-void RenderAutoOutfitHelp() {
+void RenderAutoOutfitHelp(bool follower=false) {
         UI::TextWrapped("%s",Tr("Shops use indoor locations tagged LocTypeStore. Home, inn, temple and dungeon take priority. An empty Shop slot uses Town inside towns, otherwise Default."));
-        UI::TextWrapped("%s",Tr("Crafting trial: assign a full outfit to Smithing, Alchemy or Enchanting. Missing base items are generated before the crafting menu; carry your custom-enchanted items. Late or blocked attempts are skipped until the next use. Check the equipped outfit and its active effects."));
+        if(!follower) UI::TextWrapped("%s",Tr("Crafting trial: assign a full outfit to Smithing, Alchemy or Enchanting. Missing base items are generated before the crafting menu; carry your custom-enchanted items. Late or blocked attempts are skipped until the next use. Check the equipped outfit and its active effects."));
         UI::TextWrapped("%s",Tr("Sneaking uses its own delay in Options (0-5 seconds, default 2). Combat and swimming take priority; otherwise sneaking overrides weather and locations. Empty slots keep existing rules."));
         UI::TextWrapped("%s",Tr("Styles must stay stable for 1 second, or 2 seconds for Unarmed. Attack/casting and weapon draw transitions wait. The usual delay and configured combat interval still apply. Manual changes last until combat ends."));
         UI::TextWrapped("%s",Tr("Combat styles follow the right hand; bows use either hand. Unarmed requires both hands empty. Empty style slots use Combat. Leave all four empty for the original once-per-combat behavior."));
@@ -112,20 +141,34 @@ void RenderAutoOutfitHelp() {
         UI::TextWrapped("%s",Tr("Manual Gallery changes take priority until the selected condition changes. Pause before posing or using another outfit manager."));
 }
 void RenderAutoOutfitPanel(UI::ImVec2 screen) {
+    const auto followerID=PanelFollowerID();
+    const auto panelSettings=PanelAutoSettings();
+    const bool panelEnabled{panelSettings.enabled},panelPaused{panelSettings.paused},panelCombat{panelSettings.combatEnabled};
+    const int panelDelay{panelSettings.delaySeconds},panelCombatInterval{panelSettings.combatIntervalSeconds},panelSneakDelay{panelSettings.sneakDelaySeconds},panelRecovery{panelSettings.ostimRecoverySeconds};
+    const int panelColumns=panelSettings.columns;
+    bool panelHideAssign=panelSettings.hideAssignButtons;
+    const bool panelWritable=followerID?true:Gallery::autoSlotsWritable;
+    std::vector<unsigned> displayOrder;
+    for(auto slot:AutoDisplayOrder) if(!followerID || slot<23 || slot>25) displayOrder.push_back(slot);
+
     UI::SetNextWindowPos({screen.x*.535f,screen.y*.015f},UI::ImGuiCond_Always);
     UI::SetNextWindowSize({screen.x*.455f,screen.y*.97f},UI::ImGuiCond_Always);
     bool panelOpen=autoPanel;
     if(UI::Begin(Label("Automatic outfits (test)"),&panelOpen,UI::ImGuiWindowFlags_NoResize|UI::ImGuiWindowFlags_NoMove|UI::ImGuiWindowFlags_NoCollapse)) {
-        bool enabled=autoEnabled.load(), paused=autoPaused.load(), combat=autoCombatEnabled.load();
-        UI::BeginDisabled(!autoSlotsWritable || !libraryWritable);
+        std::string targetName;
+        {std::scoped_lock lock(statusMutex);targetName=studioActorName;}
+        UI::Text("%s: %s",Tr("Target"),followerID?targetName.c_str():Tr("Player"));
+        if(followerID) UI::TextWrapped("%s",Tr("Settings are saved when you save the game (up to two followers).\nEnabling automatic outfits disables fixed outfit maintenance."));
+        bool enabled=panelEnabled, paused=panelPaused, combat=panelCombat;
+        UI::BeginDisabled(!panelWritable || !libraryWritable);
         if(UI::Checkbox(Label("Enable automatic outfits"),&enabled)) SaveAutoOutfitToggles(enabled,paused,combat);
-        const char* pauseText=autoPaused?"Resume":"Pause";
+        const char* pauseText=panelPaused?"Resume":"Pause";
         AutoSameLineIfFits(UI::CalcTextSize(Tr(pauseText)).x+UI::GetStyle()->FramePadding.x*2.f);
-        UI::BeginDisabled(!autoEnabled.load());
-        if(UI::Button(Label(pauseText))) SaveAutoOutfitToggles(autoEnabled.load(),!autoPaused.load(),autoCombatEnabled.load());
+        UI::BeginDisabled(!panelEnabled);
+        if(UI::Button(Label(pauseText))) SaveAutoOutfitToggles(panelEnabled,!panelPaused,panelCombat);
         UI::EndDisabled();
         AutoSameLineIfFits(UI::CalcTextSize(Tr("Combat (experimental)")).x+UI::GetFrameHeight()+UI::GetStyle()->ItemInnerSpacing.x);
-        if(UI::Checkbox(Label("Combat (experimental)"),&combat)) SaveAutoOutfitToggles(autoEnabled.load(),autoPaused.load(),combat);
+        if(UI::Checkbox(Label("Combat (experimental)"),&combat)) SaveAutoOutfitToggles(panelEnabled,panelPaused,combat);
         UI::EndDisabled();
         AutoSameLineIfFits(UI::GetFrameHeight());
         if(UI::Button("?##autoHelp")) UI::OpenPopup("Auto outfit help");
@@ -133,45 +176,56 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
         if(UI::BeginPopup("Auto outfit help")) {
             UI::TextWrapped("%s",Tr("Combat testing: armor and effects change during combat. Not verified across mod setups; use a test save."));
             UI::Separator();
-            UI::TextWrapped("%s",Tr("Automatic outfit preferences are shared across saves. Closing this panel does not disable automatic outfits."));
-            RenderAutoOutfitHelp();
+            UI::TextWrapped("%s",Tr(followerID?"Follower settings belong to this game save. Closing the panel keeps automatic outfits running.":"Automatic outfit preferences are shared across saves. Closing this panel does not disable automatic outfits."));
+            RenderAutoOutfitHelp(followerID!=0);
             UI::EndPopup();
         }
         std::string state,loc; AutoOutfitSlots slots; AutoEnvironmentDisplay environment;
-        {std::scoped_lock lock(autoMutex); state=autoState; loc=autoLocation; slots=autoSlots; environment=autoEnvironment;}
-        int seconds=autoDelaySeconds.load();
-        UI::BeginDisabled(!autoSlotsWritable || !libraryWritable);
+        if(followerID) {const auto entry=GetFollowerAuto(followerID);state=entry.status;loc=entry.location;slots=entry.settings.slots;environment=entry.environment;}
+        else {std::scoped_lock lock(autoMutex); state=autoState; loc=autoLocation; slots=autoSlots; environment=autoEnvironment;}
+        int seconds=panelDelay;
+        UI::BeginDisabled(!panelWritable || !libraryWritable);
         UI::SetNextItemWidth(std::max(90.f,UI::GetContentRegionAvail().x*.42f));
         if(UI::SliderInt(Label("Change delay (seconds)"),&seconds,0,10,"%d",UI::ImGuiSliderFlags_AlwaysClamp))
-            SaveAutoOutfitPreferences(slots,seconds,autoColumns,false);
+            SaveAutoOutfitPreferences(slots,seconds,panelColumns,false);
         if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("0 seconds: change on the next check (about once per second). The minimum attempt interval is 5 seconds outside combat; combat uses its configured interval."));
         UI::EndDisabled();
+        if(UI::CollapsingHeader(Label("Registered automatic followers"))) {
+            std::vector<std::pair<std::uint32_t,std::string>> registered;
+            {std::scoped_lock lock(followerAutoMutex);for(const auto& [id,e]:followerAutos) registered.emplace_back(id,e.name);}
+            for(const auto& [id,name]:registered) {
+                UI::PushID(static_cast<int>(id));
+                UI::TextUnformatted(name.empty()?Tr("Follower"):name.c_str());UI::SameLine();
+                if(UI::Button(Label("Remove automatic settings"))) RemoveFollowerAuto(id);
+                UI::PopID();
+            }
+        }
         if(UI::CollapsingHeader(Label("Options"))) {
-            RenderAutoHotkeys();
+            if(!followerID) RenderAutoHotkeys();
+            else UI::TextWrapped("%s",Tr("The automatic outfit hotkey controls the player only."));
             UI::Separator();
-            UI::BeginDisabled(!autoSlotsWritable || !libraryWritable);
-        int combatInterval=autoCombatIntervalSeconds.load();
+            UI::BeginDisabled(!panelWritable || !libraryWritable);
+        int combatInterval=panelCombatInterval;
         UI::SetNextItemWidth(std::max(90.f,UI::GetContentRegionAvail().x*.42f));
         if(UI::SliderInt(Label("Minimum combat switch interval (seconds)"),&combatInterval,2,10,"%d",UI::ImGuiSliderFlags_AlwaysClamp)) {
-            AutoOutfitSlots slots; {std::scoped_lock lock(autoMutex);slots=autoSlots;}
-            SaveAutoOutfitPreferences(slots,autoDelaySeconds.load(),autoColumns,false,-1,-1,combatInterval);
+            SaveAutoOutfitPreferences(slots,panelDelay,panelColumns,false,-1,-1,combatInterval);
         }
         if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Default: 5 seconds (recommended). Lower values respond faster to repeated weapon changes, but may increase outfit-change load or interactions with other mods. Stability and attack/casting waits still apply."));
-        int sneak=autoSneakDelaySeconds.load();
+        int sneak=panelSneakDelay;
         UI::SetNextItemWidth(std::max(90.f,UI::GetContentRegionAvail().x*.42f));
         if(UI::SliderInt(Label("Sneaking delay (seconds)"),&sneak,0,5,"%d",UI::ImGuiSliderFlags_AlwaysClamp))
-            SaveAutoOutfitPreferences(slots,autoDelaySeconds.load(),autoColumns,false,-1,sneak);
+            SaveAutoOutfitPreferences(slots,panelDelay,panelColumns,false,-1,sneak);
         if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Independent of the normal delay. 0 uses the next check (about once per second). The 5-second attempt interval and attack/casting waits still apply."));
-        int recovery=ostimRecoverySeconds.load();
+        int recovery=panelRecovery;
         UI::SetNextItemWidth(std::max(90.f,UI::GetContentRegionAvail().x*.42f));
         if(UI::SliderInt(Label("OStim recovery delay (seconds)"),&recovery,5,30,"%d",UI::ImGuiSliderFlags_AlwaysClamp))
-            SaveAutoOutfitPreferences(slots,seconds,autoColumns,false,recovery);
+            SaveAutoOutfitPreferences(slots,seconds,panelColumns,false,recovery);
         if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Wait after confirmed scene exit, then evaluate current conditions. Changes apply to the next scene exit."));
 
-            bool hide=autoHideAssignButtons;
+            bool hide=panelHideAssign;
             if(UI::Checkbox(Label("Hide assignment buttons"),&hide)) {
-                const bool previous=autoHideAssignButtons;autoHideAssignButtons=hide;
-                if(!SaveAutoOutfitPreferences(slots,autoDelaySeconds.load(),autoColumns,false)) autoHideAssignButtons=previous;
+                const bool previous=panelHideAssign;panelHideAssign=hide;
+                if(!SaveAutoOutfitPreferences(slots,panelDelay,panelColumns,false,-1,-1,-1,hide?1:0)) panelHideAssign=previous;
             }
             if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Drag photos to assign outfits. Hover over an assigned photo to clear its assignment."));
             UI::EndDisabled();
@@ -192,39 +246,39 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
         if(env.flags.sneaking) UI::TextUnformatted(Tr("Sneaking detected"));
         UI::Text("%s: %s",Tr("Selected outfit rule"),environment.selectedSlot<0?Tr("Not assigned"):Tr(AutoPlaceLabel(environment.selectedSlot)));
         UI::TextWrapped("%s: %s",Tr("Status"),Tr(state.c_str()));
-        UI::TextWrapped("%s",Tr(OStimStateLabel(ostimSceneState.load())));
+        if(!followerID) UI::TextWrapped("%s",Tr(OStimStateLabel(ostimSceneState.load())));
             UI::EndPopup();
         }
         UI::Separator();
         const float buttonHeight=UI::GetFrameHeight();
-        UI::BeginDisabled(!autoSlotsWritable || !libraryWritable);
-        if(UI::Button("##autoColumns",{buttonHeight+20.f,buttonHeight}))
-            SaveAutoOutfitPreferences(slots,autoDelaySeconds.load(),autoColumns==5?3:autoColumns+1,false);
+        UI::BeginDisabled(!panelWritable || !libraryWritable);
+        if(UI::Button("##panelColumns",{buttonHeight+20.f,buttonHeight}))
+            SaveAutoOutfitPreferences(slots,panelDelay,panelColumns==5?3:panelColumns+1,false);
         DrawColumnCountIcon(buttonHeight);
-        if(UI::IsItemHovered()) UI::SetTooltip(Tr("Columns: %d (click to cycle)"),autoColumns);
+        if(UI::IsItemHovered()) UI::SetTooltip(Tr("Columns: %d (click to cycle)"),panelColumns);
         UI::EndDisabled();
-        UI::SameLine(); UI::Text(Tr("Columns: %d"),autoColumns);
+        UI::SameLine(); UI::Text(Tr("Columns: %d"),panelColumns);
         UI::Spacing();
         const auto start=UI::GetCursorScreenPos();
         const float gap=UI::GetStyle()->ItemSpacing.x*2.f;
-        const float width=std::max(32.f,(UI::GetContentRegionAvail().x-gap*(autoColumns-1))/autoColumns);
+        const float width=std::max(32.f,(UI::GetContentRegionAvail().x-gap*(panelColumns-1))/panelColumns);
         const float frameX=UI::GetStyle()->FramePadding.x, frameY=UI::GetStyle()->FramePadding.y;
         const float imageWidth=std::max(1.f,width-frameX*2.f);
         const float cardHeight=imageWidth*1.5f;
         float rowY=start.y, rowBottom=start.y, rowHeaderHeight=0.f;
-        for(unsigned displayIndex=0;displayIndex<AutoDisplayOrder.size();++displayIndex) {
-            const unsigned n=AutoDisplayOrder[displayIndex];
-            const unsigned col=displayIndex%static_cast<unsigned>(autoColumns);
+        for(unsigned displayIndex=0;displayIndex<displayOrder.size();++displayIndex) {
+            const unsigned n=displayOrder[displayIndex];
+            const unsigned col=displayIndex%static_cast<unsigned>(panelColumns);
             if(col==0) {
                 if(displayIndex) rowY=rowBottom+gap;
                 rowHeaderHeight=UI::GetTextLineHeight();
-                const auto end=std::min(static_cast<unsigned>(AutoDisplayOrder.size()),displayIndex+static_cast<unsigned>(autoColumns));
+                const auto end=std::min(static_cast<unsigned>(displayOrder.size()),displayIndex+static_cast<unsigned>(panelColumns));
                 for(unsigned next=displayIndex;next<end;++next)
-                    rowHeaderHeight=std::max(rowHeaderHeight,UI::CalcTextSize(Tr(AutoCardLabel(AutoDisplayOrder[next])),nullptr,false,width).y);
+                    rowHeaderHeight=std::max(rowHeaderHeight,UI::CalcTextSize(Tr(AutoCardLabel(displayOrder[next])),nullptr,false,width).y);
             }
             UI::SetCursorScreenPos({start.x+col*(width+gap),rowY});
             UI::PushID(static_cast<int>(n)); UI::BeginGroup();
-            const bool combatOff=!autoCombatEnabled.load() && (n==4 || (n>=18 && n<=21));
+            const bool combatOff=!panelCombat && (n==4 || (n>=18 && n<=21));
             if(combatOff) UI::PushStyleVar(UI::ImGuiStyleVar_Alpha,UI::GetStyle()->Alpha*.45f);
             UI::PushTextWrapPos(UI::GetCursorPosX()+width);
             UI::TextWrapped("%s",Tr(AutoCardLabel(n)));
@@ -271,7 +325,7 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
                 bool clearHovered=false;
                 if(!slots[n].empty()) {
                     UI::SetCursorScreenPos({photoMax.x-size-3.f,photoMin.y+3.f});
-                    UI::BeginDisabled(!autoSlotsWritable || !libraryWritable);
+                    UI::BeginDisabled(!panelWritable || !libraryWritable);
                     if(UI::Button("X##clearAssignment",{size,size})) AssignAutoPhoto(n,"");
                     clearHovered=UI::IsItemHovered();
                     if(clearHovered) UI::SetTooltip("%s",Tr("Clear assignment"));
@@ -280,8 +334,8 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
                 }
                 if(!clearHovered) UI::SetTooltip("%s%s%s",title.c_str(),combatOff?"\n":"",combatOff?Tr("Combat switching is OFF. Assignments can still be edited."):"");
             }
-            if(!autoHideAssignButtons) {
-            UI::BeginDisabled(!autoSlotsWritable || !libraryWritable || autoSelectedPhoto.empty());
+            if(!panelHideAssign) {
+            UI::BeginDisabled(!panelWritable || !libraryWritable || autoSelectedPhoto.empty());
             const bool compactAssign=UI::CalcTextSize(Tr("Assign selected")).x+frameX*2.f>width;
             if(UI::Button(Label(compactAssign?"Assign":"Assign selected"),{width,0})) AssignAutoPhoto(n,autoSelectedPhoto);
             if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Assign selected"));
@@ -294,7 +348,7 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
         }
         UI::SetCursorScreenPos({start.x,rowBottom+gap});
         UI::Separator();
-        if(!autoSlotsWritable) UI::TextWrapped("%s",Tr("Auto outfit settings could not be read. Editing is disabled."));
+        if(!panelWritable) UI::TextWrapped("%s",Tr("Auto outfit settings could not be read. Editing is disabled."));
     }
     UI::End();
     if(!panelOpen) {autoPanel=false;autoPanelVisible=false;}

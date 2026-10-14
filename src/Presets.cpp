@@ -133,7 +133,7 @@ void ValidateSettings(const StudioSettings& s) {
     auto valid=[](float v,float low,float high){return std::isfinite(v) && v>=low && v<=high;};
     for(auto v:s.previewRect) if(!valid(v,0.f,1.f)) throw std::runtime_error("Invalid preview rectangle");
     if(s.previewRect[2]<.1f || s.previewRect[3]<.1f) throw std::runtime_error("Preview rectangle too small");
-    if (!valid(s.distance,10,500) || !valid(s.height,-20,180) || !valid(s.orbit,-180,180) || !valid(s.pitch,-25,25) || !valid(s.lateral,-150,150) || !valid(s.elevation,-60,60) || !valid(s.fov,35,90) || s.columns<2 || s.columns>5)
+    if (!valid(s.distance,10,500) || !valid(s.height,-20,180) || !valid(s.orbit,-180,180) || !valid(s.pitch,-25,25) || !valid(s.lateral,-150,150) || !valid(s.elevation,-60,60) || !valid(s.fov,35,90) || s.columns<2 || s.columns>6)
         throw std::runtime_error("Invalid studio settings");
 }
 StudioSettings ReadStudioSettings(const std::filesystem::path& path) {
@@ -141,7 +141,7 @@ StudioSettings ReadStudioSettings(const std::filesystem::path& path) {
     std::ifstream in(path); Json j; in>>j;
     if(j.at("schema").get<int>()!=1) throw std::runtime_error("Unsupported settings schema");
     StudioSettings s{j.at("distance"),j.at("height"),j.at("orbit"),j.at("pitch"),j.at("fov"),j.value("columns",3)};
-    s.showNames=j.value("showNames",true); s.showCounts=j.value("showCounts",true); s.language=j.value("language",0); s.allowFreeCamera=j.value("allowFreeCamera",false); s.addMissing=j.value("addMissing",true); s.preferEnchanted=j.value("preferEnchanted",true); s.portraitThumbnails=j.value("portraitThumbnails",false); s.cleanupCompatibility=j.value("cleanupCompatibility",false); s.allowCombatGallery=j.value("allowCombatGallery",false);
+    s.showNames=j.value("showNames",true); s.showCounts=j.value("showCounts",true); s.language=j.value("language",0); s.allowFreeCamera=j.value("allowFreeCamera",false); s.addMissing=j.value("addMissing",true); s.preferEnchanted=j.value("preferEnchanted",true); s.portraitThumbnails=j.value("portraitThumbnails",false); s.cleanupCompatibility=j.value("cleanupCompatibility",false); s.allowCombatGallery=j.value("allowCombatGallery",false); s.compactGallery=j.value("compactGallery",false);
     s.headSlots=j.value("headSlots",0x1803u);
     s.startupTab=j.value("startupTab",std::string{});
     s.followerTargeting=j.value("followerTargeting",false);
@@ -151,7 +151,7 @@ StudioSettings ReadStudioSettings(const std::filesystem::path& path) {
 }
 void WriteStudioSettings(const StudioSettings& s,const std::filesystem::path& path) {
     ValidateSettings(s);
-    Json j={{"schema",1},{"distance",s.distance},{"height",s.height},{"orbit",s.orbit},{"pitch",s.pitch},{"fov",s.fov},{"columns",s.columns},{"showNames",s.showNames},{"showCounts",s.showCounts},{"language",s.language},{"allowFreeCamera",s.allowFreeCamera},{"addMissing",s.addMissing},{"preferEnchanted",s.preferEnchanted},{"portraitThumbnails",s.portraitThumbnails},{"cleanupCompatibility",s.cleanupCompatibility},{"allowCombatGallery",s.allowCombatGallery},{"lateral",s.lateral},{"elevation",s.elevation},{"headSlots",s.headSlots},{"startupTab",s.startupTab},{"detachedPreview",s.detachedPreview},{"previewRect",s.previewRect},{"followerTargeting",s.followerTargeting}};
+    Json j={{"schema",1},{"distance",s.distance},{"height",s.height},{"orbit",s.orbit},{"pitch",s.pitch},{"fov",s.fov},{"columns",s.columns},{"showNames",s.showNames},{"showCounts",s.showCounts},{"language",s.language},{"allowFreeCamera",s.allowFreeCamera},{"addMissing",s.addMissing},{"preferEnchanted",s.preferEnchanted},{"portraitThumbnails",s.portraitThumbnails},{"cleanupCompatibility",s.cleanupCompatibility},{"allowCombatGallery",s.allowCombatGallery},{"compactGallery",s.compactGallery},{"lateral",s.lateral},{"elevation",s.elevation},{"headSlots",s.headSlots},{"startupTab",s.startupTab},{"detachedPreview",s.detachedPreview},{"previewRect",s.previewRect},{"followerTargeting",s.followerTargeting}};
     std::filesystem::create_directories(path.parent_path());
     auto tmp=path; tmp+=".tmp";
     {std::ofstream out(tmp,std::ios::binary|std::ios::trunc); out.exceptions(std::ios::badbit|std::ios::failbit); out<<j.dump(2); out.close();}
@@ -162,6 +162,11 @@ CameraBank ReadCameraBank(const std::filesystem::path& path) {
     std::ifstream in(path); Json j; in>>j;
     if(j.at("schema").get<int>()!=1 || !j.at("slots").is_array() || j.at("slots").size()!=7) throw std::runtime_error("Invalid camera preset bank");
     CameraBank bank;
+    if(j.contains("names")) {
+        if(!j["names"].is_array() || j["names"].size()!=7) throw std::runtime_error("Invalid camera preset bank");
+        bank.names=j["names"].get<std::array<std::string,7>>();
+        for(const auto& name:bank.names) if(name.size()>255 || name.find('\0')!=std::string::npos) throw std::runtime_error("Invalid camera preset bank");
+    }
     for(std::size_t n=0;n<7;++n) if(!j["slots"][n].is_null()) {
         const auto& c=j["slots"][n]; StudioSettings s;
         s.distance=c.at("distance"); s.height=c.at("height"); s.orbit=c.at("orbit"); s.pitch=c.at("pitch"); s.fov=c.at("fov");
@@ -171,7 +176,8 @@ CameraBank ReadCameraBank(const std::filesystem::path& path) {
     return bank;
 }
 void WriteCameraBank(const CameraBank& bank,const std::filesystem::path& path) {
-    Json j={{"schema",1},{"slots",Json::array()}};
+    for(const auto& name:bank.names) if(name.size()>255 || name.find('\0')!=std::string::npos) throw std::runtime_error("Invalid camera preset bank");
+    Json j={{"schema",1},{"slots",Json::array()},{"names",bank.names}};
     for(const auto& slot:bank) {
         if(!slot) {j["slots"].push_back(nullptr); continue;}
         ValidateSettings(*slot); const auto& s=*slot;

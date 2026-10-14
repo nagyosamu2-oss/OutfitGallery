@@ -43,13 +43,17 @@ PadInputPolicy::RepeatState padRepeatState;
 unsigned appliedPadReset{};
 
 void UpdatePadFrame() {
+    static unsigned diagnosticFrames=0;
     const auto serial=padResetSerial.load();
     if(appliedPadReset!=serial) {
+        diagnosticFrames=0;
+        GALLERY_DIAG("OG-OPEN-DIAG pad reset serial={} Bdown={} Bpressed={}",serial,UI::IsKeyDown(UI::ImGuiKey_GamepadFaceRight),UI::IsKeyPressed(UI::ImGuiKey_GamepadFaceRight,false));
         appliedPadReset=serial; padRepeatState.Reset();
         framePadEdges=framePadRepeat=0;
         return; // Do not treat the opening button as gallery navigation.
     }
     framePadEdges=padEdges.exchange(0);
+    const auto diagnosticRaw=framePadEdges;
     // Use one authoritative source for mapped UI buttons. Raw and translated
     // events can arrive in different frames; merging both double-counts a press.
     const std::pair<UI::ImGuiKey,unsigned> keys[]={
@@ -66,8 +70,18 @@ void UpdatePadFrame() {
         if(UI::IsKeyDown(key)) translatedHeld|=bit;
     }
     framePadEdges=PadInputPolicy::SelectSource(framePadEdges,translatedEdges,mapped);
-    const auto held=PadInputPolicy::SelectSource(padHeld.load(),translatedHeld,mapped);
+    auto held=PadInputPolicy::SelectSource(padHeld.load(),translatedHeld,mapped);
+    auto blocked=openingPadBlock.load();
+    if(blocked) {
+        framePadEdges&=~blocked;
+        held&=~blocked;
+        const auto remaining=PadInputPolicy::RemainingOpeningBlock(blocked,physicalPadHeld.load(),translatedHeld);
+        if((translatedEdges&blocked) || remaining!=blocked)
+            GALLERY_DIAG("OG-OPEN-DIAG opening guard mask={} physical={} translatedHeld={} translatedEdges={} remaining={}",blocked,physicalPadHeld.load(),translatedHeld,translatedEdges,remaining);
+        openingPadBlock.compare_exchange_strong(blocked,remaining);
+    }
     framePadRepeat=padRepeatState.Update(framePadEdges,held,GetTickCount64());
+    if(diagnosticFrames++<8 || (framePadEdges&8192)) GALLERY_DIAG("OG-OPEN-DIAG pad frame={} raw={} translated={} held={} edges={}",diagnosticFrames,diagnosticRaw,translatedEdges,held,framePadEdges);
 }
 
 bool RawPadPressed(unsigned code,bool repeat=false) {

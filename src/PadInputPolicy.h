@@ -5,6 +5,11 @@ namespace PadInputPolicy {
 inline unsigned SelectSource(unsigned raw,unsigned translated,unsigned mapped) {
     return (raw & ~mapped) | (translated & mapped);
 }
+// Ignore the opening button on the release frame too: UI translation can lag
+// the physical release and still report an edge during that frame.
+inline unsigned RemainingOpeningBlock(unsigned blocked,unsigned physicalHeld,unsigned translatedHeld) {
+    return blocked & (physicalHeld | translatedHeld);
+}
 inline bool MayReleaseFocus(unsigned fresh,bool modal,bool binding,bool mouseDown) {
     return fresh && !modal && !binding && !mouseDown;
 }

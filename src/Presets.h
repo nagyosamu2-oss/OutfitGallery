@@ -19,8 +19,15 @@ void WriteAutoOutfitSettings(const AutoOutfitSettings&,const std::filesystem::pa
 struct InputSettings { unsigned keyboard{66}, gamepad{32}; float holdSeconds{0.8f}; std::array<unsigned,3> captureKeys{67,68,87}; std::array<unsigned,3> capturePads{32768,16384,64}; unsigned keyboardModifiers{}; unsigned autoKeyboard{}, autoModifiers{}, autoGamepad{}; float autoHoldSeconds{.8f}; };
 InputSettings ReadInputSettings(const std::filesystem::path&);
 void WriteInputSettings(const InputSettings&,const std::filesystem::path&);
-struct StudioSettings { float distance{217.130f}, height{67.619f}, orbit{-22.831f}, pitch{0.350f}, fov{60.060f}; int columns{3}; bool showNames{true}, showCounts{true}; int language{0}; bool allowFreeCamera{}; bool addMissing{true}; float lateral{13.929f}, elevation{0.000f}; std::uint32_t headSlots{0x1803}; std::string startupTab{}; bool detachedPreview{}; std::array<float,4> previewRect{.54f,.08f,.45f,.84f}; bool followerTargeting{}; bool preferEnchanted{true}; bool portraitThumbnails{}; bool cleanupCompatibility{}; bool allowCombatGallery{}; };
-using CameraBank=std::array<std::optional<StudioSettings>,7>;
+struct StudioSettings { float distance{217.130f}, height{67.619f}, orbit{-22.831f}, pitch{0.350f}, fov{60.060f}; int columns{3}; bool showNames{true}, showCounts{true}; int language{0}; bool allowFreeCamera{}; bool addMissing{true}; float lateral{13.929f}, elevation{0.000f}; std::uint32_t headSlots{0x1803}; std::string startupTab{}; bool detachedPreview{}; std::array<float,4> previewRect{.54f,.08f,.45f,.84f}; bool followerTargeting{}; bool preferEnchanted{true}; bool portraitThumbnails{}; bool cleanupCompatibility{}; bool allowCombatGallery{}; bool compactGallery{}; };
+struct CameraBank {
+    std::array<std::optional<StudioSettings>,7> slots;
+    std::array<std::string,7> names;
+    auto& operator[](std::size_t n) {return slots[n];}
+    const auto& operator[](std::size_t n) const {return slots[n];}
+    auto begin() const {return slots.begin();}
+    auto end() const {return slots.end();}
+};
 CameraBank ReadCameraBank(const std::filesystem::path&);
 void WriteCameraBank(const CameraBank&,const std::filesystem::path&);
 struct Category { std::string id, name; };

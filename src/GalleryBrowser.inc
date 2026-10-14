@@ -84,6 +84,10 @@ void RenderBrowser(bool& addMissing) {
             if(UI::Button(Label("Reset preview position"))) {previewRect={.54f,.08f,.45f,.84f}; resetPreviewRect=true; settingsChangedAt=GetTickCount64();}
         }
         UI::EndDisabled();
+        if(UI::Checkbox(Label("Compact display"),&compactGallery)) {
+            search[0]=0; UI::ClearActiveID(); SaveSettingsIfDue(true);
+        }
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Hide the name and search fields. New outfits use automatic names. Turn off to enter names or search."));
         bool changed=UI::Checkbox(Label("Show preset names"),&showNames);
         changed=UI::Checkbox(Label("Show item counts"),&showCounts)||changed;
         if(changed) settingsChangedAt=GetTickCount64();
@@ -93,7 +97,7 @@ void RenderBrowser(bool& addMissing) {
         if(UI::Checkbox(Label("Prefer registered enchanted items"),&prefer)) {preferEnchanted=prefer; SaveSettingsIfDue(true);}
         if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Player only. Uses owned registered enchanted items; otherwise uses normal equipment and notifies you. Applies on the next outfit change. Re-register older sets to record enchantments."));
         UI::Separator();
-        if(UI::SliderInt(Label("Normal-view columns"),&gridColumns,2,5)) settingsChangedAt=GetTickCount64();
+        if(UI::SliderInt(Label("Normal-view columns"),&gridColumns,2,6)) settingsChangedAt=GetTickCount64();
         std::vector<Category> openingTabs{{"","All"}};
         openingTabs.insert(openingTabs.end(),library.categories.begin(),library.categories.end());
         openingTabs.push_back({"#head","Head equipment"});
@@ -145,7 +149,7 @@ void RenderBrowser(bool& addMissing) {
         if(UI::Checkbox(Label("Record detailed diagnostic log"),&diagnostics)) {
             detailedLogging=diagnostics;
             ResetTransferObservations();
-            SKSE::log::info("OG-DIAG session {} build=1.0.13 compatibility={}",diagnostics?"enabled":"disabled",cleanupCompatibility.load());
+            SKSE::log::info("OG-DIAG session {} build=1.0.15 compatibility={}",diagnostics?"enabled":"disabled",cleanupCompatibility.load());
         }
         if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Records outfit cleanup and Trash deletion details in OutfitGallery.log. Turns OFF when the game restarts. Logging does not change deletion behavior."));
         if(diagnostics) {
@@ -158,6 +162,8 @@ void RenderBrowser(bool& addMissing) {
     }
     ReceiveMissingCheck();
     if(missingCheckMode) UpdateMissingCounts();
+    if(compactGallery) search[0]=0;
+    if(!compactGallery) {
     const auto* searchStyle=UI::GetStyle();
     const float checkWidth=UI::GetFrameHeight()+searchStyle->ItemInnerSpacing.x+UI::CalcTextSize(Tr("Organize gallery")).x;
     const float searchGap=std::max(searchStyle->ItemSpacing.x*2.f,UI::GetFontSize()*.65f);
@@ -172,6 +178,11 @@ void RenderBrowser(bool& addMissing) {
     }
     if(missingCheckFocused) UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,3.f);
     UI::EndDisabled();
+    }
+    if(std::exchange(compactOrganizeRequested,false)) {
+        for(const auto& path:loaded) DisposePortraitView(path);
+        loaded.clear(); StartOrganizer(category);
+    }
     if(organizer.active) {RenderOrganizer(); return;}
     if(missingCheckMode) {
         if(missingCheckPending) UI::TextColored({1.f,.8f,.35f,1.f},"%s",Tr("Missing-data check mode: checking..."));
@@ -193,7 +204,7 @@ void RenderBrowser(bool& addMissing) {
     const bool up=PadPressed(UI::ImGuiKey_GamepadDpadUp,true)||PadPressed(UI::ImGuiKey_GamepadLStickUp,true);
     const bool left=PadPressed(UI::ImGuiKey_GamepadDpadLeft,true)||PadPressed(UI::ImGuiKey_GamepadLStickLeft,true);
     const bool right=PadPressed(UI::ImGuiKey_GamepadDpadRight,true)||PadPressed(UI::ImGuiKey_GamepadLStickRight,true);
-    bool tabChanged=false;
+    bool tabChanged=false, shortcutToPhotos=false;
     const bool browse=navigating && !reveal;
     captureAllowed=browse;
     std::vector<Category> tabs{{"","All"}};
@@ -216,8 +227,8 @@ void RenderBrowser(bool& addMissing) {
         if(PadPressed(UI::ImGuiKey_GamepadL1,false)) {idx=(idx+static_cast<int>(tabs.size())-1)%static_cast<int>(tabs.size()); tabsFocused=true; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; tabChanged=true;}
         if(PadPressed(UI::ImGuiKey_GamepadR1,false)) {idx=(idx+1)%static_cast<int>(tabs.size()); tabsFocused=true; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; tabChanged=true;}
         category=tabs[idx].id;
-        if(PadPressed(UI::ImGuiKey_GamepadL2,false)) {category="#head";tabsFocused=true;columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false;tabChanged=true;}
-        if(PadPressed(UI::ImGuiKey_GamepadR2,false)) {category="#accessories";tabsFocused=true;columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false;tabChanged=true;}
+        if(PadPressed(UI::ImGuiKey_GamepadL2,false)) {category="#head";tabsFocused=false;columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false;tabChanged=true;shortcutToPhotos=true;}
+        if(PadPressed(UI::ImGuiKey_GamepadR2,false)) {category="#accessories";tabsFocused=false;columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false;tabChanged=true;shortcutToPhotos=true;}
     }
     if(browse && tabsFocused && layoutButtonFocused && PadPressed(UI::ImGuiKey_GamepadFaceDown,false)) {
         portraitThumbnails=!portraitThumbnails; thumbnailModeChanged=true; SaveSettingsIfDue(true);
@@ -313,7 +324,9 @@ void RenderBrowser(bool& addMissing) {
     }
     UI::SameLine();
     const bool cycleWithPad=browse && tabsFocused && columnsFocused && PadPressed(UI::ImGuiKey_GamepadFaceDown,false);
-    if(UI::Button("##cycleColumns",{tabHeight+20.f,tabHeight}) || cycleWithPad) {gridColumns=gridColumns==5?2:gridColumns+1; SaveSettingsIfDue(true);}
+    const bool cycleWithStart=browse && gamepadHotkey!=16 && autoGamepad!=16 &&
+        capturePads[0]!=16 && capturePads[1]!=16 && capturePads[2]!=16 && RawPadPressed(16,false);
+    if(UI::Button("##cycleColumns",{tabHeight+20.f,tabHeight}) || cycleWithPad || cycleWithStart) {gridColumns=gridColumns==6?2:gridColumns+1; SaveSettingsIfDue(true);}
     if(tabsFocused && columnsFocused) {
         UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,3.f);
         if(left || right) UI::SetScrollHereX(.5f);
@@ -351,8 +364,8 @@ void RenderBrowser(bool& addMissing) {
     auto chosen=std::find_if(cards.begin(),cards.end(),[&](const auto& p){return p.photo==selected;});
     if(chosen!=cards.end() && !tabChanged) index=static_cast<int>(chosen-cards.begin());
     const int before=index;
-    bool moved=reveal.has_value() || modeChanged;
-    bool enteredPhotos=false;
+    bool moved=reveal.has_value() || modeChanged || shortcutToPhotos;
+    bool enteredPhotos=shortcutToPhotos;
     if(browse && !cards.empty() && tabsFocused && (down || (!columnsFocused && !layoutButtonFocused && !missingCheckFocused && PadPressed(UI::ImGuiKey_GamepadFaceDown,false)))) {tabsFocused=false; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; index=0; moved=true; enteredPhotos=true;}
     if(browse && !cards.empty() && !tabsFocused && !enteredPhotos && !tabChanged) {
         if(down) {index+=displayColumns; moved=true;}
@@ -379,7 +392,7 @@ void RenderBrowser(bool& addMissing) {
         auto it=std::find_if(library.categories.begin(),library.categories.end(),[&](const auto& c){return c.id==category;});
         if(it!=library.categories.end()) {newCategory=false; editCategory=category; strcpy_s(tabName,it->name.c_str()); openTab=true;}
     }
-    if(browse && PadPressed(UI::ImGuiKey_GamepadFaceRight,false)) command=2;
+    if(browse && PadPressed(UI::ImGuiKey_GamepadFaceRight,false)) { GALLERY_DIAG("OG-OPEN-DIAG gallery B-close"); command=2; }
     if(browse && RawPadPressed(capturePads[1]) && !saveBusy.exchange(true)) {
         {std::scoped_lock lock(presetsMutex); requestedName.clear();} command=5;
     }
@@ -431,7 +444,13 @@ void RenderBrowser(bool& addMissing) {
         // the full-size image button claiming that area first.
         const bool flagged=missingCheckMode && PresetHasMissingData(missingResults,p.photo);
         if(category=="#trash" || flagged) UI::SetNextItemAllowOverlap();
-        const bool clicked=texture?UI::ImageButton(p.photo.c_str(),texture,{w,h},uv0,uv1):UI::Button((std::string(Tr("Missing photo"))+"##"+p.photo).c_str(),{w,h});
+        // The grid reserves 12 px beyond the image width. Keep the button's
+        // padding local and bounded so a theme's FramePadding cannot make the
+        // next image cover the selection border. Match missing-photo bounds.
+        const UI::ImVec2 photoPadding{3.f,3.f};
+        UI::PushStyleVar(UI::ImGuiStyleVar_FramePadding,photoPadding);
+        const bool clicked=texture?UI::ImageButton(p.photo.c_str(),texture,{w,h},uv0,uv1):UI::Button((std::string(Tr("Missing photo"))+"##"+p.photo).c_str(),{w+6.f,h+6.f});
+        UI::PopStyleVar();
         if(p.photo==selected && !tabsFocused) UI::PopStyleColor();
         const bool hover=UI::IsItemHovered();
         const auto photoMin=UI::GetItemRectMin(), photoMax=UI::GetItemRectMax();
@@ -451,12 +470,12 @@ void RenderBrowser(bool& addMissing) {
             const float radius=std::clamp(w*.024f,3.5f,5.5f);
             // ImageButton's item rectangle includes frame padding. Anchor to
             // the actual image so the halo stays fully inside the photograph.
-            const auto padding=UI::GetStyle()->FramePadding;
+            const auto padding=photoPadding;
             const UI::ImVec2 center{photoMin.x+padding.x+radius+3.f,photoMin.y+padding.y+radius+3.f};
             UI::ImDrawListManager::AddCircleFilled(draw,center,radius+1.5f,0xD0202020,16);
             UI::ImDrawListManager::AddCircleFilled(draw,center,radius,0xFFEBDD9A,16);
         }
-        const auto pad=UI::GetStyle()->FramePadding;
+        const auto pad=photoPadding;
         const float missingRadius=std::clamp(w*.055f,8.f,15.f);
         const float editedRadius=std::clamp(w*.024f,3.5f,5.5f);
         const UI::ImVec2 missingCenter{photoMin.x+pad.x+missingRadius+3.f+(editedScope?editedRadius*2.f+8.f:0.f),photoMin.y+pad.y+missingRadius+3.f};
@@ -684,7 +703,13 @@ void RenderBrowser(bool& addMissing) {
                     const auto key=ExchangeItemKey(item);
                     bool checked=std::find(scopeItems->begin(),scopeItems->end(),key)!=scopeItems->end();
                     UI::PushID(static_cast<int>(n));
-                    if(UI::Checkbox(item.name.c_str(),&checked)) {if(checked) scopeItems->push_back(key);else std::erase(*scopeItems,key);}
+                    std::string slots;
+                    for(unsigned bit=0;bit<32;++bit) if(masks[n]&(1u<<bit)) {
+                        if(!slots.empty()) slots+=", ";
+                        slots+=std::to_string(bit+30);
+                    }
+                    const auto itemLabel="["+(slots.empty()?std::string(Tr("No biped slot")):slots)+"] "+item.name;
+                    if(UI::Checkbox(itemLabel.c_str(),&checked)) {if(checked) scopeItems->push_back(key);else std::erase(*scopeItems,key);}
                     UI::PopID();
                 }
             } else {
