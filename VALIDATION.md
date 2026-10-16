@@ -1,9 +1,9 @@
-# Validation — 1.0.15
+# Validation — 1.0.16
 
-Release based on user-accepted follower-ui-test1. In-game testing of preceding builds covered one/two follower registration, replacement of registrations, combat, short delays, travel recovery and the revised UI text. Three logged transitions confirmed successful early repair for both followers without repeated unnecessary application. Gamepad instant-close recurrence has not been reported during subsequent testing; this is not proof across all environments.
+Based on user-tested photo-test4 and accepted name-compat5 cleanup. User confirmed photo replacement and cleanup option explanations. Preceding tests confirmed generated renamed-item removal, favorite/enchantment/tempering protection, preowned-item retention and outside-inventory retention. Chest-returned tracked items may be reclaimed; dropped items that lose identity remain untracked.
 
-Release changes from the accepted trial: version metadata, documentation, and opt-in gating of opening diagnostics. Outfit behavior is unchanged. Release binary itself has not been launched in-game here. Runtime metadata retains the existing target list; not all runtimes or mod combinations have been tested.
+No change to the policy that skips cleanup when outfit verification fails. Broader cleanup behavior and the old-save CORE Carrier registration issue are deferred. No new monitoring or equip delay is added for release integration.
 
-Release build, all 33 automated tests, exported 1.0.15.0 metadata and packaged DLL integrity passed.
+Release source differs from photo-test4 only in release/build labeling and documentation. The final release binary has not been launched in-game by the assistant. Not all supported runtimes or mod combinations have been gameplay-tested. Diagnostic name logging remains opt-in and bounded; it is disabled when detailed logging is OFF.
 
-Final integration includes accepted camera-name, equipment-slots, columns-test1 and compact-test2 changes. Exploratory columns-test2 is excluded. User confirmed camera naming/clearing/tooltips, slot labels, six columns and compact layout (WQHD Japanese/English). Start is reserved by the user's automatic-outfit binding; unassigned Start cycling has not been independently confirmed in-game. Compact preference and camera-name persistence are covered by automated tests. Final public binary differs from compact-test2 in release metadata/documentation only and has not been launched in-game here.
+Release build: all 35 automated tests passed. Exported 1.0.16.0 metadata and the unchanged exact runtime list passed verification. Runtime/source ZIP integrity and packaged DLL byte equality were verified.

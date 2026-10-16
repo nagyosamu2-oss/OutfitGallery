@@ -56,7 +56,7 @@ void RenderBrowser(bool& addMissing) {
         UI::ClearActiveID();
     }
     bool openEdit=false, openTab=false;
-    if(UI::CollapsingHeader(Label("Options"))) {
+    if(!photoRetakeActive && UI::CollapsingHeader(Label("Options"))) {
         if(UI::BeginCombo("Language / 言語",language==2?"External (Translation.json)":language==1?"日本語":"English")) {
             if(UI::Selectable("日本語",language==1)) {language=1; settingsChangedAt=GetTickCount64();}
             if(UI::Selectable("English",language==0)) {language=0; settingsChangedAt=GetTickCount64();}
@@ -144,7 +144,15 @@ void RenderBrowser(bool& addMissing) {
             SKSE::log::info("Cleanup compatibility changed: {} (applies to future outfit changes)",compatibility);
         }
         UI::EndDisabled();
-        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Leave OFF for normal use. Tries additional tracking for newly generated items with existing IDs. Does not clean up old leftovers or bypass item protection."));
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Try this if equipment created by OutfitGallery remains after changing outfits.\nIf another mod changes equipment names, first try Remove renamed generated equipment.\nAdds tracking to help remove it.\nItems returned from a chest may also be removed if confirmed to be the same generated item.\nDoes not remove items while stored elsewhere or old leftovers that are no longer tracked.\nLeave OFF if you have no problems."));
+        UI::BeginDisabled(saveBusy || verificationTicks.load()!=0);
+        bool renamed=reclaimRenamedGeneratedItems.load();
+        if(UI::Checkbox(Label("Remove renamed generated equipment"),&renamed)) {
+            reclaimRenamedGeneratedItems=renamed; SaveSettingsIfDue(true);
+            SKSE::log::info("Renamed generated item cleanup changed: {}",renamed);
+        }
+        UI::EndDisabled();
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Removes equipment created and tracked by OutfitGallery even if its name changes.\nItems you already owned, favorites, and items you enchant or improve remain protected.\nTested with generated equipment renamed by MARA; not a guarantee of full MARA compatibility.\nTry enabling only this option first.\nIf generated equipment still remains, also try Equipment cleanup compatibility."));
         bool diagnostics=DetailEnabled();
         if(UI::Checkbox(Label("Record detailed diagnostic log"),&diagnostics)) {
             detailedLogging=diagnostics;
@@ -163,7 +171,7 @@ void RenderBrowser(bool& addMissing) {
     ReceiveMissingCheck();
     if(missingCheckMode) UpdateMissingCounts();
     if(compactGallery) search[0]=0;
-    if(!compactGallery) {
+    if(!photoRetakeActive && !compactGallery) {
     const auto* searchStyle=UI::GetStyle();
     const float checkWidth=UI::GetFrameHeight()+searchStyle->ItemInnerSpacing.x+UI::CalcTextSize(Tr("Organize gallery")).x;
     const float searchGap=std::max(searchStyle->ItemSpacing.x*2.f,UI::GetFontSize()*.65f);
@@ -199,7 +207,7 @@ void RenderBrowser(bool& addMissing) {
     if(PadInputPolicy::MayReleaseFocus(framePadEdges,modal,bindingMode!=0,UI::IsMouseDown(0))) {
         UI::ClearActiveID();
     }
-    const bool navigating=!modal && !helpOpen && !bindingMode && (!UI::GetIO()->WantTextInput || padIntent) && !UI::IsAnyItemActive() && !saveBusy;
+    const bool navigating=!photoRetakeActive && !modal && !helpOpen && !bindingMode && (!UI::GetIO()->WantTextInput || padIntent) && !UI::IsAnyItemActive() && !saveBusy;
     const bool down=PadPressed(UI::ImGuiKey_GamepadDpadDown,true)||PadPressed(UI::ImGuiKey_GamepadLStickDown,true);
     const bool up=PadPressed(UI::ImGuiKey_GamepadDpadUp,true)||PadPressed(UI::ImGuiKey_GamepadLStickUp,true);
     const bool left=PadPressed(UI::ImGuiKey_GamepadDpadLeft,true)||PadPressed(UI::ImGuiKey_GamepadLStickLeft,true);
@@ -239,6 +247,7 @@ void RenderBrowser(bool& addMissing) {
     }
     const auto* style=UI::GetStyle();
     const float tabHeight=UI::GetTextLineHeightWithSpacing();
+    if(!photoRetakeActive) {
     const auto categoryWidth=[&](const auto& c) {
         const bool icon=c.id=="#trash" || c.id=="#head" || c.id=="#accessories";
         return icon ? tabHeight+20.f : std::max(60.f,UI::CalcTextSize(CategoryTitle(c).c_str()).x+style->FramePadding.x*2);
@@ -334,6 +343,7 @@ void RenderBrowser(bool& addMissing) {
     DrawColumnCountIcon(tabHeight);
     if(UI::IsItemHovered()) UI::SetTooltip(Tr("Columns: %d (click to cycle)"),ThumbnailColumns(gridColumns,portraitThumbnails));
     UI::EndChild();
+    }
     std::vector<Preset> cards;
     {std::scoped_lock lock(presetsMutex); cards=presets;}
     std::map<std::string,int> ranks;
@@ -364,7 +374,13 @@ void RenderBrowser(bool& addMissing) {
     auto chosen=std::find_if(cards.begin(),cards.end(),[&](const auto& p){return p.photo==selected;});
     if(chosen!=cards.end() && !tabChanged) index=static_cast<int>(chosen-cards.begin());
     const int before=index;
-    bool moved=reveal.has_value() || modeChanged || shortcutToPhotos;
+    const bool revealRetake=std::exchange(photoRetakeReveal,false) || photoRetakeLayoutFrames>0;
+    if(photoRetakeLayoutFrames) --photoRetakeLayoutFrames;
+    if(photoRetakeActive) {
+        const auto found=std::find_if(cards.begin(),cards.end(),[&](const auto& p){return p.photo==photoUpdate.Photo();});
+        if(found!=cards.end()) {index=static_cast<int>(found-cards.begin()); tabsFocused=false;}
+    }
+    bool moved=revealRetake || reveal.has_value() || modeChanged || shortcutToPhotos;
     bool enteredPhotos=shortcutToPhotos;
     if(browse && !cards.empty() && tabsFocused && (down || (!columnsFocused && !layoutButtonFocused && !missingCheckFocused && PadPressed(UI::ImGuiKey_GamepadFaceDown,false)))) {tabsFocused=false; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; index=0; moved=true; enteredPhotos=true;}
     if(browse && !cards.empty() && !tabsFocused && !enteredPhotos && !tabChanged) {
@@ -378,7 +394,7 @@ void RenderBrowser(bool& addMissing) {
     }
     if(!cards.empty()) {selected=cards[index].photo; if(autoPanel) autoSelectedPhoto=selected;}
     auto queueApply=[&](const Preset& p){
-        if(saveBusy || category=="#trash") return;
+        if(photoRetakeActive || saveBusy || category=="#trash") return;
         if(autoPanel) {autoSelectedPhoto=p.photo; return;}
         std::scoped_lock lock(presetsMutex); requestedPreset=p;
         {const auto label=library.labels.find(p.photo); if(label!=library.labels.end()) {requestedPreset.exchangeSlots=label->second.exchangeSlots;requestedPreset.exchangeSlotless=label->second.exchangeSlotless;requestedPreset.outfitItems=label->second.outfitItems;}}
@@ -436,7 +452,7 @@ void RenderBrowser(bool& addMissing) {
         const auto& p=cards[n];
         UI::SetCursorPos({8.f+col*stepX,origin+row*stepY});
         UI::BeginGroup();
-        const auto path=(std::filesystem::path("Data/SKSE/Plugins/OutfitGallery/Captures")/p.photo).generic_string();
+        const auto path=(photoRetakeActive && p.photo==photoUpdate.Photo() && !photoUpdate.Draft().empty() ? photoUpdate.Draft() : std::filesystem::path("Data/SKSE/Plugins/OutfitGallery/Captures")/p.photo).generic_string();
         visible.push_back(path);
         const auto texture=LoadPortraitView(path);
         if(p.photo==selected && !tabsFocused) UI::PushStyleColor(UI::ImGuiCol_Button,{.55f,.43f,.19f,1.f});
@@ -492,7 +508,7 @@ void RenderBrowser(bool& addMissing) {
             for(int k=0;k<10;++k) UI::ImDrawListManager::AddLine(draw,points[k],points[(k+1)%10],0xFF55DFFF,2.f);
         }
         if(hover && !overMissing) UI::SetTooltip("%s",p.name.c_str());
-        if(UI::IsItemClicked(1)) {contextPhoto=p.photo; strcpy_s(editName,p.name.c_str()); openEdit=true; selected=p.photo;}
+        if(!photoRetakeActive && UI::IsItemClicked(1)) {contextPhoto=p.photo; strcpy_s(editName,p.name.c_str()); openEdit=true; selected=p.photo;}
         // Gamepad A is handled once above; avoid native-nav activation applying another card.
         if(clicked && !overMissing && !UI::GetDragDropPayload() && !PadPressed(UI::ImGuiKey_GamepadFaceDown,false)) {selected=p.photo; tabsFocused=false; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; queueApply(p);}
         UI::PushStyleColor(UI::ImGuiCol_PopupBg,{.07f,.07f,.07f,1.f});
@@ -501,7 +517,7 @@ void RenderBrowser(bool& addMissing) {
         // IsMouseDragging uses the maximum distance since mouse-down, retaining
         // the drag once started even when the cursor moves back toward its origin.
         const float photoDragThreshold=std::max(36.f,UI::GetIO()->MouseDragThreshold);
-        if(!missingCheckMode && libraryWritable && UI::IsMouseDragging(0,photoDragThreshold) && UI::BeginDragDropSource()) {
+        if(!photoRetakeActive && !missingCheckMode && libraryWritable && UI::IsMouseDragging(0,photoDragThreshold) && UI::BeginDragDropSource()) {
             UI::SetDragDropPayload("OUTFIT_PHOTO",p.photo.c_str(),p.photo.size()+1);
             UI::TextUnformatted(p.name.c_str());
             if(texture) UI::Image(texture,{w*.5f,h*.5f},uv0,uv1);
@@ -624,6 +640,18 @@ void RenderBrowser(bool& addMissing) {
                 UI::EndChild(); UI::Separator();
             }
         }
+        if(UI::MenuItem(Label("Retake photo"),nullptr,false,category!="#trash" && !saveBusy && !verificationTicks.load() && !editPending && !command.load())) {
+            try {
+                photoUpdate.Begin(contextPhoto);
+                photoRetakeName=editName;
+                SetStatus("");
+                photoRetakeSerial=studioOpenSerial.load(); photoRetakeActive=true;
+                captureAllowed=false; autoPanel=false; autoPanelVisible=false; helpOpen=false;
+                photoRetakeReveal=true;
+                UI::CloseCurrentPopup();
+            } catch(const std::exception& e) {SetStatus(e.what());}
+        }
+        UI::Separator();
         UI::InputText(Label("Name"),editName,sizeof(editName));
         if(UI::Button(Label("Rename")) && editName[0]) {auto next=library; next.labels[contextPhoto].name=editName; CommitLibrary(std::move(next));}
         UI::Separator();

@@ -5,8 +5,14 @@ namespace Gallery {
 inline const RE::TESFile* ItemOwner(RE::TESForm* form) {
  auto* data=RE::TESDataHandler::GetSingleton();
  const auto* owner=form?FormOwner(data,form->GetFormID()):nullptr;
- if(!owner || data->LookupForm(LocalFormID(form->GetFormID()),owner->GetFilename())!=form)
-  throw std::runtime_error("Cannot save an unstable item reference");
+ const auto* resolved=owner && data?data->LookupForm(LocalFormID(form->GetFormID()),owner->GetFilename()):nullptr;
+ if(!owner || resolved!=form) {
+  const auto id=form?form->GetFormID():0;
+  const std::string name=form && form->GetName()?form->GetName():"<unknown>";
+  SKSE::log::warn("OG-REGISTER-IDENTITY rejected form={:08X} name={} owner={} resolved={:08X} samePointer={} dynamic={}",
+   id,name,owner?owner->GetFilename():"<none>",resolved?resolved->GetFormID():0,resolved==form,(id>>24)==0xFF);
+  throw std::runtime_error("Cannot save an unstable item reference: "+name+" ["+std::to_string(id)+"]");
+ }
  return owner;
 }
 inline RE::TESForm* ResolveItem(const Item& item) {

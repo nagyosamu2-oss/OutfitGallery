@@ -10,6 +10,7 @@
 #include <optional>
 #include <stdexcept>
 #include "PreferredItem.h"
+#include "RegisteredName.h"
 namespace RE { class Actor; }
 namespace Gallery {
 using AutoOutfitSlots=std::array<std::string,27>; // Default, Town, Home, Inn, Combat, Night, Rain, Snow, Dungeon, Temple, Swimming, six guild bases; existing indices stay stable
@@ -19,7 +20,7 @@ void WriteAutoOutfitSettings(const AutoOutfitSettings&,const std::filesystem::pa
 struct InputSettings { unsigned keyboard{66}, gamepad{32}; float holdSeconds{0.8f}; std::array<unsigned,3> captureKeys{67,68,87}; std::array<unsigned,3> capturePads{32768,16384,64}; unsigned keyboardModifiers{}; unsigned autoKeyboard{}, autoModifiers{}, autoGamepad{}; float autoHoldSeconds{.8f}; };
 InputSettings ReadInputSettings(const std::filesystem::path&);
 void WriteInputSettings(const InputSettings&,const std::filesystem::path&);
-struct StudioSettings { float distance{217.130f}, height{67.619f}, orbit{-22.831f}, pitch{0.350f}, fov{60.060f}; int columns{3}; bool showNames{true}, showCounts{true}; int language{0}; bool allowFreeCamera{}; bool addMissing{true}; float lateral{13.929f}, elevation{0.000f}; std::uint32_t headSlots{0x1803}; std::string startupTab{}; bool detachedPreview{}; std::array<float,4> previewRect{.54f,.08f,.45f,.84f}; bool followerTargeting{}; bool preferEnchanted{true}; bool portraitThumbnails{}; bool cleanupCompatibility{}; bool allowCombatGallery{}; bool compactGallery{}; };
+struct StudioSettings { float distance{217.130f}, height{67.619f}, orbit{-22.831f}, pitch{0.350f}, fov{60.060f}; int columns{3}; bool showNames{true}, showCounts{true}; int language{0}; bool allowFreeCamera{}; bool addMissing{true}; float lateral{13.929f}, elevation{0.000f}; std::uint32_t headSlots{0x1803}; std::string startupTab{}; bool detachedPreview{}; std::array<float,4> previewRect{.54f,.08f,.45f,.84f}; bool followerTargeting{}; bool preferEnchanted{true}; bool portraitThumbnails{}; bool cleanupCompatibility{}; bool allowCombatGallery{}; bool compactGallery{}; bool reclaimRenamedGeneratedItems{}; };
 struct CameraBank {
     std::array<std::optional<StudioSettings>,7> slots;
     std::array<std::string,7> names;
@@ -49,7 +50,7 @@ Library ReadLibrary(const std::filesystem::path&);
 void WriteLibrary(const Library&,const std::filesystem::path&);
 StudioSettings ReadStudioSettings(const std::filesystem::path&);
 void WriteStudioSettings(const StudioSettings&, const std::filesystem::path&);
-struct Item { std::string plugin; std::uint32_t localID{}; std::string name; std::string kind; std::string hand; PreferredItem preferred; };
+struct Item { std::string plugin; std::uint32_t localID{}; std::string name; std::string kind; std::string hand; PreferredItem preferred; RegisteredName registeredName; };
 struct Preset { std::string name; std::string photo; std::vector<Item> items; std::uint32_t slotMask{}; bool accessories{}; std::optional<std::uint32_t> exchangeSlots; bool equipmentEdited{}; std::vector<std::string> exchangeSlotless; std::optional<std::vector<std::string>> outfitItems; };
 inline std::string ExchangeItemKey(const Item& item) {return item.plugin+":"+std::to_string(item.localID);}
 // Old presets may contain weapons/ammo. Keep their files readable, but never
@@ -129,8 +130,8 @@ bool SameEquipment(const Preset&,const Preset&);
 void WritePreset(const Preset&, const std::filesystem::path&);
 Preset ReadPreset(const std::filesystem::path&);
 Preset SnapshotForVerification(RE::Actor*,const Preset&);
-Preset SnapshotEquipment(RE::Actor* actor, std::uint32_t slotMask=0, bool rememberEnchanted=false); // game thread only; zero = full outfit
-Preset SnapshotAccessories(RE::Actor* actor, bool rememberEnchanted=false); // equipped armor only, union of occupied slots
+Preset SnapshotEquipment(RE::Actor* actor, std::uint32_t slotMask=0, bool rememberEnchanted=false, bool rememberNames=false); // game thread only; zero = full outfit
+Preset SnapshotAccessories(RE::Actor* actor, bool rememberEnchanted=false, bool rememberNames=false); // equipped armor only, union of occupied slots
 std::string ApplyEquipment(RE::Actor* actor, const Preset&, bool addMissing, bool preferEnchanted=false,
     const std::function<bool()>& mayMutate={}); // game thread only; optional crafting deadline
 std::string VerifyPreferredEquipment(RE::Actor*, const Preset&); // worn identity only; does not mutate inventory

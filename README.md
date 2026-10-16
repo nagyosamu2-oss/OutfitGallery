@@ -1,26 +1,11 @@
-## Changes in 1.0.15
+## Changes in 1.0.16
 
-- Added experimental automatic outfits for up to two followers, with individual assignments and timing settings.
-- Added outfit checks after travel, including early recovery when continuing the same outfit. Ready player changes take priority over waiting follower changes.
-- Added bulk Move to Trash from selected photos or the gallery organizer toolbar, and bulk restoration from Trash.
-- Fixed the gallery selection border alignment.
-- L2/R2 category switching now focuses the photos for immediate navigation.
-- Added Japanese translations for Empty Trash and Delete permanently.
-- Added protection against the held opening button immediately closing the gallery.
+- Added an optional setting to remove tracked, generated equipment even when another mod changes its name. Existing-item, favorite, enchantment, tempering and equipped-item protections remain in place.
+- Clarified the two cleanup options. Try renamed-item cleanup first; enable additional cleanup compatibility only if generated items still remain.
+- Added **Retake photo** to the photo context menu. Preview the new photo in the gallery, then confirm, retake or cancel. Equipment, preset names and automatic outfit assignments remain unchanged.
+- The retake screen includes camera presets, column and Normal/Portrait controls, with a compact layout and an unsaved-photo notice.
 
-### Automatic follower outfits (experimental)
-
-Enable follower selection, aim at an accompanying follower, open OG and switch to automatic outfits. Check the target name, assign full outfits and enable automation.
-
-- Register up to two followers. Disabled configurations still occupy a slot; remove one under the registered-followers list to free it.
-- Assignments and enabled state are stored when saving the game. Save after editing; loading restores the configuration in that save.
-- Enabling automation disables fixed outfit maintenance for that follower. Turning automation off does not automatically re-enable maintenance.
-- Conditions are evaluated for the follower: location, weather, time, sneaking, swimming and combat. Clothing/armor changes preserve weapons and spells. Missing inventory items are generated.
-- Crafting outfits and the automation toggle hotkey remain player-only.
-- Changes are processed sequentially. Travel recovery is bounded; it does not continuously override another mod's outfit changes.
-- Enable detailed diagnostic logging in Options when investigating problems. Travel/equipment diagnostics are included. Logging resets to OFF on game restart; diagnostic inventory scans do not run while OFF.
-
-# Outfit Gallery 1.0.15
+# Outfit Gallery 1.0.16
 
 A photo-based SKSE outfit gallery for full outfits, head equipment and accessories. Weapons and ammo are preserved. Includes conditional automatic outfits, follower selection/maintenance, preset editing and an optional independent preview.
 
@@ -73,3 +58,15 @@ Options → Compact display hides the preset-name and search fields and moves Or
 Open Camera Settings using the camera icon, select a preset slot and save its name. Numbered buttons remain unchanged; hover to see the name. Saving an empty name restores the default tooltip. Renaming does not change the camera position or capture it. Names persist across restarts.
 
 Equipment to wear now shows all biped slot numbers before each item name. This is a display change; selection behavior is unchanged.
+
+## Renamed generated equipment
+
+In Options, enable **Remove renamed generated equipment** if another mod changes the names of equipment supplied by OutfitGallery and those items remain after changing outfits. This setting defaults to OFF and is independent of cleanup compatibility. It adds no continuous monitoring. It allows name-only changes; it does not establish ownership of untracked items. Custom renaming alone will no longer protect a generated item while this option is enabled. Favorite an item if you want to keep it.
+
+Try this setting first. If items still remain, try **Equipment cleanup compatibility** as well; that option adds identity tracking and can reclaim a confirmed generated item after a container round trip. Items outside your inventory and items whose identity is no longer tracked are not removed. Renamed-item cleanup was confirmed with MARA in the user's tests; this is not a guarantee of full MARA compatibility.
+
+## Retake a preset photo
+
+Right-click a photo (R3 on a controller) and choose **Retake photo**. Apply the desired outfit before entering this screen: retaking captures the current appearance and does not automatically equip the target preset. Use the existing camera settings/presets and full-outfit capture shortcut (default F9/Y). After capture, only the selected thumbnail previews the new image. Choose **Use this photo** (A) to replace it, **Retake** to try again, or **Cancel** (B) to retain the original. Closing the screen also discards the unconfirmed photo.
+
+Only the image changes. Equipment, names, categories, order and automatic outfit assignments are preserved. A different current outfit can therefore produce a photo that does not match the saved equipment. No new game-pause feature is provided; use your existing pause setup. Column and Normal/Portrait changes keep the target visible and preserve the draft. The original image is replaced only after confirmation.

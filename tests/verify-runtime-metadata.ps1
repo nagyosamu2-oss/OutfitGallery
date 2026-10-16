@@ -1,4 +1,4 @@
-param([string]$Dll)
+﻿param([string]$Dll)
 $ErrorActionPreference='Stop'
 $b=[IO.File]::ReadAllBytes((Resolve-Path $Dll))
 function U32([int]$p) { [BitConverter]::ToUInt32($b,$p) }
@@ -29,11 +29,11 @@ for($i=0;$i -lt (U32 ($exp+24));$i++) {
 if($data -lt 0) { throw 'Missing SKSEPlugin_Version export' }
 $expected=@(0x01050610,0x01061610,0x01062800,0x010646a0,0x01064920,0x010649b1,0x01070680)
 if((CString ($data+8)) -ne 'OutfitGallery') {throw 'Wrong plugin name'}
-if((U32 ($data+4)) -ne 0x010000f0) {throw 'Wrong plugin version'}
+if((U32 ($data+4)) -ne 0x01000100) {throw 'Wrong plugin version'}
 if((U32 ($data+0x308)) -ne 0) {throw 'Expected exact-list compatibility'}
 for($i=0;$i -lt $expected.Count;$i++) {
     $actual=U32 ($data+0x30c+4*$i)
     if($actual -ne $expected[$i]) {throw "Compatibility entry $i mismatch: $actual"}
 }
 if((U32 ($data+0x30c+4*$expected.Count)) -ne 0) {throw 'Missing list terminator'}
-'PASS: exported 1.0.15.0 metadata; six Steam versions retained; GOG=0x010649B1; exact list terminated.'
+'PASS: exported 1.0.16.0 metadata; six Steam versions retained; GOG=0x010649B1; exact list terminated.'

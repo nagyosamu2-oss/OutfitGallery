@@ -2,6 +2,25 @@
 #include <set>
 #include <string>
 namespace Gallery::Translation { inline const std::set<std::string>& Keys() { static const std::set<std::string> keys{
+"Capture / retake: %s",
+"A: use this photo / B: cancel",
+"B: cancel",
+
+"Retake photo",
+"Updating photo: %s",
+"Only the photo changes. Saved equipment and automatic outfit assignments stay unchanged.",
+"The photo uses the current appearance, which may differ from this outfit's saved equipment.",
+"Photo preview only. Not saved yet.",
+"Use this photo",
+"Retake",
+"Take photo",
+"Photo updated. Equipment and assignments unchanged.",
+"Photo update cancelled. Original photo kept.",
+"Could not preview the new photo. Original photo kept.",
+"A: use this photo / Y: retake / B: cancel",
+"Y: take photo / B: cancel",
+"Could not replace photo. Original photo kept; retry or cancel.",
+
 "Minimum combat switch interval (seconds)",
 "Default: 5 seconds (recommended). Lower values respond faster to repeated weapon changes, but may increase outfit-change load or interactions with other mods. Stability and attack/casting waits still apply.",
 "Styles must stay stable for 1 second, or 2 seconds for Unarmed. Attack/casting and weapon draw transitions wait. The usual delay and configured combat interval still apply. Manual changes last until combat ends.",
@@ -259,7 +278,9 @@ namespace Gallery::Translation { inline const std::set<std::string>& Keys() { st
 "Outfit applied",
 "Skipped: check log",
 "Equipment cleanup compatibility (experimental)",
-"Leave OFF for normal use. Tries additional tracking for newly generated items with existing IDs. Does not clean up old leftovers or bypass item protection.",
+"Try this if equipment created by OutfitGallery remains after changing outfits.\nIf another mod changes equipment names, first try Remove renamed generated equipment.\nAdds tracking to help remove it.\nItems returned from a chest may also be removed if confirmed to be the same generated item.\nDoes not remove items while stored elsewhere or old leftovers that are no longer tracked.\nLeave OFF if you have no problems.",
+"Remove renamed generated equipment",
+"Removes equipment created and tracked by OutfitGallery even if its name changes.\nItems you already owned, favorites, and items you enchant or improve remain protected.\nTested with generated equipment renamed by MARA; not a guarantee of full MARA compatibility.\nTry enabling only this option first.\nIf generated equipment still remains, also try Equipment cleanup compatibility.",
 "Record detailed diagnostic log",
 "Records outfit cleanup and Trash deletion details in OutfitGallery.log. Turns OFF when the game restarts. Logging does not change deletion behavior.",
 "Detailed logging ON: reproduce the issue once, then send OutfitGallery.log before restarting the game.",

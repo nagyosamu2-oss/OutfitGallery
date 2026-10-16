@@ -41,7 +41,7 @@ std::vector<std::uint32_t> ResolvePresetSlots(const Preset& p) {
     }
     return masks;
 }
-Preset SnapshotEquipment(RE::Actor* actor, std::uint32_t slotMask, bool rememberEnchanted) {
+Preset SnapshotEquipment(RE::Actor* actor, std::uint32_t slotMask, bool rememberEnchanted, bool rememberNames) {
     if (!actor) throw std::runtime_error("Target unavailable");
     Preset p;
     p.slotMask=slotMask;
@@ -54,6 +54,7 @@ Preset SnapshotEquipment(RE::Actor* actor, std::uint32_t slotMask, bool remember
             if(!SlotFits(armor->GetSlotMask().underlying(),slotMask)) throw std::runtime_error("Item uses unselected slots: "+std::string(obj->GetName()));
         }
         p.items.push_back(Encode(obj,""));
+        if(rememberNames && cleanupCompatibility.load()) p.items.back().registeredName=CaptureRegisteredName(obj,data.second.get());
         if(rememberEnchanted && actor->GetFormID()==0x14 && entry->extraLists) {
             RE::ExtraDataList* worn=nullptr; unsigned countWorn=0;
             for(auto* e:*entry->extraLists) if(e && (e->HasType<RE::ExtraWorn>() || e->HasType<RE::ExtraWornLeft>())) {worn=e; ++countWorn;}
@@ -63,7 +64,7 @@ Preset SnapshotEquipment(RE::Actor* actor, std::uint32_t slotMask, bool remember
     if (p.items.empty()) throw std::runtime_error("No equipped armor or clothing to save");
     return p;
 }
-Preset SnapshotAccessories(RE::Actor* actor, bool rememberEnchanted) {
+Preset SnapshotAccessories(RE::Actor* actor, bool rememberEnchanted, bool rememberNames) {
     if(!actor) throw std::runtime_error("Target unavailable");
     Preset p; p.accessories=true;
     for(const auto& [obj,data]:actor->GetInventory()) {
@@ -72,6 +73,7 @@ Preset SnapshotAccessories(RE::Actor* actor, bool rememberEnchanted) {
         if(!armor) continue;
         const auto mask=armor->GetSlotMask().underlying();
         p.slotMask|=mask; p.items.push_back(Encode(obj,""));
+        if(rememberNames && cleanupCompatibility.load()) p.items.back().registeredName=CaptureRegisteredName(obj,data.second.get());
         if(rememberEnchanted && actor->GetFormID()==0x14 && data.second->extraLists) {
             RE::ExtraDataList* worn=nullptr; unsigned countWorn=0;
             for(auto* e:*data.second->extraLists) if(e && (e->HasType<RE::ExtraWorn>() || e->HasType<RE::ExtraWornLeft>())) {worn=e; ++countWorn;}
@@ -172,7 +174,11 @@ std::string ApplyEquipment(RE::Actor* actor, const Preset& source, bool addMissi
         if(owned<count) {
             checkDeadline();
             if(mayMutate) SKSE::log::info("OG-CRAFT generate form={:08X} count={} name={}",obj->GetFormID(),count-owned,obj->GetName());
-            AddManagedItems(actor,obj,count-owned,owned==0);
+            RegisteredName name;
+            if(compatibility && owned==0 && count==1) {
+                for(std::size_t n=0;n<resolved.size();++n) if(resolved[n].first==obj) name=p.items[n].registeredName;
+            }
+            AddManagedItems(actor,obj,count-owned,owned==0,name);
         }
     }
     checkDeadline();

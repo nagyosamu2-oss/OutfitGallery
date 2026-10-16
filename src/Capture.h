@@ -11,7 +11,7 @@ void CreatePortraitView(ID3D11Device* device, const std::filesystem::path& path,
 void* LoadPortraitView(const std::string& path);
 void DisposePortraitView(const std::string& path);
 // Called only in the framework's pre-render callback, before its ImGui draw.
-std::filesystem::path CapturePortrait(bool centered=false);
+std::filesystem::path CapturePortrait(bool centered=false, bool draft=false);
 std::filesystem::path SavePortraitTexture(ID3D11Texture2D* frame, const std::filesystem::path& folder, unsigned maxWidth=1024, bool centered=false);
 // Render-thread only. Copies the backbuffer before framework UI drawing.
 void UpdateLivePreview();

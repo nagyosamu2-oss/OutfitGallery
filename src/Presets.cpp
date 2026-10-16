@@ -141,7 +141,7 @@ StudioSettings ReadStudioSettings(const std::filesystem::path& path) {
     std::ifstream in(path); Json j; in>>j;
     if(j.at("schema").get<int>()!=1) throw std::runtime_error("Unsupported settings schema");
     StudioSettings s{j.at("distance"),j.at("height"),j.at("orbit"),j.at("pitch"),j.at("fov"),j.value("columns",3)};
-    s.showNames=j.value("showNames",true); s.showCounts=j.value("showCounts",true); s.language=j.value("language",0); s.allowFreeCamera=j.value("allowFreeCamera",false); s.addMissing=j.value("addMissing",true); s.preferEnchanted=j.value("preferEnchanted",true); s.portraitThumbnails=j.value("portraitThumbnails",false); s.cleanupCompatibility=j.value("cleanupCompatibility",false); s.allowCombatGallery=j.value("allowCombatGallery",false); s.compactGallery=j.value("compactGallery",false);
+    s.showNames=j.value("showNames",true); s.showCounts=j.value("showCounts",true); s.language=j.value("language",0); s.allowFreeCamera=j.value("allowFreeCamera",false); s.addMissing=j.value("addMissing",true); s.preferEnchanted=j.value("preferEnchanted",true); s.portraitThumbnails=j.value("portraitThumbnails",false); s.cleanupCompatibility=j.value("cleanupCompatibility",false); s.allowCombatGallery=j.value("allowCombatGallery",false); s.compactGallery=j.value("compactGallery",false); s.reclaimRenamedGeneratedItems=j.value("reclaimRenamedGeneratedItems",false);
     s.headSlots=j.value("headSlots",0x1803u);
     s.startupTab=j.value("startupTab",std::string{});
     s.followerTargeting=j.value("followerTargeting",false);
@@ -151,7 +151,7 @@ StudioSettings ReadStudioSettings(const std::filesystem::path& path) {
 }
 void WriteStudioSettings(const StudioSettings& s,const std::filesystem::path& path) {
     ValidateSettings(s);
-    Json j={{"schema",1},{"distance",s.distance},{"height",s.height},{"orbit",s.orbit},{"pitch",s.pitch},{"fov",s.fov},{"columns",s.columns},{"showNames",s.showNames},{"showCounts",s.showCounts},{"language",s.language},{"allowFreeCamera",s.allowFreeCamera},{"addMissing",s.addMissing},{"preferEnchanted",s.preferEnchanted},{"portraitThumbnails",s.portraitThumbnails},{"cleanupCompatibility",s.cleanupCompatibility},{"allowCombatGallery",s.allowCombatGallery},{"compactGallery",s.compactGallery},{"lateral",s.lateral},{"elevation",s.elevation},{"headSlots",s.headSlots},{"startupTab",s.startupTab},{"detachedPreview",s.detachedPreview},{"previewRect",s.previewRect},{"followerTargeting",s.followerTargeting}};
+    Json j={{"schema",1},{"distance",s.distance},{"height",s.height},{"orbit",s.orbit},{"pitch",s.pitch},{"fov",s.fov},{"columns",s.columns},{"showNames",s.showNames},{"showCounts",s.showCounts},{"language",s.language},{"allowFreeCamera",s.allowFreeCamera},{"addMissing",s.addMissing},{"preferEnchanted",s.preferEnchanted},{"portraitThumbnails",s.portraitThumbnails},{"cleanupCompatibility",s.cleanupCompatibility},{"allowCombatGallery",s.allowCombatGallery},{"compactGallery",s.compactGallery},{"reclaimRenamedGeneratedItems",s.reclaimRenamedGeneratedItems},{"lateral",s.lateral},{"elevation",s.elevation},{"headSlots",s.headSlots},{"startupTab",s.startupTab},{"detachedPreview",s.detachedPreview},{"previewRect",s.previewRect},{"followerTargeting",s.followerTargeting}};
     std::filesystem::create_directories(path.parent_path());
     auto tmp=path; tmp+=".tmp";
     {std::ofstream out(tmp,std::ios::binary|std::ios::trunc); out.exceptions(std::ios::badbit|std::ios::failbit); out<<j.dump(2); out.close();}
@@ -411,6 +411,7 @@ void WritePreset(const Preset& p, const std::filesystem::path& path) {
     if(p.equipmentEdited) j["equipmentEdited"]=true;
     for (const auto& i : p.items) {
         Json item={{"plugin",i.plugin},{"localID",i.localID},{"name",i.name},{"kind",i.kind},{"hand",i.hand}};
+        if(ValidRegisteredName(i.registeredName)) item["registeredName"]={{"version",1},{"base",i.registeredName.base},{"display",i.registeredName.display}};
         if(i.preferred.custom) item["preferredEnchanted"]={{"scope",i.preferred.scope},{"id",i.preferred.id}};
         if(i.preferred.custom && !i.preferred.signature.empty()) {
             item["preferredEnchanted"]["signatureVersion"]=1;
@@ -440,6 +441,14 @@ Preset ReadPreset(const std::filesystem::path& path) {
         const auto id = i.at("localID").get<std::int64_t>();
         if (id <= 0 || id > 0xFFFFFF) throw std::runtime_error("Invalid FormID");
         p.items.push_back({i.at("plugin"),static_cast<std::uint32_t>(id),i.at("name"),i.at("kind"),i.at("hand")});
+        // Invalid/unknown optional metadata never grants a cleanup exception.
+        if(i.contains("registeredName")) try {
+            const auto& n=i.at("registeredName");
+            if(n.at("version")==1) {
+                RegisteredName saved{n.at("base").get<std::string>(),n.at("display").get<std::string>()};
+                if(ValidRegisteredName(saved)) p.items.back().registeredName=std::move(saved);
+            }
+        } catch(const Json::exception&) {}
         if(i.contains("preferredEnchanted")) {
             auto& pref=p.items.back().preferred; pref.custom=true;
             try {
@@ -517,7 +526,7 @@ bool SameEditedContents(const Preset& a,const Preset& b) {
     if(a.items.size()!=b.items.size())return false;
     for(const auto& i:a.items) {
         auto it=std::find_if(b.items.begin(),b.items.end(),[&](const auto& j){return SameBaseItem(i,j) && i.hand==j.hand;});
-        if(it==b.items.end() || i.preferred.custom!=it->preferred.custom || i.preferred.id!=it->preferred.id || i.preferred.scope!=it->preferred.scope || i.preferred.signature!=it->preferred.signature)return false;
+        if(it==b.items.end() || i.preferred.custom!=it->preferred.custom || i.preferred.id!=it->preferred.id || i.preferred.scope!=it->preferred.scope || i.preferred.signature!=it->preferred.signature || i.registeredName!=it->registeredName)return false;
     }
     return true;
 }

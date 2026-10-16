@@ -28,7 +28,7 @@ void ProcessPresetEdit(unsigned request,RE::Actor* actor) {
                 (void)ResolvePresetSlots(state.origin->preset);
             } else {
             state.oldMasks=ResolvePresetSlots(state.file.original);
-            state.worn=SnapshotEquipment(actor,0,false);
+            state.worn=SnapshotEquipment(actor,0,false,true);
             RememberSelectedEnchanted(actor,state.worn,false);
             state.wornMasks=ResolvePresetSlots(state.worn);
             }
@@ -43,7 +43,7 @@ void ProcessPresetEdit(unsigned request,RE::Actor* actor) {
             SetStatus("Original equipment restored. Photo and assignments were kept.");
         } else {
             if(!state.ready || !state.error.empty()) throw std::runtime_error("Reopen the editor before saving.");
-            auto current=SnapshotEquipment(actor,0,false);RememberSelectedEnchanted(actor,current,false);
+            auto current=SnapshotEquipment(actor,0,false,true);RememberSelectedEnchanted(actor,current,false);
             const auto currentMasks=ResolvePresetSlots(current);
             Preset chosen;std::vector<std::uint32_t> chosenMasks;
             for(auto index:selection) {
@@ -51,7 +51,7 @@ void ProcessPresetEdit(unsigned request,RE::Actor* actor) {
                 const auto& expected=state.worn.items[index];
                 auto it=std::find_if(current.items.begin(),current.items.end(),[&](const auto& item){return SameBaseItem(expected,item);});
                 if(it==current.items.end() || currentMasks[it-current.items.begin()]!=state.wornMasks[index] ||
-                   it->preferred.custom!=expected.preferred.custom || it->preferred.signature!=expected.preferred.signature)
+                   it->registeredName!=expected.registeredName || it->preferred.custom!=expected.preferred.custom || it->preferred.signature!=expected.preferred.signature)
                     throw std::runtime_error("Worn equipment changed. Reopen the editor.");
                 chosen.items.push_back(*it);chosenMasks.push_back(currentMasks[it-current.items.begin()]);
             }

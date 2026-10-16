@@ -14,12 +14,45 @@
 #include <set>
 #include <map>
 #include <random>
+#include <nlohmann/json.hpp>
 
 namespace Gallery {
 namespace {
 using Identity=ManagedIdentity;
+// Read existing fields only. Display-name getters can build/cache names, so avoid them.
+void LogGeneratedName(const char* stage, RE::TESBoundObject* object, RE::ExtraDataList* extra, RE::FormID actor) {
+    if(!(cleanupCompatibility.load() || reclaimRenamedGeneratedItems.load()) || !DetailEnabled() || !object || !extra) return;
+    try {
+        static unsigned samples{}; // Game-thread only; bounded for this diagnostic session.
+        if(samples>=1024) return;
+        ++samples;
+        const auto* data=extra->GetByType<RE::ExtraTextDisplayData>();
+        const auto* uid=extra->GetByType<RE::ExtraUniqueID>();
+        const std::string base=object->GetName()?object->GetName():"";
+        const std::string stored=data && data->displayName.c_str()?data->displayName.c_str():"";
+        nlohmann::json row={{"stage",stage},{"form",object->GetFormID()},{"actor",actor},
+            {"uid",uid?uid->uniqueID:0},{"owner",uid?uid->baseID:0},
+            {"baseName",base},{"hasTextData",data!=nullptr},{"storedName",stored},
+            {"storedMatchesBase",data && stored==base},{"worn",extra->HasType<RE::ExtraWorn>() || extra->HasType<RE::ExtraWornLeft>()}};
+        if(data) {
+            row["ownerInstance"]=data->ownerInstance.underlying();
+            row["customNameLength"]=data->customNameLength;
+            row["temperFactor"]=data->temperFactor;
+            row["nameMessage"]=data->displayNameText?data->displayNameText->GetFormID():0;
+            row["ownerQuest"]=data->ownerQuest?data->ownerQuest->GetFormID():0;
+        }
+        GALLERY_DIAG("OG-NAME-DIAG {}",row.dump(-1,' ',false,nlohmann::json::error_handler_t::replace));
+    } catch(...) {} // Diagnostics never change tracking or deletion decisions.
+}
+
 std::mutex ledgerMutex;
 ManagedLedger ledger;
+// Names belong to fresh generation claims, never inferred from current inventory.
+std::map<std::pair<RE::FormID,RE::FormID>,RegisteredName> pendingNames;
+std::map<Identity,RegisteredName> registeredNames;
+bool SimpleName(const RE::ExtraTextDisplayData* n) {
+    return n && n->ownerInstance.underlying()==-2 && !n->displayNameText && !n->ownerQuest && n->temperFactor==1.0f;
+}
 TransferObservation transferObservation;
 TransferChain transferChain;
 // Shared sequence for raw notifications. Bounded, session-only, no engine access.
@@ -36,6 +69,8 @@ class IdentityChanges final : public RE::BSTEventSink<RE::TESUniqueIDChangeEvent
             {
                 std::scoped_lock lock(ledgerMutex);
                 try {
+                    registeredNames.erase({e->objectID,e->oldBaseID,e->oldUniqueID});
+                    registeredNames.erase({e->objectID,e->newBaseID,e->newUniqueID});
                     if(seq && seq<=1024) transferChain.Change(ledger,{e->objectID,e->oldBaseID,e->oldUniqueID},{e->objectID,e->newBaseID,e->newUniqueID});
                     else transferChain.Stop();
                 } catch(...) {transferChain.Stop();}
@@ -66,9 +101,9 @@ std::uint16_t AllocateItemID(RE::InventoryChanges* changes, std::set<std::uint16
     return id;
 }
 
-void Forget(const Identity& key) {std::scoped_lock lock(ledgerMutex); ledger.items.erase(key); transferChain.Retire(key);}
+void Forget(const Identity& key) {std::scoped_lock lock(ledgerMutex); ledger.items.erase(key); registeredNames.erase(key); transferChain.Retire(key);}
 void Revert(SKSE::SerializationInterface*) {
-    {std::scoped_lock lock(ledgerMutex); ledger.Clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); preferredScopes.clear(); reservedPreferredIDs.clear();}
+    {std::scoped_lock lock(ledgerMutex); ledger.Clear(); pendingNames.clear(); registeredNames.clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); preferredScopes.clear(); reservedPreferredIDs.clear();}
     ClearFollowerOutfits();
     ClearFollowerAutoOutfits();
 }
@@ -81,10 +116,19 @@ void Save(SKSE::SerializationInterface* s) {
         for(const auto& [id,scope]:preferredScopes) if(!s->WriteRecordData(id) || !s->WriteRecordData(scope)) {SKSE::log::error("Enchanted item: reserved ID save failed"); return;}
     }
     std::set<Identity> copy;
-    {std::scoped_lock lock(ledgerMutex); copy=ledger.items;}
+    std::map<Identity,RegisteredName> names;
+    {std::scoped_lock lock(ledgerMutex); copy=ledger.items; names=registeredNames;}
     for(const auto& k:copy) {
         if(!s->OpenRecord(itemRecord,k.owner==0x14 ? 1 : 2) || !s->WriteRecordData(k.form) || !s->WriteRecordData(k.owner) || !s->WriteRecordData(k.id)) {
             SKSE::log::error("Managed item ledger could not be saved"); return;
+        }
+    }
+    // Separate optional record: older releases still understand the ordinary ITEM ledger.
+    for(const auto& [k,n]:names) if(copy.contains(k) && ValidRegisteredName(n)) {
+        const auto a=static_cast<std::uint32_t>(n.base.size()),b=static_cast<std::uint32_t>(n.display.size());
+        if(!s->OpenRecord(0x4E414D45,1) || !s->WriteRecordData(k.form) || !s->WriteRecordData(k.owner) || !s->WriteRecordData(k.id) ||
+           !s->WriteRecordData(a) || !s->WriteRecordData(n.base.data(),a) || !s->WriteRecordData(b) || !s->WriteRecordData(n.display.data(),b)) {
+            SKSE::log::error("Registered name evidence save failed"); return;
         }
     }
 }
@@ -93,8 +137,23 @@ void Load(SKSE::SerializationInterface* s) {
     ClearFollowerAutoOutfits();
     preferredScopes.clear(); reservedPreferredIDs.clear();
     std::set<Identity> next;
+    std::map<Identity,RegisteredName> names;
+    std::set<Identity> duplicateNames;
     std::uint32_t type{},version{},length{};
     while(s->GetNextRecordInfo(type,version,length)) {
+        if(type==0x4E414D45) {
+            Identity old{},key{}; RegisteredName n; std::uint32_t a{},b{};
+            if(version!=1 || length<20 || length>1042 || names.size()>=1024) continue;
+            if(s->ReadRecordData(old.form)!=4 || s->ReadRecordData(old.owner)!=4 || s->ReadRecordData(old.id)!=2 || s->ReadRecordData(a)!=4 || !a || a>512 || length<18+a) continue;
+            n.base.resize(a);
+            if(s->ReadRecordData(n.base.data(),a)!=a || s->ReadRecordData(b)!=4 || !b || b>512 || length!=18+a+b) continue;
+            n.display.resize(b);
+            if(s->ReadRecordData(n.display.data(),b)!=b || !ValidRegisteredName(n) || !old.id ||
+               !s->ResolveFormID(old.form,key.form) || !s->ResolveFormID(old.owner,key.owner) || !key.form || !key.owner) continue;
+            key.id=old.id;
+            if(!names.emplace(key,std::move(n)).second) duplicateNames.insert(key);
+            continue;
+        }
         if(type==preferredRecord) {
             std::uint32_t count{};
             if(version!=2 || length<4 || s->ReadRecordData(count)!=4 || count>65535 || length!=4+count*10) continue;
@@ -112,7 +171,8 @@ void Load(SKSE::SerializationInterface* s) {
         current.id=old.id;
         if(current.owner && (version==2 || current.owner==0x14) && next.size()<10000) next.insert(current);
     }
-    std::scoped_lock lock(ledgerMutex); ledger.Clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); ledger.items=std::move(next);
+    std::scoped_lock lock(ledgerMutex); ledger.Clear(); pendingNames.clear(); registeredNames.clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); ledger.items=std::move(next);
+    for(auto& [key,n]:names) if(ledger.items.contains(key) && !duplicateNames.contains(key)) registeredNames.emplace(key,std::move(n));
 }
 class Transfers final : public RE::BSTEventSink<RE::TESContainerChangedEvent> {
     RE::BSEventNotifyControl ProcessEvent(const RE::TESContainerChangedEvent* e,RE::BSTEventSource<RE::TESContainerChangedEvent>*) override {
@@ -134,6 +194,10 @@ class Transfers final : public RE::BSTEventSink<RE::TESContainerChangedEvent> {
                     try {observed=transferObservation.Capture(ledger,e->baseObj,e->oldContainer,e->newContainer);}
                     catch(...) {} // diagnostics must not interrupt ordinary transfer handling
                 } else {transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0;}
+                if(e->oldContainer && e->oldContainer!=e->newContainer) {
+                    pendingNames.erase({e->oldContainer,e->baseObj});
+                    std::erase_if(registeredNames,[&](const auto& n){return n.first.owner==e->oldContainer && n.first.form==e->baseObj;});
+                }
                 released=ledger.Transfer(e->baseObj,e->oldContainer,e->newContainer);
                 if(!generatedEvidence.empty() && e->oldContainer && e->oldContainer!=e->newContainer) generatedEvidence.erase({e->oldContainer,e->baseObj});
             }
@@ -178,6 +242,16 @@ void InspectDepartedItems(RE::Actor* actor) {
     }
 }
 }
+RegisteredName CaptureRegisteredName(RE::TESBoundObject* object,RE::InventoryEntryData* entry) {
+    if(!cleanupCompatibility.load() || !object || !entry || !entry->extraLists) return {};
+    RE::ExtraDataList* worn{}; unsigned count{};
+    for(auto* extra:*entry->extraLists) if(extra && (extra->HasType<RE::ExtraWorn>() || extra->HasType<RE::ExtraWornLeft>())) {worn=extra;++count;}
+    if(count!=1 || worn->GetCount()!=1 || entry->IsQuestObject()) return {};
+    const auto* text=worn->GetByType<RE::ExtraTextDisplayData>();
+    if(!SimpleName(text) || worn->HasType<RE::ExtraHealth>() || worn->HasType<RE::ExtraEnchantment>() || worn->HasType<RE::ExtraHotkey>() || worn->HasType<RE::ExtraPoison>()) return {};
+    RegisteredName result{object->GetName()?object->GetName():"",text->displayName.c_str()?text->displayName.c_str():""};
+    return ValidRegisteredName(result)?result:RegisteredName{};
+}
 void ResetTransferObservations() {std::scoped_lock lock(ledgerMutex);transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0;}
 std::uint64_t PreferredScope(std::uint16_t id) {const auto it=preferredScopes.find(id); return it==preferredScopes.end()?0:it->second;}
 PreferredItem RememberEnchanted(RE::Actor* actor,RE::ExtraDataList* extra) {
@@ -216,13 +290,15 @@ void RegisterManagedItemEvents() {
     if(auto* source=RE::ScriptEventSourceHolder::GetSingleton()) {source->AddEventSink(&transfers); source->AddEventSink(&identityChanges);}
 }
 void BeginManagedAddition(RE::Actor* actor) {
-    if(actor) {std::scoped_lock lock(ledgerMutex); ledger.Begin(actor->GetFormID()); std::erase_if(generatedEvidence,[&](const auto& e){return e.first.first==actor->GetFormID();});}
+    if(actor) {std::scoped_lock lock(ledgerMutex); ledger.Begin(actor->GetFormID()); std::erase_if(pendingNames,[&](const auto& n){return n.first.first==actor->GetFormID();}); std::erase_if(generatedEvidence,[&](const auto& e){return e.first.first==actor->GetFormID();});}
 }
-void AddManagedItems(RE::Actor* actor,RE::TESBoundObject* obj,int count,bool previouslyAbsent) {
+void AddManagedItems(RE::Actor* actor,RE::TESBoundObject* obj,int count,bool previouslyAbsent,const RegisteredName& name) {
     if(!actor || !obj || count<=0) return;
     // Record before AddObject: a synchronous outgoing transfer must be able to
     // cancel the claim. Incoming add events do not claim existing possessions.
-    if(previouslyAbsent) {std::scoped_lock lock(ledgerMutex); ledger.pending[{actor->GetFormID(),obj->GetFormID()}]=count;}
+    if(previouslyAbsent) {std::scoped_lock lock(ledgerMutex); ledger.pending[{actor->GetFormID(),obj->GetFormID()}]=count;
+        if(cleanupCompatibility.load() && count==1 && ValidRegisteredName(name) && pendingNames.size()<1024)
+            pendingNames[{actor->GetFormID(),obj->GetFormID()}]=name;}
     GALLERY_DIAG("OG-DIAG generate actor={:08X} form={:08X} count={} previouslyAbsent={}",actor->GetFormID(),obj->GetFormID(),count,previouslyAbsent);
     actor->AddObjectToContainer(obj,nullptr,count,nullptr);
 }
@@ -242,6 +318,7 @@ void ObserveGeneratedItems(RE::Actor* actor) {
         RE::ExtraDataList* only{}; unsigned lists=0;
         for(auto* extra:*data.second->extraLists) if(extra) {only=extra; ++lists;}
         if(lists!=1 || !only || only->GetCount()!=1) continue;
+        LogGeneratedName("after-generation",obj,only,owner);
         auto* uid=only->GetByType<RE::ExtraUniqueID>();
         if(!uid || uid->baseID!=owner || !uid->uniqueID) continue;
         std::scoped_lock lock(ledgerMutex);
@@ -255,10 +332,13 @@ void TrackNewManagedItems(RE::Actor* actor, bool compatibility) {
     CleanupTiming timing{"track"};
     if(!actor) return;
     std::map<RE::FormID,int> added;
+    std::map<RE::FormID,RegisteredName> names;
     std::map<RE::FormID,ManagedIdentity> evidence;
     std::set<std::uint16_t> ledgerIDs;
     {
         std::scoped_lock lock(ledgerMutex); added=ledger.TakePending(actor->GetFormID());
+        if(compatibility) for(const auto& [k,n]:pendingNames) if(k.first==actor->GetFormID() && added.contains(k.second)) names[k.second]=n;
+        std::erase_if(pendingNames,[&](const auto& n){return n.first.first==actor->GetFormID();});
         if(compatibility) for(const auto& [key,value]:generatedEvidence) if(key.first==actor->GetFormID()) evidence[key.second]=value;
         std::erase_if(generatedEvidence,[&](const auto& e){return e.first.first==actor->GetFormID();});
         if(compatibility && !added.empty()) for(const auto& key:ledger.items) if(key.owner==actor->GetFormID()) ledgerIDs.insert(key.id);
@@ -297,6 +377,7 @@ void TrackNewManagedItems(RE::Actor* actor, bool compatibility) {
             continue;
         }
         for(auto* extra:instances) {
+            LogGeneratedName("after-equip",obj,extra,actor->GetFormID());
             // Use an engine-created worn list: its allocation/layout differs on
             // pre/post 1.6.629. Never allocate ExtraDataList using compile-time size.
             auto* uid=extra->GetByType<RE::ExtraUniqueID>();
@@ -319,7 +400,9 @@ void TrackNewManagedItems(RE::Actor* actor, bool compatibility) {
                     GALLERY_DIAG("OG-DIAG compatibility skip form={:08X} existingID={} observed={} owner={:08X} matches={} reserved={}",obj->GetFormID(),uid->uniqueID,proof!=evidence.end(),uid->baseID,check.matchingIDs,reserved);
                     continue;
                 }
-                {std::scoped_lock lock(ledgerMutex); ledger.items.insert({obj->GetFormID(),actor->GetFormID(),uid->uniqueID});}
+                {std::scoped_lock lock(ledgerMutex); ledger.items.insert({obj->GetFormID(),actor->GetFormID(),uid->uniqueID});
+                if(compatibility && found->second==1 && names.contains(obj->GetFormID()) && registeredNames.size()<1024)
+                    registeredNames[{obj->GetFormID(),actor->GetFormID(),uid->uniqueID}]=names.at(obj->GetFormID());}
                 ledgerIDs.insert(uid->uniqueID);
                 GALLERY_DIAG("OG-DIAG compatibility adopted form={:08X} uid={} (existing ID unchanged)",obj->GetFormID(),uid->uniqueID);
                 continue;
@@ -328,7 +411,9 @@ void TrackNewManagedItems(RE::Actor* actor, bool compatibility) {
             if(!id) continue;
             extra->Add(new RE::ExtraUniqueID(actor->GetFormID(),id));
             used.insert(id);
-            {std::scoped_lock lock(ledgerMutex); ledger.items.insert({obj->GetFormID(),actor->GetFormID(),id});}
+            {std::scoped_lock lock(ledgerMutex); ledger.items.insert({obj->GetFormID(),actor->GetFormID(),id});
+                if(compatibility && found->second==1 && names.contains(obj->GetFormID()) && registeredNames.size()<1024)
+                    registeredNames[{obj->GetFormID(),actor->GetFormID(),id}]=names.at(obj->GetFormID());}
             SKSE::log::info("Tracking gallery item {:08X}, instance {}, actor {:08X}",obj->GetFormID(),id,actor->GetFormID());
         }
     }
@@ -363,9 +448,15 @@ void ReclaimManagedItems(RE::Actor* actor) {
             SKSE::log::info("Preserving ambiguous gallery item {:08X}, instance {}, matches={}, count={}",key.form,key.id,matches,instance?instance->GetCount():0);
             Forget(key); continue;
         }
-        // User customization relinquishes our claim. Never remove tempered,
-        // enchanted, renamed, favorited or quest equipment automatically.
-        if(protectedItem || instance->HasType<RE::ExtraHealth>() || instance->HasType<RE::ExtraEnchantment>() || instance->HasType<RE::ExtraTextDisplayData>() || instance->HasType<RE::ExtraHotkey>() || instance->HasType<RE::ExtraPoison>()) {
+        LogGeneratedName("before-reclaim",object,instance,actor->GetFormID());
+        const bool ignoreName=reclaimRenamedGeneratedItems.load();
+        const bool hasName=instance->HasType<RE::ExtraTextDisplayData>();
+        if(ignoreName && hasName) GALLERY_DIAG("OG-NAME-COMPAT bypass form={:08X} uid={} reason=name-only-protection-disabled",key.form,key.id);
+        // Compatibility ignores text changes only. Identity and ownership are
+        // still checked above and claimed below; all other protections remain.
+        if(ProtectGeneratedItem(ignoreName,protectedItem,
+            instance->HasType<RE::ExtraHealth>(),instance->HasType<RE::ExtraEnchantment>(),
+            hasName,instance->HasType<RE::ExtraHotkey>(),instance->HasType<RE::ExtraPoison>())) {
             SKSE::log::info("Preserving customized gallery item {:08X}, instance {}: quest={}, health={}, enchant={}, name={}, favorite={}, poison={}",key.form,key.id,protectedItem,instance->HasType<RE::ExtraHealth>(),instance->HasType<RE::ExtraEnchantment>(),instance->HasType<RE::ExtraTextDisplayData>(),instance->HasType<RE::ExtraHotkey>(),instance->HasType<RE::ExtraPoison>());
             Forget(key); continue;
         }
@@ -376,7 +467,7 @@ void ReclaimManagedItems(RE::Actor* actor) {
         bool transferClaim=false;
         {
             std::scoped_lock lock(ledgerMutex);
-            claimed=ledger.items.erase(key)!=0;
+            claimed=ledger.items.erase(key)!=0; registeredNames.erase(key);
             if(claimed) transferChain.Retire(key);
             else {transferClaim=transferChain.Consume(key,cleanupCompatibility.load()); claimed=transferClaim;}
         }

@@ -183,7 +183,7 @@ void UpdateLivePreviewTexture(ID3D11Texture2D* frame) {
     context->CopySubresourceRegion(liveTexture.Get(),0,0,0,0,frame,0,&box);
     liveAspect=float(desc.Width)/float(desc.Height);
 }
-std::filesystem::path CapturePortrait(bool centered) {
+std::filesystem::path CapturePortrait(bool centered, bool draft) {
     using Microsoft::WRL::ComPtr;
     auto* window = RE::BSGraphics::Renderer::GetCurrentRenderWindow();
     if (!window || !window->swapChain) throw std::runtime_error("Game swap chain is unavailable");
@@ -193,7 +193,7 @@ std::filesystem::path CapturePortrait(bool centered) {
     D3D11_TEXTURE2D_DESC captureDesc{};
     frame->GetDesc(&captureDesc);
     SKSE::log::info("Portrait capture: framework pre-render, {}x{}, DXGI format {}, samples {}",captureDesc.Width,captureDesc.Height,static_cast<unsigned>(captureDesc.Format),captureDesc.SampleDesc.Count);
-    const auto path=SavePortraitTexture(frame.Get(), "Data/SKSE/Plugins/OutfitGallery/Captures",1024,centered);
+    const auto path=SavePortraitTexture(frame.Get(), draft ? "Data/SKSE/Plugins/OutfitGallery/Captures/PhotoRetake" : "Data/SKSE/Plugins/OutfitGallery/Captures",1024,centered);
     std::error_code pathError,sizeError;
     const auto absolute=std::filesystem::absolute(path,pathError);
     const auto bytes=std::filesystem::file_size(path,sizeError);

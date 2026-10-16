@@ -1,7 +1,8 @@
-#include "ItemIdentity.h"
+﻿#include "ItemIdentity.h"
 #include <d3d11.h>
 #include <wrl/client.h>
 #include "Capture.h"
+#include "PhotoUpdate.h"
 #include "ExternalTranslation.h"
 #include "TranslationKeys.h"
 #include <fstream>
@@ -37,7 +38,7 @@
 
 using namespace REL::literals;
 SKSEPluginInfo(
-    .Version = "1.0.15.0"_v,
+    .Version = "1.0.16.0"_v,
     .Name = "OutfitGallery",
     .Author = "Outfit Gallery contributors",
     // SKSE's final component is the store identifier: GOG is 1, not 0.
@@ -88,7 +89,7 @@ ULONGLONG settingsChangedAt{};
 const std::filesystem::path settingsFile="Data/SKSE/Plugins/OutfitGallery/StudioSettings.json";
 void SaveSettingsIfDue(bool force=false) {
     if (!force && (!settingsChangedAt || GetTickCount64()-settingsChangedAt<600)) return;
-    try { WriteStudioSettings({distance.load(),height.load(),orbit.load(),pitch.load(),fov.load(),gridColumns,showNames,showCounts,language,allowFreeCamera.load(),addMissing,lateral.load(),elevation.load(),partialSlots.load(),startupTab,detachedPreview.load(),previewRect,followerTargeting.load(),preferEnchanted.load(),portraitThumbnails,cleanupCompatibility.load(),allowCombatGallery.load(),compactGallery},settingsFile); }
+    try { WriteStudioSettings({distance.load(),height.load(),orbit.load(),pitch.load(),fov.load(),gridColumns,showNames,showCounts,language,allowFreeCamera.load(),addMissing,lateral.load(),elevation.load(),partialSlots.load(),startupTab,detachedPreview.load(),previewRect,followerTargeting.load(),preferEnchanted.load(),portraitThumbnails,cleanupCompatibility.load(),allowCombatGallery.load(),compactGallery,reclaimRenamedGeneratedItems.load()},settingsFile); }
     catch(const std::exception& e) { SKSE::log::error("Settings save: {}",e.what()); }
     settingsChangedAt=0;
 }
@@ -122,6 +123,12 @@ std::atomic<bool> autoToggleRequested{};
 void ProcessAutoToggle();
 const std::filesystem::path inputSettingsFile="Data/SKSE/Plugins/OutfitGallery/Hotkeys.json";
 std::atomic<bool> saveBusy{};
+std::atomic<bool> photoRetakeActive{}, photoRetakeCaptureRequested{};
+PhotoUpdate photoUpdate{"Data/SKSE/Plugins/OutfitGallery/Captures"}; // render-thread only
+std::string photoRetakeName;
+unsigned photoRetakeSerial{};
+bool photoRetakeReveal{};
+unsigned photoRetakeLayoutFrames{}; // render-only; settle scroll limits after a column change
 std::mutex presetsMutex;
 std::vector<Preset> presets;
 Preset stagedPreset, requestedPreset;
@@ -206,6 +213,7 @@ void Close() {
     bindingMode=0;
     active = false;
     captureRequested = false;
+    photoRetakeCaptureRequested = false;
     saveBusy = false;
     if (window) window->IsOpen = false;
     if (saved.valid) {
@@ -411,11 +419,11 @@ void Tick() {
         SKSE::log::info("OG-FOLLOWER studio closed: {}",targetReason);
         Close(); SetStatus(targetReason); return;
     }
-    if (requested == 3 || requested == 5 || requested == 6) {
+    if (!photoRetakeActive && (requested == 3 || requested == 5 || requested == 6)) {
         try {
             const auto scope=requested==5?partialSlots.load():0;
             if(requested==5 && !scope) throw std::runtime_error("Select at least one slot.");
-            auto p = requested==6?SnapshotAccessories(subject.get(),true):SnapshotEquipment(subject.get(),scope,true);
+            auto p = requested==6?SnapshotAccessories(subject.get(),true,true):SnapshotEquipment(subject.get(),scope,true,true);
             { std::scoped_lock lock(presetsMutex); p.name = requestedName.empty() ? "Outfit " + std::to_string(presets.size()+1) : requestedName; stagedPreset = std::move(p); }
             captureRequested = true;
         } catch (const std::exception& e) { saveBusy = false; SetStatus(e.what()); }
@@ -496,14 +504,22 @@ void QueueTick() {
     }
 }
 
+void CancelPhotoRetake() {
+    if(!photoUpdate.Draft().empty()) DisposePortraitView(photoUpdate.Draft().generic_string());
+    photoUpdate.Cancel();
+    photoRetakeActive=false; photoRetakeCaptureRequested=false; photoRetakeReveal=false; photoRetakeLayoutFrames=0;
+    captureDelay=0; captureRequested=false; saveBusy=false;
+}
 void __stdcall OnFrame(SKSEMenuFramework::Model::EventType event) {
     if (event != SKSEMenuFramework::Model::kBeforeRender || !ready) return;
+    if(photoRetakeActive && (!active || photoRetakeSerial!=studioOpenSerial.load() || !window || !window->IsOpen)) CancelPhotoRetake();
     ProcessAutoToggle();
     SaveSettingsIfDue();
     // The framework dispatches listeners under its own lock. Never call back into
     // its registration/lookup APIs here. Game mutations go to one coalesced task.
     QueueTick();
     if (active && captureRequested.exchange(false)) captureDelay = 3;
+    if (active && photoRetakeActive && photoRetakeCaptureRequested.exchange(false)) captureDelay = 3;
     if (!active) {captureDelay=0; previewSettled=0; ResetLivePreview();}
     else if(cameraCentered.load()!=detachedPreview.load()) {previewSettled=0; ResetLivePreview();}
     else previewSettled=std::min(previewSettled+1,4u);
@@ -517,7 +533,16 @@ void __stdcall OnFrame(SKSEMenuFramework::Model::EventType event) {
     } else if(!detachedPreview) ResetLivePreview();
     if (captureDelay && previewSettled>=3 && --captureDelay == 0 && active) {
         try {
-            const auto file = CapturePortrait(detachedPreview.load());
+            const auto file = CapturePortrait(detachedPreview.load(),photoRetakeActive.load());
+            if(photoRetakeActive) {
+                try {
+                    if(!LoadPortraitView(file.generic_string())) throw std::runtime_error("Could not preview the new photo. Original photo kept.");
+                    if(!photoUpdate.Draft().empty()) DisposePortraitView(photoUpdate.Draft().generic_string());
+                    photoUpdate.Stage(file);
+                    photoRetakeReveal=true;
+                    SetStatus("Photo preview only. Not saved yet.");
+                } catch(...) {DisposePortraitView(file.generic_string()); std::error_code ec; std::filesystem::remove(file,ec); throw;}
+            } else {
             { std::scoped_lock lock(statusMutex); lastImage = file.generic_string(); }
             Preset p;
             { std::scoped_lock lock(presetsMutex); p = stagedPreset; }
@@ -526,6 +551,7 @@ void __stdcall OnFrame(SKSEMenuFramework::Model::EventType event) {
             ReloadPresets();
             {std::scoped_lock lock(presetsMutex); revealAfterSave=p;}
             SetStatus("Photo + outfit saved: " + p.name);
+            }
         } catch (const std::exception& e) { SetStatus(e.what()); }
         saveBusy = false;
     }
@@ -579,7 +605,8 @@ void RenderCameraSettings() {
 
 
 }
-void RenderCameraSlots() {
+void DrawColumnCountIcon(float buttonHeight);
+void RenderCameraSlots(bool retakeColumns=false) {
     UI::BeginDisabled(saveBusy);
     // A font-independent settings toggle keeps the toolbar compact in both languages.
     const float side=UI::GetFrameHeight();
@@ -616,6 +643,54 @@ void RenderCameraSlots() {
             } else SetStatus("Empty camera slot: "+std::to_string(n+1));
         }
     }
+    if(retakeColumns) {
+        const float width=side+20.f;
+        const auto* toolbarStyle=UI::GetStyle();
+        const float modeWidth=std::max(UI::CalcTextSize(Tr("Normal")).x,UI::CalcTextSize(Tr("Portrait")).x)+toolbarStyle->FramePadding.x*2.f;
+        const float groupWidth=width+2.f*modeWidth+2.f*toolbarStyle->ItemSpacing.x;
+        const float right=UI::GetCursorPosX()+UI::GetContentRegionAvail().x;
+        const float groupX=std::max(UI::GetCursorPosX(),right-groupWidth);
+        const float previousRight=UI::GetItemRectMax().x-UI::GetWindowPos().x;
+        const char* notice=photoUpdate.Draft().empty()?nullptr:Tr("Photo preview only. Not saved yet.");
+        bool noticeDrawn=false;
+        if(previousRight+toolbarStyle->ItemSpacing.x*2.f<=groupX) {
+            UI::SameLine();
+        } else if(notice && UI::GetCursorPosX()+UI::CalcTextSize(notice).x+toolbarStyle->ItemSpacing.x*2.f<=groupX) {
+            // Share the folded toolbar row without overlapping translated text.
+            UI::AlignTextToFramePadding();
+            UI::TextColored({1.f,.8f,.35f,1.f},"%s",notice);
+            noticeDrawn=true;
+            UI::SameLine();
+        }
+        UI::SetCursorPosX(groupX);
+        if(UI::Button("##retakeColumns",{width,side})) {
+            gridColumns=gridColumns==6?2:gridColumns+1;
+            // ImGui clamps against the previous frame's content height. Keep
+            // revealing the same photo until the new grid's extent has settled.
+            photoRetakeReveal=true; photoRetakeLayoutFrames=3;
+            SaveSettingsIfDue(true);
+        }
+        DrawColumnCountIcon(side);
+        if(UI::IsItemHovered()) UI::SetTooltip(Tr("Columns: %d (click to cycle)"),ThumbnailColumns(gridColumns,portraitThumbnails));
+        for(int mode=0;mode<2;++mode) {
+            UI::SameLine();
+            const bool selectedMode=portraitThumbnails==(mode==1);
+            if(selectedMode) UI::PushStyleColor(UI::ImGuiCol_Button,{.55f,.43f,.19f,1.f});
+            const bool clicked=UI::Button((std::string(Tr(mode?"Portrait":"Normal"))+"##retakeMode").c_str(),{modeWidth,side});
+            if(selectedMode) UI::PopStyleColor();
+            if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Click to switch between normal and portrait thumbnails."));
+            if(clicked && !selectedMode) {
+                portraitThumbnails=mode==1; thumbnailModeChanged=true;
+                photoRetakeReveal=true; photoRetakeLayoutFrames=3;
+                SaveSettingsIfDue(true);
+            }
+        }
+        if(notice && !noticeDrawn) {
+            UI::PushStyleColor(UI::ImGuiCol_Text,{1.f,.8f,.35f,1.f});
+            UI::TextWrapped("%s",notice);
+            UI::PopStyleColor();
+        }
+    }
     UI::EndDisabled();
     if(showCameraSettings) RenderCameraSettings();
 }
@@ -630,11 +705,49 @@ void DrawColumnCountIcon(float buttonHeight) {
         UI::ImDrawListManager::AddRectFilled(draw,p,{p.x+side,p.y+side},0xFFE0E0E0,0,0);
     }
 }
+void RenderPhotoRetakeControls() {
+    captureAllowed=false;
+    UI::TextWrapped(Tr("Updating photo: %s"),photoRetakeName.c_str());
+    UI::TextWrapped("%s",Tr("Only the photo changes. Saved equipment and automatic outfit assignments stay unchanged."));
+    UI::TextWrapped("%s",Tr("The photo uses the current appearance, which may differ from this outfit's saved equipment."));
+    const bool review=!photoUpdate.Draft().empty();
+    UI::BeginDisabled(saveBusy);
+    if(review) {
+        if(!saveBusy && (UI::Button(Label("Use this photo")) || PadPressed(UI::ImGuiKey_GamepadFaceDown,false))) {
+            try {
+                // Invalidate before the next draw; never release a texture referenced by this frame.
+                DisposePortraitView(photoUpdate.Target().generic_string());
+                photoUpdate.Commit();
+                CancelPhotoRetake();
+                SetStatus("Photo updated. Equipment and assignments unchanged.");
+                framePadEdges=framePadRepeat=0;
+            } catch(const std::exception& e) {SetStatus(e.what());}
+        }
+        if(UI::IsItemHovered()) UI::SetTooltip("%s / A",Tr("Use this photo"));
+        UI::SameLine();
+    }
+    const bool shoot=UI::Button(Label(review?"Retake":"Take photo")) || RawPadPressed(capturePads[0]);
+    if(UI::IsItemHovered()) UI::SetTooltip(Tr("Capture / retake: %s"),CaptureHint(0).c_str());
+    UI::SameLine();
+    const bool cancel=UI::Button(Label("Cancel")) || PadPressed(UI::ImGuiKey_GamepadFaceRight,false);
+    if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("B: cancel"));
+    UI::EndDisabled();
+    if(photoRetakeActive && !saveBusy && cancel) {
+        CancelPhotoRetake(); SetStatus("Photo update cancelled. Original photo kept.");
+        framePadEdges=framePadRepeat=0;
+    } else if(photoRetakeActive && !saveBusy && shoot) {
+        saveBusy=true; photoRetakeCaptureRequested=true;
+    }
+    if(photoRetakeActive) {
+        RenderCameraSlots(true);
+    }
+}
 #include "PresetEditUI.inc"
 #include "GalleryBrowser.inc"
 #include "AutoOutfitUI.inc"
 
 void __stdcall RenderStudio() {
+    if(photoRetakeActive && (!active || photoRetakeSerial!=studioOpenSerial.load())) CancelPhotoRetake();
     DrainOrganizerTextures();
     organizerFrame=false;
     ProcessCapturedHotkey();
@@ -663,7 +776,15 @@ void __stdcall RenderStudio() {
     UI::SetNextWindowSize({screen.x*0.515f, screen.y*0.97f}, UI::ImGuiCond_Always);
     bool opened = true;
     if (UI::Begin("Outfit Gallery", &opened, UI::ImGuiWindowFlags_NoResize | UI::ImGuiWindowFlags_NoMove | UI::ImGuiWindowFlags_NoCollapse | UI::ImGuiWindowFlags_NoNavInputs | UI::ImGuiWindowFlags_NoTitleBar | UI::ImGuiWindowFlags_NoScrollbar | UI::ImGuiWindowFlags_NoScrollWithMouse)) {
-        RenderGalleryTitle(opened);
+        if(photoRetakeActive) {
+            const auto titlePos=UI::GetCursorPos();
+            const float closeSide=UI::GetFrameHeight();
+            const float closeX=titlePos.x+UI::GetContentRegionAvail().x-closeSide;
+            UI::AlignTextToFramePadding(); UI::TextUnformatted("Outfit Gallery");
+            UI::SetCursorPos({closeX,titlePos.y});
+            if(UI::Button("X##closePhotoRetake",{closeSide,closeSide})) opened=false;
+            UI::Separator();
+        } else RenderGalleryTitle(opened);
         if(diagnosticNow) {
             ++diagnosticSample; diagnosticDue=GetTickCount64()+1500;
             const auto size=UI::GetWindowSize(), pos=UI::GetWindowPos();
@@ -674,6 +795,8 @@ void __stdcall RenderStudio() {
                 screen.x!=display.x || screen.y!=display.y,size.x,size.y,pos.x,pos.y,UI::GetFontSize(),detachedPreview.load());
         }
         UI::BeginChild("Gallery contents",{0,0},0,UI::ImGuiWindowFlags_NoNavInputs);
+        if(photoRetakeActive) RenderPhotoRetakeControls();
+        else {
         float targetRowRight=-1.f;
         if(studioFollower) {
             std::string targetName; {std::scoped_lock lock(statusMutex); targetName=studioActorName;}
@@ -764,12 +887,17 @@ void __stdcall RenderStudio() {
         if(UI::IsItemHovered()) UI::SetTooltip("%s\n%s",Tr("Wear only the accessories to register. Applying adds or replaces their slots."),CaptureHint(2).c_str());
         UI::EndDisabled();
         RenderCameraSlots();
+        }
         std::string text, image;
         { std::scoped_lock lock(statusMutex); text = status; image = lastImage; }
-        if(text!="Adjust composition and press F9/Y to save." && text!="Save equipment with F9; click a photo to apply a preset.") UI::TextWrapped(Tr("%s"), StatusText(text).c_str());
+        if(!text.empty() && !(photoRetakeActive && text=="Photo preview only. Not saved yet.") && text!="Adjust composition and press F9/Y to save." && text!="Save equipment with F9; click a photo to apply a preset.") UI::TextWrapped(Tr("%s"), StatusText(text).c_str());
         UI::Separator();
         if(autoPanel) UI::TextWrapped("%s",Tr("Select or drag a photo to assign it. Clicking photos here does not equip them."));
+        UI::PushStyleVar(UI::ImGuiStyleVar_DisabledAlpha,1.f);
+        UI::BeginDisabled(photoRetakeActive);
         RenderBrowser(addMissing);
+        UI::EndDisabled();
+        UI::PopStyleVar();
         UI::EndChild();
     }
     UI::End();
@@ -933,7 +1061,11 @@ bool __stdcall Input(RE::InputEvent* event) {
     if(autoKeyboard && code==autoKeyboard && HotkeyChord::Matches(autoModifiers.load(),HeldKeyboardModifiers() & ~HotkeyChord::ModifierForKey(code))) {
         autoToggleRequested=true;return true;
     }
-    for(unsigned action=0;action<3;++action) if (active && !editPending && captureAllowed && captureKeys[action] && code==captureKeys[action]) {
+    if(active && photoRetakeActive && captureKeys[0] && code==captureKeys[0]) {
+        if(!saveBusy.exchange(true)) photoRetakeCaptureRequested=true;
+        return true;
+    }
+    for(unsigned action=0;action<3;++action) if (active && !photoRetakeActive && !editPending && captureAllowed && captureKeys[action] && code==captureKeys[action]) {
         if (!saveBusy.exchange(true)) {
             { std::scoped_lock lock(presetsMutex); requestedName.clear(); }
             command = action==0?3:action==1?5:6; QueueTick();
@@ -983,7 +1115,7 @@ void Message(SKSE::MessagingInterface::Message* message) {
         try {
             if(std::filesystem::exists(settingsFile)) {
                 const auto s=ReadStudioSettings(settingsFile);
-                distance=s.distance; height=s.height; orbit=s.orbit; pitch=s.pitch; fov=s.fov; lateral=s.lateral; elevation=s.elevation; gridColumns=s.columns; showNames=s.showNames; showCounts=s.showCounts; language=s.language; allowFreeCamera=s.allowFreeCamera; addMissing=s.addMissing; partialSlots=s.headSlots; startupTab=s.startupTab; detachedPreview=s.detachedPreview; previewRect=s.previewRect; followerTargeting=s.followerTargeting; preferEnchanted=s.preferEnchanted; portraitThumbnails=s.portraitThumbnails; cleanupCompatibility=s.cleanupCompatibility; allowCombatGallery=s.allowCombatGallery; compactGallery=s.compactGallery;
+                distance=s.distance; height=s.height; orbit=s.orbit; pitch=s.pitch; fov=s.fov; lateral=s.lateral; elevation=s.elevation; gridColumns=s.columns; showNames=s.showNames; showCounts=s.showCounts; language=s.language; allowFreeCamera=s.allowFreeCamera; addMissing=s.addMissing; partialSlots=s.headSlots; startupTab=s.startupTab; detachedPreview=s.detachedPreview; previewRect=s.previewRect; followerTargeting=s.followerTargeting; preferEnchanted=s.preferEnchanted; portraitThumbnails=s.portraitThumbnails; cleanupCompatibility=s.cleanupCompatibility; allowCombatGallery=s.allowCombatGallery; compactGallery=s.compactGallery; reclaimRenamedGeneratedItems=s.reclaimRenamedGeneratedItems;
                 SKSE::log::info("Loaded persistent studio settings");
             }
         } catch(const std::exception& e) { SetStatus(std::string("Camera settings: ")+e.what()); }
@@ -1037,7 +1169,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
         SKSE::log::error("Unsupported Skyrim runtime {}. Supported targets: 1.5.97, 1.6.353, 1.6.640, 1.6.1130, 1.6.1170, GOG 1.6.1179, Steam 1.7.104. VR is not enabled.",runtime.string());
         return false;
     }
-    SKSE::log::info("Runtime {} accepted; 1.0.15 runtime target; Steam 1.7.104 user-tested; GOG 1.6.1179 untested.",runtime.string());
+    SKSE::log::info("Runtime {} accepted; 1.0.16 runtime target; Steam 1.7.104 user-tested; GOG 1.6.1179 untested.",runtime.string());
     SKSE::Init(skse, false);
     Gallery::InitializeManagedItems();
     const auto ini = std::filesystem::absolute("Data/SKSE/Plugins/OutfitGallery.ini");
@@ -1045,8 +1177,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     Gallery::saveHotkey = GetPrivateProfileIntW(L"Input", L"SaveHotkey", 67, ini.c_str());
     Gallery::captureKeys[0]=Gallery::saveHotkey;
     Gallery::gamepadHotkey = GetPrivateProfileIntW(L"Input", L"GamepadHotkey", 32, ini.c_str());
-    SKSE::log::info("OutfitGallery 1.0.15");
-    SKSE::log::info("OutfitGallery 1.0.15 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
+    SKSE::log::info("OutfitGallery 1.0.16");
+    SKSE::log::info("OutfitGallery 1.0.16 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
     return SKSE::GetMessagingInterface()->RegisterListener(Gallery::Message);
 }
 

@@ -25,11 +25,19 @@ int main() {
         if(!ReadStudioSettings(folder/"legacy-preference.json").preferEnchanted) throw std::runtime_error("missing preference field not default ON");
         if(prefSettings.cleanupCompatibility || cleanupCompatibility.load() || DetailEnabled()) throw std::runtime_error("support options must default OFF");
         if(ReadStudioSettings(folder/"legacy-preference.json").cleanupCompatibility) throw std::runtime_error("legacy settings enabled compatibility");
+        if(prefSettings.reclaimRenamedGeneratedItems || reclaimRenamedGeneratedItems.load() || ReadStudioSettings(folder/"legacy-preference.json").reclaimRenamedGeneratedItems)
+            throw std::runtime_error("renamed cleanup must default OFF for existing users");
+        for(bool tracking:{false,true}) for(bool renamed:{false,true}) {
+            StudioSettings independent; independent.cleanupCompatibility=tracking; independent.reclaimRenamedGeneratedItems=renamed;
+            WriteStudioSettings(independent,folder/"independent.json");
+            const auto read=ReadStudioSettings(folder/"independent.json");
+            if(read.cleanupCompatibility!=tracking || read.reclaimRenamedGeneratedItems!=renamed) throw std::runtime_error("cleanup settings not independent");
+        }
         prefSettings.cleanupCompatibility=true; prefSettings.portraitThumbnails=true;
         detailedLogging=true;
         WriteStudioSettings(prefSettings,folder/"support.json");
         const auto support=ReadStudioSettings(folder/"support.json");
-        if(!support.cleanupCompatibility || !support.portraitThumbnails) throw std::runtime_error("support setting did not persist");
+        if(!support.cleanupCompatibility || !support.portraitThumbnails || support.reclaimRenamedGeneratedItems) throw std::runtime_error("support setting did not persist");
         {std::ifstream in(folder/"support.json"); std::string bytes((std::istreambuf_iterator<char>(in)),{});
          if(bytes.find("detailedLogging")!=std::string::npos) throw std::runtime_error("diagnostics persisted across restart");}
         detailedLogging=false;
