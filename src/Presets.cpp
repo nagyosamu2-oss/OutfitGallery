@@ -1,4 +1,5 @@
-﻿#include "Presets.h"
+#include "Presets.h"
+#include "UiScale.h"
 #include "PresetEditing.h"
 #include <chrono>
 #include <atomic>
@@ -68,10 +69,10 @@ AutoOutfitSettings ReadAutoOutfitSettings(const std::filesystem::path& path) {
         throw std::runtime_error("Auto outfit setting out of range");
     if(j.contains("sneakDelaySeconds") && (j["sneakDelaySeconds"]<0 || j["sneakDelaySeconds"]>5)) throw std::runtime_error("Auto outfit setting out of range");
     if(j.contains("combatIntervalSeconds") && (j["combatIntervalSeconds"]<2 || j["combatIntervalSeconds"]>10)) throw std::runtime_error("Auto outfit setting out of range");
-    settings.combatIntervalSeconds=j.value("combatIntervalSeconds",5);
-    settings.sneakDelaySeconds=j.value("sneakDelaySeconds",2);
+    settings.combatIntervalSeconds=j.value("combatIntervalSeconds",2);
+    settings.sneakDelaySeconds=j.value("sneakDelaySeconds",1);
     settings.ostimRecoverySeconds=j.value("ostimRecoverySeconds",10);
-    settings.delaySeconds=j.value("delaySeconds",3); settings.columns=j.value("columns",3);
+    settings.delaySeconds=j.value("delaySeconds",0); settings.columns=j.value("columns",3);
     if(settings.combatIntervalSeconds<2 || settings.combatIntervalSeconds>10 || settings.sneakDelaySeconds<0 || settings.sneakDelaySeconds>5 || settings.ostimRecoverySeconds<5 || settings.ostimRecoverySeconds>30 || settings.delaySeconds<0 || settings.delaySeconds>10 || settings.columns<3 || settings.columns>5)
         throw std::runtime_error("Auto outfit setting out of range");
     return settings;
@@ -141,17 +142,21 @@ StudioSettings ReadStudioSettings(const std::filesystem::path& path) {
     std::ifstream in(path); Json j; in>>j;
     if(j.at("schema").get<int>()!=1) throw std::runtime_error("Unsupported settings schema");
     StudioSettings s{j.at("distance"),j.at("height"),j.at("orbit"),j.at("pitch"),j.at("fov"),j.value("columns",3)};
-    s.showNames=j.value("showNames",true); s.showCounts=j.value("showCounts",true); s.language=j.value("language",0); s.allowFreeCamera=j.value("allowFreeCamera",false); s.addMissing=j.value("addMissing",true); s.preferEnchanted=j.value("preferEnchanted",true); s.portraitThumbnails=j.value("portraitThumbnails",false); s.cleanupCompatibility=j.value("cleanupCompatibility",false); s.allowCombatGallery=j.value("allowCombatGallery",false); s.compactGallery=j.value("compactGallery",false); s.reclaimRenamedGeneratedItems=j.value("reclaimRenamedGeneratedItems",false);
+    s.showNames=j.value("showNames",true); s.showCounts=j.value("showCounts",false); s.language=j.value("language",0); s.allowFreeCamera=j.value("allowFreeCamera",true); s.addMissing=j.value("addMissing",true); s.preferEnchanted=j.value("preferEnchanted",true); s.portraitThumbnails=j.value("portraitThumbnails",false); s.cleanupCompatibility=j.value("cleanupCompatibility",false); s.allowCombatGallery=j.value("allowCombatGallery",true); s.compactGallery=j.value("compactGallery",false); s.reclaimRenamedGeneratedItems=j.value("reclaimRenamedGeneratedItems",false);
+    s.uiZoom=NormalizeUiZoom(j.value("uiZoom",1.f));
+    s.fullOutfitToggle=j.value("fullOutfitToggle",false);
+    s.upscalerCompatibility=j.value("upscalerCompatibility",false);
     s.headSlots=j.value("headSlots",0x1803u);
     s.startupTab=j.value("startupTab",std::string{});
-    s.followerTargeting=j.value("followerTargeting",false);
+    s.followerTargetingMigrationPending=j.value("followerTargetingDefaultVersion",0)<1;
+    s.followerTargeting=s.followerTargetingMigrationPending || j.value("followerTargeting",true);
     s.detachedPreview=j.value("detachedPreview",false); s.previewRect=j.value("previewRect",s.previewRect);
     s.lateral=j.value("lateral",0.f); s.elevation=j.value("elevation",0.f);
     ValidateSettings(s); return s;
 }
 void WriteStudioSettings(const StudioSettings& s,const std::filesystem::path& path) {
     ValidateSettings(s);
-    Json j={{"schema",1},{"distance",s.distance},{"height",s.height},{"orbit",s.orbit},{"pitch",s.pitch},{"fov",s.fov},{"columns",s.columns},{"showNames",s.showNames},{"showCounts",s.showCounts},{"language",s.language},{"allowFreeCamera",s.allowFreeCamera},{"addMissing",s.addMissing},{"preferEnchanted",s.preferEnchanted},{"portraitThumbnails",s.portraitThumbnails},{"cleanupCompatibility",s.cleanupCompatibility},{"allowCombatGallery",s.allowCombatGallery},{"compactGallery",s.compactGallery},{"reclaimRenamedGeneratedItems",s.reclaimRenamedGeneratedItems},{"lateral",s.lateral},{"elevation",s.elevation},{"headSlots",s.headSlots},{"startupTab",s.startupTab},{"detachedPreview",s.detachedPreview},{"previewRect",s.previewRect},{"followerTargeting",s.followerTargeting}};
+    Json j={{"schema",1},{"uiZoom",NormalizeUiZoom(s.uiZoom)},{"distance",s.distance},{"height",s.height},{"orbit",s.orbit},{"pitch",s.pitch},{"fov",s.fov},{"columns",s.columns},{"showNames",s.showNames},{"showCounts",s.showCounts},{"language",s.language},{"allowFreeCamera",s.allowFreeCamera},{"addMissing",s.addMissing},{"preferEnchanted",s.preferEnchanted},{"portraitThumbnails",s.portraitThumbnails},{"cleanupCompatibility",s.cleanupCompatibility},{"allowCombatGallery",s.allowCombatGallery},{"compactGallery",s.compactGallery},{"reclaimRenamedGeneratedItems",s.reclaimRenamedGeneratedItems},{"lateral",s.lateral},{"elevation",s.elevation},{"headSlots",s.headSlots},{"startupTab",s.startupTab},{"detachedPreview",s.detachedPreview},{"previewRect",s.previewRect},{"followerTargeting",s.followerTargeting},{"followerTargetingDefaultVersion",1},{"fullOutfitToggle",s.fullOutfitToggle},{"upscalerCompatibility",s.upscalerCompatibility}};
     std::filesystem::create_directories(path.parent_path());
     auto tmp=path; tmp+=".tmp";
     {std::ofstream out(tmp,std::ios::binary|std::ios::trunc); out.exceptions(std::ios::badbit|std::ios::failbit); out<<j.dump(2); out.close();}

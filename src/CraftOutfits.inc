@@ -1,4 +1,4 @@
-﻿// Game-thread session state. Event callbacks retain handles/values only.
+// Game-thread session state. Event callbacks retain handles/values only.
 Craft::Session craft;
 RE::ObjectRefHandle craftFurniture;
 std::atomic<unsigned> craftMenuSerial{};
@@ -39,7 +39,7 @@ bool MaintainCraft(RE::PlayerCharacter* player,RE::UI* ui,ULONGLONG now) {
     }
     std::string photo;{std::scoped_lock lock(autoMutex);photo=autoSlots[slot];}
     const bool scene=OStimBlocksAutomatic(player);
-    const bool allowed=target && CraftFurnitureKind(target.get())==craft.kind && autoEnabled && !autoPaused && !photo.empty() &&
+    const bool allowed=!autoAppearanceOnly && target && CraftFurnitureKind(target.get())==craft.kind && autoEnabled && !autoPaused && !photo.empty() &&
         !scene && !active && !editPending && !saveBusy && now>=equipmentLaneDue && !verificationTicks && !player->IsInCombat() &&
         !player->IsDead() && !player->IsDisabled() && !player->IsInKillMove() && !player->IsInRagdollState() &&
         !state->IsUnconscious() && !state->IsStaggered() && !state->IsSwimming() && !player->IsOnMount() &&
@@ -112,7 +112,7 @@ void QueueCraftFurniture(RE::TESObjectREFR* actor,RE::TESObjectREFR* target,bool
         const int slot=Craft::SlotFor(kind);
         if(slot<0) return;
         if(!craft.target) {
-            if(!autoEnabled || autoPaused) return;
+            if(!autoEnabled || autoPaused || autoAppearanceOnly) return;
             {std::scoped_lock lock(autoMutex);if(autoSlots[slot].empty()) return;}
             if(!craft.Begin(ref->GetFormID(),stamp,serial,kind)) return;
             craftFurniture=handle;craftActive=true;

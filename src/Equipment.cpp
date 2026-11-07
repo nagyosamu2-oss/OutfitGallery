@@ -1,7 +1,10 @@
+#include "EquipmentRemoval.h"
+#include "AccessoryToggle.h"
 #include "ItemIdentity.h"
 #include "Presets.h"
 #include "Diagnostics.h"
 #include "ManagedItems.h"
+#include "FollowerOutfits.h"
 #include "EnchantmentSignature.h"
 #include <map>
 #undef GetObject
@@ -98,6 +101,117 @@ Preset SnapshotForVerification(RE::Actor* actor,const Preset& target) {
         if(AccessoryItemInScope(masks[n],target.slotMask,registered)) selected.items.push_back(item);
     }
     return selected;
+}
+namespace {
+std::vector<std::uint32_t> AccessoryIDs(const Preset& p) {
+    std::vector<std::uint32_t> ids;
+    if(p.items.empty()) return ids;
+    for(const auto& item:p.items) {
+        auto* form=ResolveItem(item);
+        auto* armor=form?form->As<RE::TESObjectARMO>():nullptr;
+        if(!armor) throw std::runtime_error("Missing or changed mod item: "+item.plugin+" / "+item.name);
+        ids.push_back(armor->GetFormID());
+    }
+    return ids;
+}
+std::vector<std::uint32_t> WornArmorIDs(RE::Actor* actor) {
+    std::vector<std::uint32_t> ids;
+    if(!actor) throw std::runtime_error("Target unavailable");
+    for(const auto& [obj,data]:actor->GetInventory())
+        if(obj && obj->As<RE::TESObjectARMO>() && data.first>0 && data.second && data.second->IsWorn()) ids.push_back(obj->GetFormID());
+    return ids;
+}
+}
+bool AccessoriesRemoved(RE::Actor* actor,const Preset& p) {
+    const auto wanted=AccessoryIDs(ClothingPreset(p)), worn=WornArmorIDs(actor);
+    return std::none_of(wanted.begin(),wanted.end(),[&](auto id){return std::find(worn.begin(),worn.end(),id)!=worn.end();});
+}
+std::vector<RemovalItem> SnapshotRemovalEquipment(RE::Actor* actor) {
+    std::vector<RemovalItem> rows;
+    if(!actor) throw std::runtime_error("Target unavailable");
+    for(const auto& [obj,data]:actor->GetInventory()) {
+        auto* armor=obj?obj->As<RE::TESObjectARMO>():nullptr;
+        if(armor && data.first>0 && data.second && data.second->IsWorn())
+            rows.push_back({armor->GetFormID(),armor->GetSlotMask().underlying(),armor->GetName()?armor->GetName():""});
+    }
+    return rows;
+}
+namespace {
+struct RemovalIdentity {std::uint16_t unique{};std::uint32_t base{};bool enchanted{};std::string signature;};
+std::map<std::uint32_t,RemovalIdentity> removalIdentities;
+std::uint32_t removalIdentityActor{};
+}
+void BeginRemovalEquipment(RE::Actor* actor) {
+    removalIdentities.clear();removalIdentityActor=actor?actor->GetFormID():0;
+    if(!actor) return;
+    for(const auto& [obj,data]:actor->GetInventory()) {
+        if(!obj || !obj->As<RE::TESObjectARMO>() || !data.second || !data.second->IsWorn()) continue;
+        RemovalIdentity identity;
+        if(data.second->extraLists) for(auto* e:*data.second->extraLists)
+            if(e && (e->HasType<RE::ExtraWorn>() || e->HasType<RE::ExtraWornLeft>())) {
+                if(auto* uid=e->GetByType<RE::ExtraUniqueID>()) {identity.unique=uid->uniqueID;identity.base=uid->baseID;}
+                identity.enchanted=e->HasType<RE::ExtraEnchantment>();
+                if(identity.enchanted) identity.signature=EnchantmentSignature(e);
+                break;
+            }
+        removalIdentities[obj->GetFormID()]=std::move(identity);
+    }
+}
+bool RestoreRemovalEquipment(RE::Actor* actor,std::uint32_t id) {
+    if(!actor || actor->GetFormID()!=removalIdentityActor || !removalIdentities.contains(id)) return false;
+    auto* armor=RE::TESForm::LookupByID<RE::TESObjectARMO>(id);
+    auto* manager=RE::ActorEquipManager::GetSingleton();
+    if(!armor || !manager) return false;
+    const auto inventory=actor->GetInventory();const auto found=inventory.find(armor);
+    if(found==inventory.end() || found->second.first<=0 || !found->second.second) return false;
+    const auto& original=removalIdentities.at(id);
+    RE::ExtraDataList* selected=nullptr;bool matched=false;int listed=0;
+    if(found->second.second->extraLists) for(auto* e:*found->second.second->extraLists) if(e) {
+        listed+=e->GetCount();
+        auto* uid=e->GetByType<RE::ExtraUniqueID>();
+        if(original.unique && (!uid || uid->uniqueID!=original.unique || uid->baseID!=original.base)) continue;
+        if(e->HasType<RE::ExtraEnchantment>()!=original.enchanted) continue;
+        if(original.enchanted && EnchantmentSignature(e)!=original.signature) continue;
+        selected=e;matched=true;break;
+    }
+    if(!matched && (original.unique || original.enchanted || listed>=found->second.first)) return false;
+    // Reject a new conflicting piece rather than displacing equipment added elsewhere.
+    for(const auto& row:SnapshotRemovalEquipment(actor))
+        if(row.id!=id && (row.slots&armor->GetSlotMask().underlying())) return false;
+    manager->EquipObject(actor,armor,selected,1,nullptr,false,false,false,true);
+    actor->Update3DModel();return true;
+}
+bool EquipmentIDsRemoved(RE::Actor* actor,const std::vector<std::uint32_t>& ids) {
+    const auto worn=WornArmorIDs(actor);
+    return std::none_of(ids.begin(),ids.end(),[&](auto id){return std::find(worn.begin(),worn.end(),id)!=worn.end();});
+}
+bool RemoveEquippedAccessories(RE::Actor* actor,const Preset& p) {
+    return RemoveEquipmentIDs(actor,AccessoryIDs(ClothingPreset(p)));
+}
+bool RemoveEquipmentIDs(RE::Actor* actor,const std::vector<std::uint32_t>& wanted) {
+
+    if(!AccessoryToggle::Complete(wanted,WornArmorIDs(actor))) return false;
+    auto* manager=RE::ActorEquipManager::GetSingleton();
+    if(!manager) throw std::runtime_error("Equipment manager unavailable");
+    // Fresh inventory per mutation: never reuse or traverse a destroyed extra list.
+    for(auto id:wanted) {
+        auto* armor=RE::TESForm::LookupByID<RE::TESObjectARMO>(id);
+        if(!armor) throw std::runtime_error("Target unavailable");
+        auto inventory=actor->GetInventory();
+        const auto found=inventory.find(armor);
+        if(found==inventory.end() || !found->second.second || !found->second.second->IsWorn()) continue;
+        RE::ExtraDataList* worn=nullptr;
+        if(found->second.second->extraLists)
+            for(auto* extra:*found->second.second->extraLists)
+                if(extra && (extra->HasType<RE::ExtraWorn>() || extra->HasType<RE::ExtraWornLeft>())) {worn=extra;break;}
+        manager->UnequipObject(actor,armor,worn,1,nullptr,false,false,false,true);
+    }
+    actor->Update3DModel();
+    return true;
+}
+void RefreshFollowerAfterAccessoryRemoval(RE::Actor* actor) {
+    if(WornArmorIDs(actor).empty()) ReleaseFollowerOutfit(actor);
+    else RefreshFollowerOutfit(actor);
 }
 std::string VerifyPreferredEquipment(RE::Actor* actor,const Preset& p) {
     if(!actor || actor->GetFormID()!=0x14 || !std::any_of(p.items.begin(),p.items.end(),[](const Item& i){return i.preferred.custom;})) return {};

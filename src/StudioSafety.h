@@ -1,8 +1,8 @@
 #pragma once
 namespace Gallery {
-// Combat entry is an opt-in for the player only. Followers retain both gates.
-inline bool StudioCombatAllowed(bool playerCombat,bool targetCombat,bool playerTarget,bool allow) {
-    return (!playerCombat && !targetCombat) || (playerTarget && allow);
+// The same combat permission applies to the player and follower targets.
+inline bool StudioCombatAllowed(bool playerCombat,bool targetCombat,bool allow) {
+    return (!playerCombat && !targetCombat) || allow;
 }
 // Furniture use, sitting, ordinary idles and scenes alone do not block entry.
 struct FollowerHazards {

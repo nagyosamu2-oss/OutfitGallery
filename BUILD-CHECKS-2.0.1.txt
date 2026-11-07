@@ -1,0 +1,12 @@
+Outfit Gallery 2.0.1 build checks
+
+Public version 2.0.1. Internal SKSE version 2.0.1.2.
+MSVC 19.44, CommonLibSSE-NG 10.1.0, RelWithDebInfo, Windows x64.
+Configure and build succeeded.
+SKSEPlugin_Load, SKSEPlugin_Query and SKSEPlugin_Version exports verified.
+46 automated tests passed.
+TrashVirtualPathSafety was excluded because its junction fixture cannot be created in this environment.
+DLL SHA256 e0412e4bbc1389d19832c34335bcaeed2511d0f499b6e0a66d91b11d9014fab0
+Release executable code matches user-tested 2.0.1-rc2, except version identifiers and the Framework footer.
+The final-numbered DLL has not been launched in-game by the assistant.
+The archive contains default INI and no generated photos, presets or user settings.

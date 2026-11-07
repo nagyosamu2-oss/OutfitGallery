@@ -203,8 +203,16 @@ void MaintainFollowerAutoOutfits() {
                 }
                 if(p.outfitItems) p=FilterExchangeSlots(p,{});
                 p=ClothingPreset(p); // follower automation never changes weapons/spells
-                (void)ResolvePresetSlots(p);
+                const bool appearance=FollowerTransmogMode(id);
+                if(!appearance) (void)ResolvePresetSlots(p);
                 if(p.items.empty()) throw std::runtime_error("Assigned outfit has no armor");
+                if(appearance) {
+                    ApplyTransmog(p,actor);SetTransmogAutoOwned(actor,true);
+                    equipmentLaneDue=now+1000;followerAutoLastServed=id;
+                    e.arrival.Cancel();e.policy.Applied(photo);e.status="Appearance applied";
+                    SKSE::log::info("OG-FOLLOWER-TRANSMOG actor={:08X} photo={}",id,photo);return;
+                }
+                ClearActorTransmog(actor);
                 bool same=false;try {same=SameEquipment(p,SnapshotEquipment(actor));} catch(const std::exception&) {if(recheck) throw;}
                 if(recheck) GALLERY_DIAG("OG-FOLLOWER-AUTO arrival-check actor={:08X} cell={:08X} same={} photo={} check={} early={}",id,cell->GetFormID(),same,photo,e.arrival.checks,early);
                 if(same) {e.policy.Applied(photo);e.status="Already wearing assigned outfit";return;}
@@ -216,7 +224,7 @@ void MaintainFollowerAutoOutfits() {
                 e.policy.lastPhoto.clear();
                 const bool prefer=preferEnchanted.load();
                 const auto result=ApplyEquipment(actor,p,true,prefer);
-                verificationActor=actor->CreateRefHandle();verificationTarget=p;verificationPrefer=prefer;
+                verificationActor=actor->CreateRefHandle();verificationRemoving=false;verificationTarget=p;verificationPrefer=prefer;
                 verificationDue=GetTickCount64()+750;verificationTicks=1;autoVerifying=false;
                 followerAutoVerifying=id;followerAutoVerifyRevision=e.revision;
                 e.policy.Applied(photo);e.status="Verifying outfit";

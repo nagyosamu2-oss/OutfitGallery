@@ -6,11 +6,11 @@ inline int ThumbnailColumns(int normalColumns,bool portrait) {
     return portrait ? (normalColumns*8+2)/5 : normalColumns;
 }
 struct ThumbnailLayout {float stepX,width,height,uvLeft,uvRight;};
-inline ThumbnailLayout MakeThumbnailLayout(float available,float screenWidth,float screenHeight,int normalColumns,bool portrait) {
+inline ThumbnailLayout MakeThumbnailLayout(float available,float screenWidth,float screenHeight,int normalColumns,bool portrait,float scale=1.f) {
     const int columns=ThumbnailColumns(normalColumns,portrait);
-    const float normalWidth=std::max(32.f,(available-16.f)/std::clamp(normalColumns,2,6)-12.f);
-    const float step=(available-16.f)/columns;
-    const float width=std::max(32.f,step-12.f);
+    const float normalWidth=std::max(32.f*scale,(available-16.f*scale)/std::clamp(normalColumns,2,6)-12.f*scale);
+    const float step=(available-16.f*scale)/columns;
+    const float width=std::max(32.f*scale,step-12.f*scale);
     const float fraction=std::clamp(width/normalWidth,0.f,1.f);
     // Taller displays retain the 16:9 thumbnail size; extra height reveals
     // more rows instead of stretching every card. Preserve wider-screen layouts.

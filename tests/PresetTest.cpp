@@ -1,4 +1,4 @@
-﻿#include "Presets.h"
+#include "Presets.h"
 #include "HoldButton.h"
 #include "DiagnosticSettings.h"
 #include <fstream>
@@ -20,6 +20,19 @@ int main() {
         if(!remembered.items[0].preferred.custom || remembered.items[0].preferred.scope!=enchanted.items[0].preferred.scope || remembered.items[0].preferred.id!=65000) throw std::runtime_error("preferred identity lost");
         if(remembered.items[0].preferred.signature!="stable-effect-signature") throw std::runtime_error("preferred signature lost");
         StudioSettings prefSettings;
+        if(prefSettings.upscalerCompatibility)
+            throw std::runtime_error("Upscaler compatibility must default OFF");
+        { std::ofstream legacy(folder/"legacy-upscaler.json"); legacy << R"({"schema":1,"uiZoom":1.25,"distance":220,"height":65,"orbit":0,"pitch":0,"fov":60})"; }
+        if(ReadStudioSettings(folder/"legacy-upscaler.json").upscalerCompatibility)
+            throw std::runtime_error("Old settings enabled upscaler compatibility");
+        for(bool enabled : {true, false}) {
+            prefSettings.upscalerCompatibility=enabled;
+            prefSettings.uiZoom=1.25f;
+            WriteStudioSettings(prefSettings,folder/"upscaler.json");
+            const auto loaded=ReadStudioSettings(folder/"upscaler.json");
+            if(loaded.upscalerCompatibility!=enabled || loaded.uiZoom!=1.25f)
+                throw std::runtime_error("Upscaler compatibility persistence damaged settings");
+        }
         if(!prefSettings.preferEnchanted) throw std::runtime_error("preference not default ON");
         {std::ofstream out(folder/"legacy-preference.json"); out<<R"({"schema":1,"distance":220,"height":65,"orbit":0,"pitch":0,"fov":60})";}
         if(!ReadStudioSettings(folder/"legacy-preference.json").preferEnchanted) throw std::runtime_error("missing preference field not default ON");
@@ -113,10 +126,45 @@ int main() {
         bool previewRejected=false;
         try {WriteStudioSettings(badPreview,folder/"preview.json");} catch(const std::exception&) {previewRejected=true;}
         if(!previewRejected || ReadStudioSettings(folder/"preview.json").previewRect!=settings.previewRect) throw std::runtime_error("Invalid preview overwrote settings");
-        if(ReadStudioSettings(folder/"low-camera.json").followerTargeting) throw std::runtime_error("Follower targeting must default off");
+        if(!StudioSettings{}.followerTargeting || !ReadStudioSettings(folder/"low-camera.json").followerTargeting) throw std::runtime_error("Follower targeting must default on");
         settings.followerTargeting=true;
         WriteStudioSettings(settings,folder/"follower.json");
         if(!ReadStudioSettings(folder/"follower.json").followerTargeting || ReadStudioSettings(folder/"follower.json").previewRect!=settings.previewRect) throw std::runtime_error("Follower settings damaged preview settings");
+        // Legacy OFF migrates once; a later explicit OFF survives repeated loads.
+        nlohmann::json legacyFollower;
+        {std::ifstream in(folder/"follower.json");in>>legacyFollower;}
+        legacyFollower.erase("followerTargetingDefaultVersion");
+        legacyFollower["followerTargeting"]=false;
+        {std::ofstream out(folder/"legacy-follower.json");out<<legacyFollower;}
+        auto migratedFollower=ReadStudioSettings(folder/"legacy-follower.json");
+        if(!migratedFollower.followerTargeting || !migratedFollower.followerTargetingMigrationPending) throw std::runtime_error("Legacy OFF migration missing");
+        WriteStudioSettings(migratedFollower,folder/"legacy-follower.json");
+        nlohmann::json migratedJson;
+        {std::ifstream in(folder/"legacy-follower.json");in>>migratedJson;}
+        migratedJson.erase("followerTargetingDefaultVersion");migratedJson["followerTargeting"]=false;
+        if(migratedJson!=legacyFollower) throw std::runtime_error("Migration changed unrelated preferences");
+        migratedFollower=ReadStudioSettings(folder/"legacy-follower.json");
+        if(!migratedFollower.followerTargeting || migratedFollower.followerTargetingMigrationPending) throw std::runtime_error("Migration repeated after save");
+        migratedFollower.followerTargeting=false;
+        WriteStudioSettings(migratedFollower,folder/"legacy-follower.json");
+        for(int reload=0;reload<2;++reload) {
+            migratedFollower=ReadStudioSettings(folder/"legacy-follower.json");
+            if(migratedFollower.followerTargeting || migratedFollower.followerTargetingMigrationPending) throw std::runtime_error("Explicit OFF lost after migration");
+            WriteStudioSettings(migratedFollower,folder/"legacy-follower.json");
+        }
+        legacyFollower.erase("followerTargeting");
+        {std::ofstream out(folder/"missing-follower.json");out<<legacyFollower;}
+        const auto missingFollower=ReadStudioSettings(folder/"missing-follower.json");
+        if(!missingFollower.followerTargeting || !missingFollower.followerTargetingMigrationPending) throw std::runtime_error("Missing legacy preference did not migrate");
+        if(StudioSettings{}.fullOutfitToggle || ReadStudioSettings(folder/"missing-follower.json").fullOutfitToggle)
+            throw std::runtime_error("Full outfit removal must default OFF for new and legacy settings");
+        auto toggleSettings=ReadStudioSettings(folder/"follower.json");
+        toggleSettings.fullOutfitToggle=true;
+        WriteStudioSettings(toggleSettings,folder/"full-toggle.json");
+        if(!ReadStudioSettings(folder/"full-toggle.json").fullOutfitToggle) throw std::runtime_error("Full outfit toggle ON lost");
+        toggleSettings.fullOutfitToggle=false;
+        WriteStudioSettings(toggleSettings,folder/"full-toggle.json");
+        if(ReadStudioSettings(folder/"full-toggle.json").fullOutfitToggle) throw std::runtime_error("Full outfit toggle OFF lost");
         settings.startupTab="custom-7";
         WriteStudioSettings(settings,folder/"opening-settings.json");
         if(ReadStudioSettings(folder/"opening-settings.json").startupTab!="custom-7") throw std::runtime_error("Opening tab not persisted");
@@ -127,6 +175,10 @@ int main() {
         openingLibrary.categories.clear();
         if(ResolveStartupTab("deleted-category",openingLibrary)!="") throw std::runtime_error("All fallback failed");
         {std::ofstream oldSettings(folder/"old-opening.json"); oldSettings << R"({"schema":1,"distance":220,"height":65,"orbit":0,"pitch":0,"fov":60})";}
+        if(StudioSettings{}.showCounts || ReadStudioSettings(folder/"old-opening.json").showCounts) throw std::runtime_error("Item counts must default OFF");
+        auto explicitCounts=ReadStudioSettings(folder/"old-opening.json");explicitCounts.showCounts=true;
+        WriteStudioSettings(explicitCounts,folder/"explicit-counts.json");
+        if(!ReadStudioSettings(folder/"explicit-counts.json").showCounts) throw std::runtime_error("Explicit item count preference lost");
         if(!StudioSettings{}.startupTab.empty() || !ReadStudioSettings(folder/"old-opening.json").startupTab.empty()) throw std::runtime_error("Unset opening tab must default to All");
         WriteStudioSettings(settings,folder/"settings.json");
         settings.headSlots=2;
@@ -217,7 +269,15 @@ int main() {
         if(ReadStudioSettings(folder/"settings.json").language!=1) throw std::runtime_error("Japanese preference lost");
         settings.language=2; WriteStudioSettings(settings,folder/"settings.json");
         if(ReadStudioSettings(folder/"settings.json").language!=2) throw std::runtime_error("External language preference lost");
-        if(StudioSettings{}.allowCombatGallery || ReadStudioSettings(folder/"legacy-preference.json").allowCombatGallery) throw std::runtime_error("combat entry must default OFF");
+        for(const auto& defaults : {StudioSettings{},ReadStudioSettings(folder/"legacy-preference.json")}) {
+            if(!defaults.allowCombatGallery || !defaults.allowFreeCamera) throw std::runtime_error("entry permissions must default ON");
+        }
+        for(bool combat : {false,true}) for(bool freeCamera : {false,true}) {
+            settings.allowCombatGallery=combat; settings.allowFreeCamera=freeCamera;
+            WriteStudioSettings(settings,folder/"entry-preferences.json");
+            const auto loaded=ReadStudioSettings(folder/"entry-preferences.json");
+            if(loaded.allowCombatGallery!=combat || loaded.allowFreeCamera!=freeCamera) throw std::runtime_error("saved entry preferences changed");
+        }
         settings.allowCombatGallery=true;WriteStudioSettings(settings,folder/"combat-entry.json");
         if(!ReadStudioSettings(folder/"combat-entry.json").allowCombatGallery) throw std::runtime_error("combat entry ON lost");
         settings.allowCombatGallery=false;WriteStudioSettings(settings,folder/"combat-entry.json");
@@ -241,6 +301,13 @@ int main() {
         settings.compactGallery=true; WriteStudioSettings(settings,folder/"compact.json");
         if(!ReadStudioSettings(folder/"compact.json").compactGallery) throw std::runtime_error("Compact display did not persist");
         settings.compactGallery=false;
+        settings.uiZoom=1.25f; WriteStudioSettings(settings,folder/"ui-scale.json");
+        if(ReadStudioSettings(folder/"ui-scale.json").uiZoom!=1.25f) throw std::runtime_error("UI zoom lost");
+        if(ReadStudioSettings(folder/"legacy-settings.json").uiZoom!=1.f) throw std::runtime_error("Legacy UI zoom default");
+        settings.uiZoom=99.f;WriteStudioSettings(settings,folder/"ui-scale.json");
+        if(ReadStudioSettings(folder/"ui-scale.json").uiZoom!=2.f) throw std::runtime_error("UI zoom bounds");
+        settings.uiZoom=1.f;
+
         CameraBank bank{}; bank[0]=settings; bank[6]=settings; bank[6]->height=140;
         settings.lateral=42; settings.elevation=-35;
         WriteStudioSettings(settings,folder/"settings.json");

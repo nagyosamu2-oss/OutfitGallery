@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <functional>
 #include <algorithm>
 #include <filesystem>
@@ -14,13 +14,13 @@
 namespace RE { class Actor; }
 namespace Gallery {
 using AutoOutfitSlots=std::array<std::string,27>; // Default, Town, Home, Inn, Combat, Night, Rain, Snow, Dungeon, Temple, Swimming, six guild bases; existing indices stay stable
-struct AutoOutfitSettings { AutoOutfitSlots slots; int delaySeconds{3}; int columns{3}; int ostimRecoverySeconds{10}; bool enabled{}, paused{}, combatEnabled{}, hideAssignButtons{}; int sneakDelaySeconds{2}; int combatIntervalSeconds{5}; };
+struct AutoOutfitSettings { AutoOutfitSlots slots; int delaySeconds{0}; int columns{3}; int ostimRecoverySeconds{10}; bool enabled{}, paused{}, combatEnabled{}, hideAssignButtons{}; int sneakDelaySeconds{1}; int combatIntervalSeconds{2}; };
 AutoOutfitSettings ReadAutoOutfitSettings(const std::filesystem::path&);
 void WriteAutoOutfitSettings(const AutoOutfitSettings&,const std::filesystem::path&);
 struct InputSettings { unsigned keyboard{66}, gamepad{32}; float holdSeconds{0.8f}; std::array<unsigned,3> captureKeys{67,68,87}; std::array<unsigned,3> capturePads{32768,16384,64}; unsigned keyboardModifiers{}; unsigned autoKeyboard{}, autoModifiers{}, autoGamepad{}; float autoHoldSeconds{.8f}; };
 InputSettings ReadInputSettings(const std::filesystem::path&);
 void WriteInputSettings(const InputSettings&,const std::filesystem::path&);
-struct StudioSettings { float distance{217.130f}, height{67.619f}, orbit{-22.831f}, pitch{0.350f}, fov{60.060f}; int columns{3}; bool showNames{true}, showCounts{true}; int language{0}; bool allowFreeCamera{}; bool addMissing{true}; float lateral{13.929f}, elevation{0.000f}; std::uint32_t headSlots{0x1803}; std::string startupTab{}; bool detachedPreview{}; std::array<float,4> previewRect{.54f,.08f,.45f,.84f}; bool followerTargeting{}; bool preferEnchanted{true}; bool portraitThumbnails{}; bool cleanupCompatibility{}; bool allowCombatGallery{}; bool compactGallery{}; bool reclaimRenamedGeneratedItems{}; };
+struct StudioSettings { float distance{217.130f}, height{67.619f}, orbit{-22.831f}, pitch{0.350f}, fov{60.060f}; int columns{3}; bool showNames{true}, showCounts{false}; int language{0}; bool allowFreeCamera{true}; bool addMissing{true}; float lateral{13.929f}, elevation{0.000f}; std::uint32_t headSlots{0x1803}; std::string startupTab{}; bool detachedPreview{}; std::array<float,4> previewRect{.54f,.08f,.45f,.84f}; bool followerTargeting{true}; bool preferEnchanted{true}; bool portraitThumbnails{}; bool cleanupCompatibility{}; bool allowCombatGallery{true}; bool compactGallery{}; bool reclaimRenamedGeneratedItems{}; float uiZoom{1.f}; bool fullOutfitToggle{}; bool upscalerCompatibility{}; bool followerTargetingMigrationPending{}; };
 struct CameraBank {
     std::array<std::optional<StudioSettings>,7> slots;
     std::array<std::string,7> names;
@@ -134,6 +134,9 @@ Preset SnapshotEquipment(RE::Actor* actor, std::uint32_t slotMask=0, bool rememb
 Preset SnapshotAccessories(RE::Actor* actor, bool rememberEnchanted=false, bool rememberNames=false); // equipped armor only, union of occupied slots
 std::string ApplyEquipment(RE::Actor* actor, const Preset&, bool addMissing, bool preferEnchanted=false,
     const std::function<bool()>& mayMutate={}); // game thread only; optional crafting deadline
+bool RemoveEquippedAccessories(RE::Actor*,const Preset&); // game-thread manual toggle only
+bool AccessoriesRemoved(RE::Actor*,const Preset&);
+void RefreshFollowerAfterAccessoryRemoval(RE::Actor*);
 std::string VerifyPreferredEquipment(RE::Actor*, const Preset&); // worn identity only; does not mutate inventory
 }
 

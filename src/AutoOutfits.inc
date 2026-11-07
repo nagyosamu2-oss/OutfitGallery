@@ -1,12 +1,14 @@
-﻿// Included in Gallery before Tick. Engine state is read only on the game thread.
+// Included in Gallery before Tick. Engine state is read only on the game thread.
 std::atomic<bool> autoEnabled{}, autoPaused{}, autoPanelVisible{}, autoCombatEnabled{}; // persisted preferences; transition state remains session-only
+std::atomic<bool> autoAppearanceOnly{}; // shared manual/automatic player mode; stored per save, changed on game thread
+std::atomic<bool> autoAppearanceOwned{}; // game thread writes; scheduler reads for pending cleanup
 bool autoPanel{}; // renderer only
 std::string autoSelectedPhoto; // renderer only
 std::mutex autoMutex;
 AutoOutfitSlots autoSlots;
-std::atomic<int> autoDelaySeconds{3};
-std::atomic<int> autoCombatIntervalSeconds{5};
-std::atomic<int> autoSneakDelaySeconds{2};
+std::atomic<int> autoDelaySeconds{0};
+std::atomic<int> autoCombatIntervalSeconds{2};
+std::atomic<int> autoSneakDelaySeconds{1};
 bool autoHideAssignButtons=false; // renderer only after initialization
 int autoColumns=3; // renderer only after initialization
 bool autoSlotsWritable=true;
@@ -102,7 +104,7 @@ void ResetCraft();
 bool MaintainCraft(RE::PlayerCharacter*,RE::UI*,ULONGLONG);
 std::atomic<bool> craftActive{};
 void ResetAutoOutfits() {
-    ResetCraft(); ResetFollowerAutoRuntime();
+    ResetCraft(); ResetFollowerAutoRuntime(); autoAppearanceOwned=false;
     // Preserve user preferences across loads; discard old-world transition history.
     autoCombat={}; autoStyle={}; autoPolicy={}; autoDue=0; autoVerifying=false; autoOutcome="Ready";
     ostimSuspend={};
@@ -116,6 +118,7 @@ void AutoManualChange(RE::Actor* actor) {
     (void)FollowerAutoVerificationDone(false);
     FollowerAutoManualChange(actor);
     if(actor && actor==RE::PlayerCharacter::GetSingleton()) {
+        autoAppearanceOwned=false;
         // Manual apply supersedes any pending automatic verification.
         autoVerifying=false;
         autoSeenRevision=autoRevision.load();
@@ -150,12 +153,13 @@ bool CombatCastingBusy(RE::Actor* player) {
     }
     return false;
 }
-bool AutoDue() {return (craftActive || autoEnabled || (active && autoPanelVisible)) && GetTickCount64()>=autoDue.load();}
+bool AutoDue() {return (craftActive || autoEnabled || autoAppearanceOwned || (active && autoPanelVisible)) && GetTickCount64()>=autoDue.load();}
 void MaintainAutoOutfits(bool beforeFollowers=false) {
     const auto now=GetTickCount64(); if(!FollowerAuto::PollPlayer(now,autoDue.load(),beforeFollowers)) return; autoDue=now+1000;
     auto* player=RE::PlayerCharacter::GetSingleton();
     auto* ui=RE::UI::GetSingleton(); auto* camera=RE::PlayerCamera::GetSingleton();
     if(!player || !player->Get3D() || !player->GetParentCell() || !ui || !camera || ui->IsMenuOpen("Loading Menu") || ui->IsMenuOpen("Main Menu")) {autoPolicy.Block();autoStyle.Block(); return;}
+    if(autoAppearanceOwned && !autoEnabled) {ClearTransmog();autoAppearanceOwned=false;}
     if(MaintainCraft(player,ui,now)) return;
     const auto where=ClassifyAutoPlace(player);
     const bool fighting=player->IsInCombat();
@@ -173,6 +177,9 @@ void MaintainAutoOutfits(bool beforeFollowers=false) {
     const bool sceneBlocked=OStimBlocksAutomatic(player);
     if(!autoEnabled) {autoPolicy.Block();autoStyle.Block(); AutoStatus("Disabled",place,where.name); return;}
     if(autoPaused) {autoPolicy.Block();autoStyle.Block(); AutoStatus("Paused",place,where.name); return;}
+    if(autoAppearanceOnly && !TransmogAvailable()) {
+        autoPolicy.Block();autoStyle.Block();AutoStatus(TransmogUnavailableReason(language==1),place,where.name);return;
+    }
     if(sceneBlocked) {autoPolicy.Block();autoStyle.Block();AutoStatus(OStimStateLabel(ostimSceneState.load()),place,where.name);return;}
     if(!fighting && !environment.ready) {autoPolicy.Block();autoStyle.Block();AutoStatus("Waiting for environment data",place,where.name);return;}
     auto* controls=RE::ControlMap::GetSingleton(); const auto* state=player->AsActorState();
@@ -232,11 +239,21 @@ void MaintainAutoOutfits(bool beforeFollowers=false) {
         }
         // All records are resolved before ApplyEquipment can change the actor.
         if(p.outfitItems) p=FilterExchangeSlots(p,{});
-            (void)ResolvePresetSlots(p);
+            if(!autoAppearanceOnly) (void)ResolvePresetSlots(p);
         if(ClothingPreset(p).items.empty()) throw std::runtime_error("Assigned outfit has no armor");
+        if(autoAppearanceOnly) {
+            if(OStimBlocksAutomatic(player)) {autoPolicy.Block();autoStyle.Block();return;}
+            ApplyTransmog(p); // full outfit replaces prior partial looks; no inventory mutation
+            autoAppearanceOwned=true;
+            autoPolicy.Applied(photo);
+            autoOutcome="Transmog applied"; AutoStatus(autoOutcome,place,where.name);
+            SKSE::log::info("OG-AUTO-TRANSMOG applied photo={} preset={} condition={}; actual equipment unchanged",photo,p.name,place);
+            SetStatus(language==1?"自動重ね着を適用しました。実際の装備は変更していません。":"Automatic transmog applied. Actual equipment is unchanged.");
+            return;
+        }
         bool already=false;
         try {already=SameEquipment(ClothingPreset(p),SnapshotEquipment(player));} catch(const std::exception&) {}
-        if(already) {autoPolicy.Applied(photo); autoOutcome="Already wearing assigned outfit"; AutoStatus(autoOutcome,place,where.name); return;}
+        if(already) {ClearTransmog();autoAppearanceOwned=false;autoPolicy.Applied(photo); autoOutcome="Already wearing assigned outfit"; AutoStatus(autoOutcome,place,where.name); return;}
         if(OStimBlocksAutomatic(player)) {
             autoPolicy.Block();autoStyle.Block();AutoStatus(OStimStateLabel(ostimSceneState.load()),place,where.name);return;
         }
@@ -245,6 +262,7 @@ void MaintainAutoOutfits(bool beforeFollowers=false) {
         // A partial failure must not let the pre-combat photo cache suppress restoration.
         if(fighting) autoPolicy.lastPhoto.clear();
         equipmentLaneDue=now+1000;
+        ClearTransmog(); autoAppearanceOwned=false;
         const auto result=ApplyEquipment(player,p,true,verificationPrefer);
         if(styled) {
             const auto after=ReadCombatStyle(player);
@@ -258,7 +276,7 @@ void MaintainAutoOutfits(bool beforeFollowers=false) {
         }
         const auto warning=result.find(" Registered enchantment not restored:");
         if(warning!=std::string::npos) enchantNotice=result.substr(warning);
-        verificationActor=player->CreateRefHandle(); verificationTarget=ClothingPreset(p);
+        verificationActor=player->CreateRefHandle(); verificationRemoving=false;verificationTarget=ClothingPreset(p);
         verificationDue=GetTickCount64()+750; verificationTicks=1; autoVerifying=true;
         autoPolicy.Applied(photo);
         autoOutcome="Verifying outfit"; AutoStatus(autoOutcome,place,where.name);

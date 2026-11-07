@@ -64,6 +64,12 @@ int main() {
     require(!p.Observe(0,2000,1000) && p.Observe(0,3000,1000),"blocked delay measured again");
     const auto folder=std::filesystem::temp_directory_path()/"OutfitGallery-AutoPolicyTest";
     std::filesystem::create_directories(folder); auto file=folder/"AutoOutfits.json";
+    require(AutoOutfitSettings{}.delaySeconds==0,"new player/follower settings default to zero delay");
+    for(int delay : {0,3,10}) {
+        AutoOutfitSettings saved; saved.delaySeconds=delay;
+        WriteAutoOutfitSettings(saved,file);
+        require(ReadAutoOutfitSettings(file).delaySeconds==delay,"saved delay preserved");
+    }
     for(bool hide:{false,true}) {
         AutoOutfitSettings prefs{slots,2,4,15,true,true,true,hide};
         WriteAutoOutfitSettings(prefs,file); const auto read=ReadAutoOutfitSettings(file);
@@ -80,7 +86,7 @@ int main() {
     {std::ofstream out(file); out<<R"({"schema":1,"slots":["a.png","b.png",""]})";}
     const auto legacy=ReadAutoOutfitSettings(file);
     require(!legacy.hideAssignButtons,"old settings keep assignment buttons visible");
-    require(legacy.delaySeconds==3 && legacy.columns==3 && legacy.slots[0]=="a.png" && legacy.slots[1]=="b.png" && legacy.slots[3].empty(),"legacy defaults retain assignments");
+    require(legacy.delaySeconds==0 && legacy.columns==3 && legacy.slots[0]=="a.png" && legacy.slots[1]=="b.png" && legacy.slots[3].empty(),"legacy defaults retain assignments");
     {std::ofstream out(file); out<<R"({"schema":1,"slots":["a.png","b.png","c.png"],"delaySeconds":0,"columns":5})";}
     const auto previous=ReadAutoOutfitSettings(file);
     require(previous.slots[0]=="a.png" && previous.slots[1]=="b.png" && previous.slots[2]=="c.png" && previous.slots[3].empty() && previous.delaySeconds==0 && previous.columns==5,"auto-test2 migration retains all settings");
@@ -173,7 +179,7 @@ int main() {
         require(invalid,"toggle values must be boolean");
     }
     {std::ofstream out(file);out<<R"({"schema":1,"slots":["old.png","",""],"delaySeconds":10})";}
-    require(ReadAutoOutfitSettings(file).sneakDelaySeconds==2,"legacy settings default to two seconds independently of normal delay");
+    require(ReadAutoOutfitSettings(file).sneakDelaySeconds==1,"legacy settings default to one second independently of normal delay");
     for(int delay:{0,2,5}) {
         AutoOutfitSettings settings{extended,10,5,20,true,true,true,true};settings.sneakDelaySeconds=delay;
         WriteAutoOutfitSettings(settings,file);const auto read=ReadAutoOutfitSettings(file);
@@ -191,7 +197,7 @@ int main() {
     }
 
     {std::ofstream out(file);out<<R"({"schema":1,"slots":["old.png","",""]})";}
-    require(ReadAutoOutfitSettings(file).combatIntervalSeconds==5,"legacy combat interval defaults to five");
+    require(ReadAutoOutfitSettings(file).combatIntervalSeconds==2,"legacy combat interval defaults to two");
     for(int interval:{2,5,10}) {
         AutoOutfitSettings settings{extended,3,4,12,true,false,true,true};
         settings.combatIntervalSeconds=interval;

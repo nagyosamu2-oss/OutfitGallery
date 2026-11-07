@@ -3,7 +3,51 @@
 #include <set>
 #include <string>
 #include <vector>
+#include "Presets.h"
 namespace Gallery::Organize {
+// Match ordinary gallery tab membership: visible, selected full outfits only.
+// Return identities so registering never changes the selection or photo order.
+inline std::vector<std::string> CategoryTargets(const Library& draft,
+        const std::vector<Preset>& visible,const std::set<std::string>& selected) {
+    std::vector<std::string> targets;
+    std::set<std::string> seen;
+    for(const auto& preset:visible) {
+        if(preset.slotMask || preset.accessories || !selected.contains(preset.photo)) continue;
+        const auto label=draft.labels.find(preset.photo);
+        if(label!=draft.labels.end() && label->second.deleted) continue;
+        if(seen.insert(preset.photo).second) targets.push_back(preset.photo);
+    }
+    return targets;
+}
+inline std::size_t AddToCategory(Library& draft,const std::vector<std::string>& targets,const std::string& category) {
+    if(category.empty() || category.starts_with("#") ||
+       std::none_of(draft.categories.begin(),draft.categories.end(),[&](const auto& c){return c.id==category;})) return 0;
+    std::size_t added=0;
+    for(const auto& photo:targets) {
+        auto& label=draft.labels[photo];
+        if(label.deleted) continue;
+        if(std::find(label.categories.begin(),label.categories.end(),category)==label.categories.end()) {
+            label.categories.push_back(category);++added;
+        }
+    }
+    return added;
+}
+inline bool IsCategory(const Library& draft,const std::string& category) {
+    return !category.empty() && !category.starts_with("#") &&
+        std::any_of(draft.categories.begin(),draft.categories.end(),[&](const auto& c){return c.id==category;});
+}
+// Remove only membership in the current editable tab. Keep the label itself,
+// other memberships, order, equipment choices and Trash state unchanged.
+inline std::size_t RemoveFromCategory(Library& draft,const std::vector<std::string>& targets,const std::string& category) {
+    if(!IsCategory(draft,category)) return 0;
+    std::size_t removed=0;
+    for(const auto& photo:targets) {
+        auto label=draft.labels.find(photo);
+        if(label==draft.labels.end() || label->second.deleted) continue;
+        if(std::erase(label->second.categories,category))++removed;
+    }
+    return removed;
+}
 // A selected context item acts on the visible selection; an unselected one
 // acts only on itself. Empty context denotes the toolbar selection action.
 inline std::vector<std::string> TrashTargets(const std::vector<std::string>& visible,

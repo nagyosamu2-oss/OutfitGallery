@@ -7,10 +7,10 @@ void BeginEquipmentSection(const char* id,const char* title,bool gold) {
     UI::TextUnformatted(Tr(title));UI::Separator();
 }
 void PrepareEquipmentDialog() {
-    const auto* viewport=UI::GetMainViewport();const auto area=viewport->WorkSize;
-    UI::SetNextWindowSize({std::min(820.f,area.x*.72f),area.y*.78f},UI::ImGuiCond_Appearing);
-    UI::SetNextWindowPos({viewport->WorkPos.x+area.x*.5f,viewport->WorkPos.y+area.y*.5f},UI::ImGuiCond_Appearing,{.5f,.5f});
-    UI::SetNextWindowSizeConstraints({std::min(480.f,area.x*.90f),std::min(300.f,area.y*.90f)},{area.x*.95f,area.y*.95f});
+    const auto area=uiLayoutScreen;
+    UI::SetNextWindowSize({std::min(UiPx(820.f),area.x*.72f),area.y*.78f},UI::ImGuiCond_Appearing);
+    UI::SetNextWindowPos({area.x*.5f,area.y*.5f},UI::ImGuiCond_Appearing,{.5f,.5f});
+    UI::SetNextWindowSizeConstraints({std::min(UiPx(480.f),area.x*.90f),std::min(UiPx(300.f),area.y*.90f)},{area.x*.95f,area.y*.95f});
 }
 bool RenderPresetEditor(const Preset& target,bool allowed) {
     bool closeParent=false;

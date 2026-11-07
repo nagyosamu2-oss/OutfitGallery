@@ -1,4 +1,4 @@
-﻿// Renderer-only panel. No engine pointers, no game mutations.
+// Renderer-only panel. No engine pointers, no game mutations.
 const char* AutoPlaceLabel(unsigned n) {
     static constexpr std::array<const char*,27> labels{"Default","Town / City","Player home","Inn","Combat base","Night","Rain","Snow","Dungeon","Temple","Swimming","Fort Dawnguard","College of Winterhold","Dark Brotherhood sanctuaries","Jorrvaskr","Bards College","Ragged Flagon","Blue Palace","Combat: Melee","Combat: Magic","Combat: Archery","Combat: Unarmed","Sneaking","Smithing (test)","Alchemy (test)","Enchanting (test)","Shop"};
     return n<labels.size()?labels[n]:"Default";
@@ -91,17 +91,65 @@ void AutoSameLineIfFits(float width) {
     const float end=UI::GetWindowPos().x+UI::GetWindowSize().x-UI::GetStyle()->WindowPadding.x-UI::GetStyle()->ScrollbarSize;
     if(UI::GetItemRectMax().x+UI::GetStyle()->ItemSpacing.x+width<=end) UI::SameLine();
 }
+UI::ImVec4 OutfitModeBandColor(){return {.16f,.165f,.235f,1.f};}
+UI::ImVec4 OutfitModeLineColor(){return {.455f,.475f,.678f,1.f};}
+void PushSelectedOutfitModeColors() {
+    UI::PushStyleColor(UI::ImGuiCol_Button,{.55f,.43f,.19f,1.f});
+    UI::PushStyleColor(UI::ImGuiCol_ButtonHovered,{.65f,.52f,.24f,1.f});
+    UI::PushStyleColor(UI::ImGuiCol_ButtonActive,{.72f,.57f,.26f,1.f});
+}
 void RenderGalleryTitle(bool& opened) {
     autoUITarget=studioFollower.load()?studioActorID.load():0;
     const auto start=UI::GetCursorPos();
     const float buttonWidth=UI::CalcTextSize(Tr("Automatic outfits")).x+UI::GetStyle()->FramePadding.x*2.f;
-    const std::string followerLabel=std::format("{} {}",Tr("Follower selection"),MaintainedFollowerCount());
+    const std::string followerLabel=std::format("{} ({}){}",Tr("Target followers"),MaintainedFollowerCount(),followerTargeting.load()?"":" OFF");
     const float followerWidth=UI::CalcTextSize(followerLabel.c_str()).x+UI::GetStyle()->FramePadding.x*2.f;
     const float closeWidth=UI::GetFrameHeight();
     const float right=UI::GetContentRegionAvail().x;
-    UI::AlignTextToFramePadding();UI::TextUnformatted("Outfit Gallery");
-    const float x=std::max(UI::GetItemRectMax().x-UI::GetWindowPos().x+UI::GetStyle()->ItemSpacing.x,start.x+right-buttonWidth-followerWidth-closeWidth-UI::GetStyle()->ItemSpacing.x*2.f);
-    UI::SetCursorPos({x,start.y});
+    const float gap=UI::GetStyle()->ItemSpacing.x;
+    const bool effectiveMode=TargetAppearanceMode(studioFollower?studioActorID.load():0x14);
+    const char* title=effectiveMode?(language==1?"Outfit Gallery | 重ね着":"Outfit Gallery | Transmog"):"Outfit Gallery";
+    const char* normalLabel=language==1?"通常着替え":"Equip";
+    const char* transmogLabel=language==1?"重ね着":"Transmog";
+    const float modeWidth=UI::CalcTextSize(normalLabel).x+UI::CalcTextSize(transmogLabel).x+UI::GetStyle()->FramePadding.x*4.f+gap;
+    const float controlsWidth=buttonWidth+followerWidth+closeWidth+gap*2.f;
+    const float titleInset=effectiveMode?std::max(2.f,closeWidth*.065f)+UI::GetStyle()->ItemInnerSpacing.x:0.f;
+    const float titleWidth=UI::CalcTextSize(title).x+titleInset;
+    const bool controlsWrap=titleWidth+gap+controlsWidth>right;
+    const bool modesInline=!controlsWrap && titleWidth+modeWidth+controlsWidth+gap*2.f<=right;
+    if(effectiveMode) {
+        const auto pos=UI::GetCursorScreenPos();
+        UI::ImDrawListManager::AddRectFilled(UI::GetWindowDrawList(),pos,
+            {pos.x+right,pos.y+closeWidth},UI::GetColorU32(OutfitModeBandColor()),0,0);
+        const float stripe=std::max(2.f,closeWidth*.065f);
+        UI::ImDrawListManager::AddRectFilled(UI::GetWindowDrawList(),pos,
+            {pos.x+stripe,pos.y+closeWidth},UI::GetColorU32(OutfitModeLineColor()),0,0);
+        UI::SetCursorPos({start.x+titleInset,start.y});
+    }
+    UI::AlignTextToFramePadding();UI::TextUnformatted(title);
+    auto renderModes=[&] {
+        UI::BeginDisabled(saveBusy || command.load()!=0 || verificationTicks.load()!=0 || craftActive);
+        if(!effectiveMode) PushSelectedOutfitModeColors();
+        if(UI::Button(normalLabel)) command=33;
+        if(!effectiveMode) UI::PopStyleColor(3);
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",language==1?"手動・自動とも実際に着替えます。自動で適用した重ね着は解除します。手動の重ね着は次の着替えか解除操作まで維持します。":"Manual and automatic outfits equip real items. Clears automatic transmog; manual transmog stays until the next outfit or explicit restore.");
+        UI::SameLine();
+        if(effectiveMode) PushSelectedOutfitModeColors();
+        if(UI::Button(transmogLabel)) {
+            if(TransmogAvailable()) command=32;
+            else SetStatus(TransmogUnavailableReason(language==1));
+        }
+        if(effectiveMode) UI::PopStyleColor(3);
+        if(UI::IsItemHovered()) {
+            if(!TransmogAvailable()) UI::SetTooltip("%s",TransmogUnavailableReason(language==1).c_str());
+            else UI::SetTooltip("%s",language==1?"手動・自動とも見た目だけ変更します。実際の装備と性能は変わりません。プレイヤー・フォロワー対応・作業台用は対象外。":"Manual and automatic outfits change appearance only. Equipment and stats stay unchanged. Player and followers supported; crafting outfits excluded.");
+        }
+        UI::EndDisabled();
+    };
+    if(modesInline) {UI::SameLine();renderModes();}
+    const float controlsY=controlsWrap?start.y+closeWidth+gap:start.y;
+    const float x=std::max(start.x,start.x+right-controlsWidth);
+    UI::SetCursorPos({x,controlsY});
     const bool selecting=followerTargeting.load();
     if(selecting) {
         UI::PushStyleColor(UI::ImGuiCol_Button,UI::ImVec4{.55f,.43f,.19f,1.f});
@@ -110,7 +158,7 @@ void RenderGalleryTitle(bool& opened) {
     if(UI::Button((followerLabel+"###followerSelection").c_str(),{followerWidth,closeWidth})) {followerTargeting=!selecting;settingsChangedAt=GetTickCount64();}
     if(selecting) UI::PopStyleColor(2);
     if(UI::IsItemHovered()) {
-        UI::SetTooltip("%s\n%s\n%s",Tr("Select a follower as the outfit target."),Tr("Aim at a following companion and open the gallery."),Tr("The number counts enabled followers. Their outfits are maintained even when selection is OFF."));
+        UI::SetTooltip("%s\n%s\n%s",Tr("Aim at a following companion and open the gallery. Look away to target yourself."),Tr("Click to enable or disable follower targeting for the next gallery opening."),Tr("The number counts followers with maintained outfits. Zero does not prevent targeting a new follower; OFF does not stop outfit maintenance."));
     }
     UI::SameLine();
     const auto targetSettings=PanelAutoSettings();
@@ -124,6 +172,7 @@ void RenderGalleryTitle(bool& opened) {
     if(enabled) UI::PopStyleColor(2);
     if(UI::IsItemHovered()) UI::SetTooltip("%s: %s\n%s",Tr("Automatic outfits"),Tr(!enabled?"Disabled":paused?"Paused":"Enabled"),Tr("Open or close settings. Automatic outfits keep running when this panel is closed."));
     UI::SameLine();if(UI::Button("X##closeGallery",{closeWidth,closeWidth})) opened=false;
+    if(!modesInline) {UI::SetCursorPos({start.x,controlsY+closeWidth+gap});renderModes();}
     UI::Separator();
 }
 void RenderAutoOutfitHelp(bool follower=false) {
@@ -154,7 +203,22 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
     UI::SetNextWindowPos({screen.x*.535f,screen.y*.015f},UI::ImGuiCond_Always);
     UI::SetNextWindowSize({screen.x*.455f,screen.y*.97f},UI::ImGuiCond_Always);
     bool panelOpen=autoPanel;
-    if(UI::Begin(Label("Automatic outfits (test)"),&panelOpen,UI::ImGuiWindowFlags_NoResize|UI::ImGuiWindowFlags_NoMove|UI::ImGuiWindowFlags_NoCollapse)) {
+    const bool panelTransmog=TargetAppearanceMode(followerID);
+    const std::string panelTitle=std::string(Tr("Automatic outfits"))+" | "+
+        (panelTransmog?(language==1?"重ね着":"Transmog"):(language==1?"通常着替え":"Equip"))+"###AutomaticOutfitsPanel";
+    if(panelTransmog) {
+        UI::PushStyleColor(UI::ImGuiCol_TitleBg,OutfitModeBandColor());
+        UI::PushStyleColor(UI::ImGuiCol_TitleBgActive,OutfitModeBandColor());
+        UI::PushStyleColor(UI::ImGuiCol_TitleBgCollapsed,OutfitModeBandColor());
+    }
+    const bool panelVisible=UI::Begin(panelTitle.c_str(),&panelOpen,UI::ImGuiWindowFlags_NoResize|UI::ImGuiWindowFlags_NoMove|UI::ImGuiWindowFlags_NoCollapse);
+    if(panelTransmog) UI::PopStyleColor(3);
+    if(panelVisible) {
+        if(panelTransmog) {
+            const auto pos=UI::GetWindowPos();const float height=UI::GetFrameHeight();
+            UI::ImDrawListManager::AddRectFilled(UI::GetWindowDrawList(),{pos.x+1.f,pos.y+1.f},
+                {pos.x+1.f+std::max(2.f,height*.065f),pos.y+height},UI::GetColorU32(OutfitModeLineColor()),0,0);
+        }
         std::string targetName;
         {std::scoped_lock lock(statusMutex);targetName=studioActorName;}
         UI::Text("%s: %s",Tr("Target"),followerID?targetName.c_str():Tr("Player"));
@@ -167,8 +231,8 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
         UI::BeginDisabled(!panelEnabled);
         if(UI::Button(Label(pauseText))) SaveAutoOutfitToggles(panelEnabled,!panelPaused,panelCombat);
         UI::EndDisabled();
-        AutoSameLineIfFits(UI::CalcTextSize(Tr("Combat (experimental)")).x+UI::GetFrameHeight()+UI::GetStyle()->ItemInnerSpacing.x);
-        if(UI::Checkbox(Label("Combat (experimental)"),&combat)) SaveAutoOutfitToggles(panelEnabled,panelPaused,combat);
+        AutoSameLineIfFits(UI::CalcTextSize(Tr("Combat auto-switch")).x+UI::GetFrameHeight()+UI::GetStyle()->ItemInnerSpacing.x);
+        if(UI::Checkbox(Label("Combat auto-switch"),&combat)) SaveAutoOutfitToggles(panelEnabled,panelPaused,combat);
         UI::EndDisabled();
         AutoSameLineIfFits(UI::GetFrameHeight());
         if(UI::Button("?##autoHelp")) UI::OpenPopup("Auto outfit help");

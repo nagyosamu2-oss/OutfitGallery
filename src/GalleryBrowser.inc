@@ -55,8 +55,25 @@ void RenderBrowser(bool& addMissing) {
         selected=reveal->photo; search[0]=0; oldFilter.clear(); tabsFocused=false; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false;
         UI::ClearActiveID();
     }
+    if(TransmogActive(studioFollower?studioActorID.load():0x14)) {
+        if(UI::Button(language==1?"実際の装備の外見に戻す":"Restore actual appearance")) command=31;
+    }
     bool openEdit=false, openTab=false;
     if(!photoRetakeActive && UI::CollapsingHeader(Label("Options"))) {
+        bool compatibleUpscaling = upscalerCompatibility.load();
+        if (UI::Checkbox(Label("Upscaler compatibility mode"), &compatibleUpscaling)) {
+            upscalerCompatibility = compatibleUpscaling;
+            settingsChangedAt = GetTickCount64();
+            SaveSettingsIfDue(true);
+        }
+        UI::TextWrapped("%s", Tr("Enable if upscaling makes text blurry. Close and reopen the gallery to apply."));
+        float zoomPercent=uiZoom*100.f;
+        if(UI::SliderFloat(Label("UI size"),&zoomPercent,75.f,200.f,"%.0f%%")) {
+            uiZoom=NormalizeUiZoom(zoomPercent/100.f); settingsChangedAt=GetTickCount64();
+        }
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Adjust text and controls relative to the automatic WQHD layout. Applied on the next frame."));
+        if(UI::Button(Label("Reset UI size"))) {uiZoom=1.f;SaveSettingsIfDue(true);}
+
         if(UI::BeginCombo("Language / 言語",language==2?"External (Translation.json)":language==1?"日本語":"English")) {
             if(UI::Selectable("日本語",language==1)) {language=1; settingsChangedAt=GetTickCount64();}
             if(UI::Selectable("English",language==0)) {language=0; settingsChangedAt=GetTickCount64();}
@@ -69,7 +86,7 @@ void RenderBrowser(bool& addMissing) {
             allowCombatGallery=combatEntry;settingsChangedAt=GetTickCount64();
             SKSE::log::info("OG-STUDIO combat entry option={}",combatEntry);
         }
-        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Player only. Combat may continue while Gallery is open. Killmoves, stagger and target lock remain blocked."));
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Applies to player and follower targets. Combat may continue while Gallery is open. Other opening restrictions still apply."));
         bool freeEntry=allowFreeCamera.load();
         if(UI::Checkbox(Label("Allow opening from free camera (experimental)"),&freeEntry)) {allowFreeCamera=freeEntry; settingsChangedAt=GetTickCount64();}
         UI::Separator();
@@ -91,6 +108,11 @@ void RenderBrowser(bool& addMissing) {
         bool changed=UI::Checkbox(Label("Show preset names"),&showNames);
         changed=UI::Checkbox(Label("Show item counts"),&showCounts)||changed;
         if(changed) settingsChangedAt=GetTickCount64();
+        bool fullToggle=fullOutfitToggle.load();
+        if(UI::Checkbox(Label("Allow full outfit removal on repeat click"),&fullToggle)) {
+            fullOutfitToggle=fullToggle;SaveSettingsIfDue(true);
+        }
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("OFF by default. Enabling allows a repeat click to remove the entire registered outfit and may leave the character in underwear or naked. Applies to player and followers in both outfit modes. Head and accessory toggles remain available."));
         if(UI::Checkbox(Label("Add missing base items (new game)"),&addMissing)) { SaveSettingsIfDue(true); }
         if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Generated items use base properties; custom enchantments are not recreated."));
         bool prefer=preferEnchanted.load();
@@ -184,7 +206,7 @@ void RenderBrowser(bool& addMissing) {
         for(const auto& path:loaded) DisposePortraitView(path);
         loaded.clear(); StartOrganizer(category);
     }
-    if(missingCheckFocused) UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,3.f);
+    if(missingCheckFocused) UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,UiPx(3.f));
     UI::EndDisabled();
     }
     if(std::exchange(compactOrganizeRequested,false)) {
@@ -337,7 +359,7 @@ void RenderBrowser(bool& addMissing) {
         capturePads[0]!=16 && capturePads[1]!=16 && capturePads[2]!=16 && RawPadPressed(16,false);
     if(UI::Button("##cycleColumns",{tabHeight+20.f,tabHeight}) || cycleWithPad || cycleWithStart) {gridColumns=gridColumns==6?2:gridColumns+1; SaveSettingsIfDue(true);}
     if(tabsFocused && columnsFocused) {
-        UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,3.f);
+        UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,UiPx(3.f));
         if(left || right) UI::SetScrollHereX(.5f);
     }
     DrawColumnCountIcon(tabHeight);
@@ -393,12 +415,27 @@ void RenderBrowser(bool& addMissing) {
         index=std::clamp(index,0,static_cast<int>(cards.size())-1);
     }
     if(!cards.empty()) {selected=cards[index].photo; if(autoPanel) autoSelectedPhoto=selected;}
+    auto prepareApplyPreset=[&](const Preset& p){
+        auto prepared=p;
+        const auto label=library.labels.find(p.photo);
+        if(label!=library.labels.end()) {
+            prepared.exchangeSlots=label->second.exchangeSlots;
+            prepared.exchangeSlotless=label->second.exchangeSlotless;
+            prepared.outfitItems=label->second.outfitItems;
+        }
+        return prepared;
+    };
+    if((category=="#accessories" || category=="#head") && !autoPanel)
+        UI::TextWrapped("%s",Tr("Head and accessory sets: click to equip; click again when all registered items are equipped to remove only those items."));
     auto queueApply=[&](const Preset& p){
-        if(photoRetakeActive || saveBusy || category=="#trash") return;
+        if(photoRetakeActive || saveBusy || category=="#trash" || (AccessoryToggle::Allowed(p.accessories,p.slotMask,fullOutfitToggle.load()) && verificationTicks)) return;
         if(autoPanel) {autoSelectedPhoto=p.photo; return;}
-        std::scoped_lock lock(presetsMutex); requestedPreset=p;
-        {const auto label=library.labels.find(p.photo); if(label!=library.labels.end()) {requestedPreset.exchangeSlots=label->second.exchangeSlots;requestedPreset.exchangeSlotless=label->second.exchangeSlotless;requestedPreset.outfitItems=label->second.outfitItems;}}
-        requestedAddMissing=addMissing; command=4;
+        std::scoped_lock lock(presetsMutex); requestedPreset=prepareApplyPreset(p);
+        requestedAddMissing=addMissing;
+        if(TargetAppearanceMode(studioFollower?studioActorID.load():0x14)) {
+            if(!TransmogAvailable()) {SetStatus(TransmogUnavailableReason(language==1)); return;}
+            command=30;
+        } else command=4;
     };
     if(browse && !cards.empty() && !tabsFocused && !enteredPhotos) {
         if(PadPressed(UI::ImGuiKey_GamepadFaceDown,false)) queueApply(cards[index]);
@@ -421,21 +458,21 @@ void RenderBrowser(bool& addMissing) {
             command=3;
         }
     }
-    const auto screen=UI::GetIO()->DisplaySize;
+    const auto screen=uiLayoutScreen;
     const float footer=UI::GetTextLineHeightWithSpacing()*1.4f;
     // Reserve scrollbar width even when all rows fit. Otherwise its appearance
     // narrows the thumbnails, making them shorter and hiding it again next frame.
-    UI::BeginChild("Presets",{0,std::max(80.f,UI::GetContentRegionAvail().y-footer)},0,
+    UI::BeginChild("Presets",{0,std::max(UiPx(80.f),UI::GetContentRegionAvail().y-footer)},0,
         UI::ImGuiWindowFlags_NoNavInputs|UI::ImGuiWindowFlags_AlwaysVerticalScrollbar);
-    const auto layout=MakeThumbnailLayout(UI::GetContentRegionAvail().x,screen.x,screen.y,gridColumns,portraitThumbnails);
+    const auto layout=MakeThumbnailLayout(UI::GetContentRegionAvail().x,screen.x,screen.y,gridColumns,portraitThumbnails,uiFrameScale);
     const float stepX=layout.stepX, w=layout.width, h=layout.height;
     const UI::ImVec2 uv0{layout.uvLeft,0.f}, uv1{layout.uvRight,1.f};
     thumbnailVisibleWidth=layout.uvRight-layout.uvLeft;
     const float textHeight=UI::GetTextLineHeightWithSpacing();
-    const float stepY=h+16.f+(showNames?textHeight:0)+(showCounts?textHeight:0);
+    const float stepY=h+UiPx(16.f)+(showNames?textHeight:0)+(showCounts?textHeight:0);
     const int totalRows=(static_cast<int>(cards.size())+displayColumns-1)/displayColumns;
     float scroll=reset?0.f:UI::GetScrollY();
-    const float viewport=std::max(1.f,UI::GetWindowHeight()-16.f);
+    const float viewport=std::max(1.f,UI::GetWindowHeight()-UiPx(16.f));
     if(reset) UI::SetScrollY(0);
     if(moved || index!=before) {
         const float y=(index/displayColumns)*stepY;
@@ -450,7 +487,7 @@ void RenderBrowser(bool& addMissing) {
     for(int row=start;row<finish;++row) for(int col=0;col<displayColumns;++col) {
         const int n=row*displayColumns+col; if(n>=static_cast<int>(cards.size())) break;
         const auto& p=cards[n];
-        UI::SetCursorPos({8.f+col*stepX,origin+row*stepY});
+        UI::SetCursorPos({UiPx(8.f)+col*stepX,origin+row*stepY});
         UI::BeginGroup();
         const auto path=(photoRetakeActive && p.photo==photoUpdate.Photo() && !photoUpdate.Draft().empty() ? photoUpdate.Draft() : std::filesystem::path("Data/SKSE/Plugins/OutfitGallery/Captures")/p.photo).generic_string();
         visible.push_back(path);
@@ -463,17 +500,17 @@ void RenderBrowser(bool& addMissing) {
         // The grid reserves 12 px beyond the image width. Keep the button's
         // padding local and bounded so a theme's FramePadding cannot make the
         // next image cover the selection border. Match missing-photo bounds.
-        const UI::ImVec2 photoPadding{3.f,3.f};
+        const UI::ImVec2 photoPadding{UiPx(3.f),UiPx(3.f)};
         UI::PushStyleVar(UI::ImGuiStyleVar_FramePadding,photoPadding);
-        const bool clicked=texture?UI::ImageButton(p.photo.c_str(),texture,{w,h},uv0,uv1):UI::Button((std::string(Tr("Missing photo"))+"##"+p.photo).c_str(),{w+6.f,h+6.f});
+        const bool clicked=texture?UI::ImageButton(p.photo.c_str(),texture,{w,h},uv0,uv1):UI::Button((std::string(Tr("Missing photo"))+"##"+p.photo).c_str(),{w+UiPx(6.f),h+UiPx(6.f)});
         UI::PopStyleVar();
         if(p.photo==selected && !tabsFocused) UI::PopStyleColor();
         const bool hover=UI::IsItemHovered();
         const auto photoMin=UI::GetItemRectMin(), photoMax=UI::GetItemRectMax();
         if(p.photo==selected && !tabsFocused) {
             auto* draw=UI::GetWindowDrawList();
-            UI::ImDrawListManager::AddRect(draw,{photoMin.x+3,photoMin.y+3},{photoMax.x-3,photoMax.y-3},0xFF171717,0,0,7.f);
-            UI::ImDrawListManager::AddRect(draw,{photoMin.x+3,photoMin.y+3},{photoMax.x-3,photoMax.y-3},0xFF70C6E8,0,0,4.f);
+            UI::ImDrawListManager::AddRect(draw,{photoMin.x+UiPx(3.f),photoMin.y+UiPx(3.f)},{photoMax.x-UiPx(3.f),photoMax.y-UiPx(3.f)},0xFF171717,0,0,UiPx(7.f));
+            UI::ImDrawListManager::AddRect(draw,{photoMin.x+UiPx(3.f),photoMin.y+UiPx(3.f)},{photoMax.x-UiPx(3.f),photoMax.y-UiPx(3.f)},0xFF70C6E8,0,0,UiPx(4.f));
         }
         const auto label=library.labels.find(p.photo);
         // A full outfit override changes full replacement into selected-slot
@@ -516,7 +553,7 @@ void RenderBrowser(bool& addMissing) {
         // threshold. A slight movement still releases as a normal ImageButton click.
         // IsMouseDragging uses the maximum distance since mouse-down, retaining
         // the drag once started even when the cursor moves back toward its origin.
-        const float photoDragThreshold=std::max(36.f,UI::GetIO()->MouseDragThreshold);
+        const float photoDragThreshold=std::max(UiPx(36.f),UI::GetIO()->MouseDragThreshold);
         if(!photoRetakeActive && !missingCheckMode && libraryWritable && UI::IsMouseDragging(0,photoDragThreshold) && UI::BeginDragDropSource()) {
             UI::SetDragDropPayload("OUTFIT_PHOTO",p.photo.c_str(),p.photo.size()+1);
             UI::TextUnformatted(p.name.c_str());
@@ -531,11 +568,11 @@ void RenderBrowser(bool& addMissing) {
                     const bool after=UI::GetIO()->MousePos.x>(photoMin.x+photoMax.x)*.5f;
                     if(source!=p.photo && payload->Preview) {
                         auto* draw=UI::GetWindowDrawList();
-                        UI::ImDrawListManager::AddRect(draw,{photoMin.x+3,photoMin.y+3},{photoMax.x-3,photoMax.y-3},0xFF171717,0,0,7.f);
-                        UI::ImDrawListManager::AddRect(draw,{photoMin.x+3,photoMin.y+3},{photoMax.x-3,photoMax.y-3},0xFF70E8FF,0,0,3.f);
-                        const float x=after?photoMax.x-5:photoMin.x+5;
-                        UI::ImDrawListManager::AddLine(draw,{x,photoMin.y+5},{x,photoMax.y-5},0xFF171717,10.f);
-                        UI::ImDrawListManager::AddLine(draw,{x,photoMin.y+5},{x,photoMax.y-5},0xFF70E8FF,6.f);
+                        UI::ImDrawListManager::AddRect(draw,{photoMin.x+UiPx(3.f),photoMin.y+UiPx(3.f)},{photoMax.x-UiPx(3.f),photoMax.y-UiPx(3.f)},0xFF171717,0,0,UiPx(7.f));
+                        UI::ImDrawListManager::AddRect(draw,{photoMin.x+UiPx(3.f),photoMin.y+UiPx(3.f)},{photoMax.x-UiPx(3.f),photoMax.y-UiPx(3.f)},0xFF70E8FF,0,0,UiPx(3.f));
+                        const float x=after?photoMax.x-UiPx(5.f):photoMin.x+UiPx(5.f);
+                        UI::ImDrawListManager::AddLine(draw,{x,photoMin.y+UiPx(5.f)},{x,photoMax.y-UiPx(5.f)},0xFF171717,10.f);
+                        UI::ImDrawListManager::AddLine(draw,{x,photoMin.y+UiPx(5.f)},{x,photoMax.y-UiPx(5.f)},0xFF70E8FF,6.f);
                     }
                     if(payload->Delivery) {
                         auto next=library; next.order=fullOrder;
@@ -563,7 +600,7 @@ void RenderBrowser(bool& addMissing) {
         if(category=="#trash") {
             const auto cursor=UI::GetCursorPos();
             const float size=UI::GetFrameHeight();
-            UI::SetCursorScreenPos({photoMax.x-size-3.f,photoMin.y+3.f});
+            UI::SetCursorScreenPos({photoMax.x-size-3.f,photoMin.y+UiPx(3.f)});
             UI::BeginDisabled(!libraryWritable);
             if(UI::Button(("X##delete"+p.photo).c_str(),{size,size})) {deletePhotos={p.photo}; openDelete=true;}
             UI::EndDisabled();
@@ -626,13 +663,14 @@ void RenderBrowser(bool& addMissing) {
         UI::EndPopup();
     }
     if(openEdit) UI::OpenPopup("Outfit actions");
+    PrepareGalleryPopup();
     if(UI::BeginPopup("Outfit actions")) {
         if(missingCheckMode && !missingCheckPending && missingCheckError.empty()) {
             const auto result=missingResults.find(contextPhoto);
             if(result==missingResults.end()) UI::TextWrapped("%s",Tr("Not checked in this snapshot."));
             else if(!result->second.empty()) {
                 UI::TextColored({1.f,.5f,.4f,1.f},"%s",Tr("Missing or changed equipment data"));
-                UI::BeginChild("Missing details",{540.f,std::min(200.f,UI::GetTextLineHeightWithSpacing()*(1.f+result->second.size()*2.f))},0);
+                UI::BeginChild("Missing details",{std::min(UiPx(540.f),uiLayoutScreen.x*.85f),std::min(uiLayoutScreen.y*.3f,UI::GetTextLineHeightWithSpacing()*(1.f+result->second.size()*2.f))},0);
                 for(const auto& item:result->second) {
                     UI::TextWrapped("%s",item.name.c_str());
                     UI::TextWrapped("%s / %06X",item.plugin.c_str(),item.localID);
@@ -640,6 +678,16 @@ void RenderBrowser(bool& addMissing) {
                 UI::EndChild(); UI::Separator();
             }
         }
+        if(UI::MenuItem(language==1?"見た目だけ試着":"Try appearance only",nullptr,false,
+            category!="#trash" && !saveBusy && !verificationTicks.load() && !editPending && !command.load())) {
+            if(!TransmogAvailable()) SetStatus(TransmogUnavailableReason(language==1));
+            else {
+                std::scoped_lock lock(presetsMutex);
+                for(const auto& p:presets) if(p.photo==contextPhoto) {requestedPreset=prepareApplyPreset(p); command=30; break;}
+            }
+            UI::CloseCurrentPopup();
+        }
+        if(!TransmogAvailable() && UI::IsItemHovered()) UI::SetTooltip("%s",TransmogUnavailableReason(language==1).c_str());
         if(UI::MenuItem(Label("Retake photo"),nullptr,false,category!="#trash" && !saveBusy && !verificationTicks.load() && !editPending && !command.load())) {
             try {
                 photoUpdate.Begin(contextPhoto);

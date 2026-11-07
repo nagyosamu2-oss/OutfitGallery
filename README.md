@@ -1,72 +1,56 @@
-## Changes in 1.0.16
+﻿# Outfit Gallery 2.0.1
 
-- Added an optional setting to remove tracked, generated equipment even when another mod changes its name. Existing-item, favorite, enchantment, tempering and equipped-item protections remain in place.
-- Clarified the two cleanup options. Try renamed-item cleanup first; enable additional cleanup compatibility only if generated items still remain.
-- Added **Retake photo** to the photo context menu. Preview the new photo in the gallery, then confirm, retake or cancel. Equipment, preset names and automatic outfit assignments remain unchanged.
-- The retake screen includes camera presets, column and Normal/Portrait controls, with a compact layout and an unsaved-photo notice.
+A photo-based outfit gallery with normal equipment changes and appearance-only transmog for the player and followers.
 
-# Outfit Gallery 1.0.16
-
-A photo-based SKSE outfit gallery for full outfits, head equipment and accessories. Weapons and ammo are preserved. Includes conditional automatic outfits, follower selection/maintenance, preset editing and an optional independent preview.
-
-Japanese manual: [README.ja.md](README.ja.md). New features: [FEATURES.ja.md](FEATURES.ja.md).
+## Changes in 2.0.1
+- Added Upscaler compatibility mode, OFF by default. Enable it in Options if upscaling makes Gallery text blurry or enlarged, then close and reopen Gallery. The choice is saved across game restarts.
+- In compatibility mode, added HUD widgets that respond to Cursor Menu can hide while Gallery is open and return afterward. The native game cursor is hidden during Gallery to prevent overlapping pointers.
+- Integrated the Steam 1.7.104 Transmog Fix. Verified fallback call positions can be used when normal call-target discovery cannot locate the required hooks.
+- Fixed Gallery entry when another mod already owns TDM's headtracking-disable control. This resolves the reported first-person entry failure with ImprovedCameraSE 2.0.0.2231. External ownership is respected.
 
 ## Requirements
+Windows x64, the SKSE version matching your executable, Address Library, and SKSE Menu Framework 3 with its dependencies. A suitable framework font is needed for Japanese. Disable the framework's Blur Background option for a clear preview. SmoothCam and True Directional Movement are optional. VR is not supported. Third-party framework DLLs, fonts, outfits and game assets are not bundled.
 
-Install SKSE matching your Skyrim executable, Address Library, and SKSE Menu Framework 3 with its dependencies. This plugin uses the framework's event-priority and input-event API. Disable the framework's Blur Background option for a clear subject. Japanese display requires a suitable framework font. SmoothCam and True Directional Movement are optional. Outfit mods, fonts and third-party plugin DLLs are not bundled.
-
-Accepted executables: Steam 1.5.97, 1.6.353, 1.6.640, 1.6.1130, 1.6.1170, 1.7.104; GOG 1.6.1179. Development gameplay testing has been reported on 1.5.97 and mainly 1.6.1170; a compatibility build was user-tested on 1.7.104. This is not a fresh test of every feature on every executable. GOG and the other listed targets remain untested. VR is not supported. For Steam 1.7.104 use matching SKSE, Address Library and Menu Framework versions.
+Accepted targets: Steam 1.5.97 / 1.6.353 / 1.6.640 / 1.6.1130 / 1.6.1170 / 1.7.104; GOG 1.6.1179.
+Development testing includes Steam 1.5.97 and 1.6.1170, plus the 1.7.104 transmog fix tested by the user. Other accepted runtimes have implementation coverage and remain untested in gameplay for these changes. GOG 1.6.1179 is untested. See VALIDATION.md.
 
 ## Install or update
+Close Skyrim and install this complete archive with your mod manager. It contains the DLL and default INI; no ESP or Papyrus scripts are required.
+Keep generated Data/SKSE/Plugins/OutfitGallery data: photos, presets and JSON settings. Preserve a customized OutfitGallery.ini. With MO2, check the existing mod folder, Overwrite and any output mod before replacing files. Disable older trial DLL overrides and the standalone 1.7.104 Transmog Fix so the 2.0.1 DLL takes priority. Hotkeys.json takes priority over INI hotkeys. A new game or preset re-registration is not required.
+The first load of legacy settings enables follower targeting once. A later explicit OFF is preserved. This migration does not enable automatic outfits.
+Keep .ess and .skse together. To downgrade, restore pre-update user data and saves as well as the previous DLL: older versions do not understand all newer preset, library and appearance data.
 
-Close Skyrim and install this complete archive with your mod manager. No ESP or Papyrus scripts are required. Do not let an older trial DLL override this release. Keep generated Data/SKSE/Plugins/OutfitGallery data, including photos, presets and settings, and any customized OutfitGallery.ini. Before replacing an MO2 mod, preserve generated data inside that mod; also check Overwrite and your output mod. Saved JSON settings are not distributed or reset. Hotkeys.json takes priority over INI input settings.
+## Controls
+F8 opens Gallery. Default gamepad alternative: hold Back/View for 0.8 seconds. F9 registers an outfit, F10 headgear, F11 accessories while Gallery is open.
+Click a photo to apply it; right-click for equipment management. Gamepad A applies, R3 opens the photo menu, B closes. Bindings can be changed in Options.
+Choose Normal outfits or Transmog at the top. The selected button is amber; a subdued header band indicates transmog mode.
 
-New accessory presets use schema 4, including zero-slot armor. Older versions cannot read these new presets and may discard newer library fields. Restore pre-update data as well as the old DLL when downgrading. Keep .ess and .skse save files together.
+## Transmog
+Changes the visible armor while preserving real equipment, armor rating and enchantment effects. Player first-person and third-person appearance and follower appearance are supported.
+Appearance and mode are stored per actor in the SKSE co-save. Use Restore actual appearance to show actual equipment again.
+Armor models must support the actor's race and sex. Shield slot 39 and zero-biped-slot visual overrides are not supported. Missing/incompatible visual pieces may be skipped; an entirely unusable preset leaves the previous look intact.
+Another appearance mod controlling the same actor may conflict. Startup verifies the required callsites and supported hook chains. If an unsafe/unrecognized site is found, transmog is disabled with a reason available on the transmog control. Listing a runtime is not a guarantee for every hook combination.
 
-## Basic controls
+## Followers
+Follower targeting is ON by default: aim at a currently following humanoid and open Gallery; look away to target the player. Target followers (N) counts followers with maintained outfits, not all nearby followers; zero does not prevent selecting a new follower.
+Fixed outfit maintenance and conditional automatic outfits are separate optional controls. Both start OFF for a new follower. Previously saved follower settings are restored from the co-save. Conditional automatic outfits support up to two registered followers.
+Other follower managers can compete with outfit maintenance. Restore standard outfit returns the follower to the current default outfit definition; it does not restore an entire inventory.
 
-F8 opens the gallery; gamepad Back/View held for 0.8 seconds is the default alternative. F9 registers a full outfit, F10 head equipment, F11 accessories while the gallery is open. Click a photo to equip it; right-click for management. Gamepad A applies, Y/X/left-stick click register the three modes, right-stick click opens the photo menu and B closes. Bindings can be changed in Options. English/Japanese are built in; the translations folder contains an external translation template, not an active override.
+## Remove and restore equipment
+Remove equipment is at the right of the registration/camera toolbar. A compact minus button is used if space is limited.
+In its dialog, CHECK to remove one item immediately; UNCHECK to restore that item. Removed rows remain until the dialog is closed or refreshed. Closing keeps the current equipment state. Refresh rebuilds the list and ends the ability to restore items removed from the previous list.
+Normal mode lists worn armor/clothing. Transmog lists applied visual overrides; actual equipment outside the controlled scope is not listed.
+Removal can expose underwear or nudity. Actions occur immediately. Restoring does not generate items; if the original item or compatible state cannot be identified, refresh is requested.
+Head/accessory photo repeat-click toggles are also available when all registered pieces are present. Full-outfit repeat-click removal is OFF by default; enable it explicitly in Options if wanted. Registered head/accessory sets may contain body clothing, so their contents determine what is removed.
+Automatic outfit application equips outfits; it does not use repeat-click removal.
 
-## Automatic outfits
+## Organize and automatic outfits
+Organize gallery supports multiple selection, order changes, Trash and batch registration to existing category tabs. Drag selected photos to a destination tab, or use the destination control. Already-registered counts are shown. Remove from this tab removes category membership without deleting the preset or photo. Changes are committed with Save and close; Cancel discards the draft.
+Automatic outfits are enabled separately after assigning photos to conditions. Defaults for new settings: normal delay 0 seconds, combat minimum interval 2 seconds, sneak delay 1 second. Existing explicit settings are preserved. Crafting is still experimental and may skip an attempt if its preparation deadline is missed.
+Item counts default OFF. UI zoom, portrait layout, category filtering, camera presets, preset editing and optional independent preview remain available.
 
-Open Auto outfits, assign photos to conditions, then enable automatic switching. Conditions cover locations (including indoor shops), weather/night, swimming, sneaking, combat styles and crafting stations. Empty specialized combat slots fall back to the combat base. Location detection depends on game records and may differ in mod-added locations. Combat and crafting remain experimental. Crafting makes one pre-menu attempt and may skip if the timing deadline has passed. After leaving a station, normal automatic condition handling resumes.
-
-The dedicated shortcut in the automatic-outfit options toggles automatic switching itself, not its panel. It is unbound by default, supports keyboard modifiers and gamepad hold, and resumes a paused system. Delay settings and OStim scene suspension are available.
-
-## Equipment management
-
-Full outfits use individual equipment selection; head/accessory presets use exchange slots in the management screen. Zero-slot armor can be selected individually. Accessories capture worn armor too; clear the selection and select just the desired ring/item when needed. An empty saved selection does nothing. Unrelated equipment is preserved for partial changes. Full outfit presets can be edited from currently worn armor; review before saving. One initial original is kept for restoration, not a growing edit history. Windows resize and scroll; outside clicks do not close them.
-
-## Data and limitations
-
-Missing base items can be generated if enabled; custom enchantments, tempering and custom names are not cloned into new items. Player enchanted-item preference uses owned registered items. Save the game after registering them. Removed mods or changed form/slot definitions can invalidate a preset. Missing-set checking reports unavailable records, not missing inventory items.
-
-Follower selection targets loaded humanoid followers, including the hired Sofia fallback. The header count refers to maintained follower outfits; turning selection off does not cancel maintenance. Other follower managers may compete with outfit control. Independent preview shares the rendered game image; it does not create a second camera or clone the actor. Rendering-mod and HDR combinations are not comprehensively tested.
-
-Diagnostics are in OutfitGallery.log in the SKSE log directory. Detailed logging is optional and resets on restart. Logs can include preset names and local paths.
-
-## License and provenance
-
-GPL-3.0; see LICENSE, THIRD_PARTY.md and LICENSES. The matching source archive is provided separately. This project was authored with substantial AI assistance. See VALIDATION.md for the tested scope.
-
-## Gallery display and camera preset names (1.0.15)
-
-Normal thumbnails support 2–6 columns; portrait thumbnails support 3–10. Start/Menu cycles the gallery columns only when it is not assigned to opening Gallery, toggling automatic outfits or capturing outfits in OG. Existing assignments take priority.
-
-Options → Compact display hides the preset-name and search fields and moves Organize gallery next to Normal/Portrait. It defaults to OFF and is remembered. Enabling it clears the search filter; registration uses automatic names. Turn it OFF to enter names or search. Photo names and item counts retain their separate visibility settings. Follower maintenance controls share the row only when the translated controls fit.
-
-Open Camera Settings using the camera icon, select a preset slot and save its name. Numbered buttons remain unchanged; hover to see the name. Saving an empty name restores the default tooltip. Renaming does not change the camera position or capture it. Names persist across restarts.
-
-Equipment to wear now shows all biped slot numbers before each item name. This is a display change; selection behavior is unchanged.
-
-## Renamed generated equipment
-
-In Options, enable **Remove renamed generated equipment** if another mod changes the names of equipment supplied by OutfitGallery and those items remain after changing outfits. This setting defaults to OFF and is independent of cleanup compatibility. It adds no continuous monitoring. It allows name-only changes; it does not establish ownership of untracked items. Custom renaming alone will no longer protect a generated item while this option is enabled. Favorite an item if you want to keep it.
-
-Try this setting first. If items still remain, try **Equipment cleanup compatibility** as well; that option adds identity tracking and can reclaim a confirmed generated item after a container round trip. Items outside your inventory and items whose identity is no longer tracked are not removed. Renamed-item cleanup was confirmed with MARA in the user's tests; this is not a guarantee of full MARA compatibility.
-
-## Retake a preset photo
-
-Right-click a photo (R3 on a controller) and choose **Retake photo**. Apply the desired outfit before entering this screen: retaking captures the current appearance and does not automatically equip the target preset. Use the existing camera settings/presets and full-outfit capture shortcut (default F9/Y). After capture, only the selected thumbnail previews the new image. Choose **Use this photo** (A) to replace it, **Retake** to try again, or **Cancel** (B) to retain the original. Closing the screen also discards the unconfirmed photo.
-
-Only the image changes. Equipment, names, categories, order and automatic outfit assignments are preserved. A different current outfit can therefore produce a photo that does not match the saved equipment. No new game-pause feature is provided; use your existing pause setup. Column and Normal/Portrait changes keep the target visible and preserve the draft. The original image is replaced only after confirmation.
+## Data, diagnostics and license
+Japanese detailed manual: README.ja.md. Release summary: RELEASE-NOTES.md. Development history is retained in the source archive.
+Logs are written to the SKSE log directory as OutfitGallery.log and may include preset names and paths. Detailed logging is optional and resets on restart.
+Known limitations include paused character animations with Fluid Motion, text blur in some upscaling configurations, and untested rendering/HDR combinations. The independent preview shares the game's rendered image.
+GPL-3.0. See LICENSE, THIRD_PARTY.md and LICENSES. Publish the matching source archive with this release. Authored with substantial AI assistance.

@@ -10,6 +10,7 @@
 #include "Presets.h"
 #include "FollowerOutfits.h"
 #include "FollowerAutoOutfits.h"
+#include "Transmog.h"
 #include <mutex>
 #include <set>
 #include <map>
@@ -103,11 +104,13 @@ std::uint16_t AllocateItemID(RE::InventoryChanges* changes, std::set<std::uint16
 
 void Forget(const Identity& key) {std::scoped_lock lock(ledgerMutex); ledger.items.erase(key); registeredNames.erase(key); transferChain.Retire(key);}
 void Revert(SKSE::SerializationInterface*) {
+    ResetTransmogPersistence();
     {std::scoped_lock lock(ledgerMutex); ledger.Clear(); pendingNames.clear(); registeredNames.clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); preferredScopes.clear(); reservedPreferredIDs.clear();}
     ClearFollowerOutfits();
     ClearFollowerAutoOutfits();
 }
 void Save(SKSE::SerializationInterface* s) {
+    SaveTransmog(s);
     SaveFollowerOutfits(s);
     SaveFollowerAutoOutfits(s);
     if(!preferredScopes.empty()) {
@@ -133,6 +136,7 @@ void Save(SKSE::SerializationInterface* s) {
     }
 }
 void Load(SKSE::SerializationInterface* s) {
+    ResetTransmogPersistence();
     ClearFollowerOutfits();
     ClearFollowerAutoOutfits();
     preferredScopes.clear(); reservedPreferredIDs.clear();
@@ -164,6 +168,7 @@ void Load(SKSE::SerializationInterface* s) {
         }
         if(LoadFollowerOutfit(s,type,version,length)) continue;
         if(LoadFollowerAutoOutfit(s,type,version,length)) continue;
+        if(LoadTransmog(s,type,version,length)) continue;
         if(type!=itemRecord || (version!=1 && version!=2) || length!=10) continue;
         Identity old, current;
         if(s->ReadRecordData(old.form)!=4 || s->ReadRecordData(old.owner)!=4 || s->ReadRecordData(old.id)!=2) continue;
