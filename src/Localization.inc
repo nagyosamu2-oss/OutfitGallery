@@ -18,6 +18,20 @@ void LoadExternalTranslation() {
     }
 }
 const std::map<std::string,std::string> japanese{
+ {"Select matching outfit types. The first photo represents the group.","同じ種類のセットを選択。先頭の写真が代表になります。"},
+ {"Ungroup variations","まとめを解除"},
+ {"Group variations","差分をまとめる"},
+ {"Outfit variations","差分一覧"},
+ {"RT / R2: cycle accessory tabs","RT / R2：小物タブを順に切り替え"},
+ {"Accessory tabs: replace only registered accessory slots, keeping your clothes.","小物タブ：他の服を維持し、登録した小物の部位だけを交換します。"},
+
+ {"Create tab","タブを作成"},
+ {"Tab contents","表示するセット"},
+ {"Accessory sets","小物セット"},
+ {"Full outfit sets","全身セット"},
+ {"Accessory sets are still registered in Accessories first. Classify them here afterward.","小物の撮影・登録先は従来どおり「小物」です。登録後にこのタブへ分類できます。"},
+ {"Select accessory sets to register. Restore photos from Trash first.","登録する小物セットを選択してください。ごみ箱の写真は先に復元してください。"},
+
  {"Upscaler compatibility mode","アップスケール互換モード"},
  {"Enable if upscaling makes text blurry. Close and reopen the gallery to apply.","アップスケール使用時に文字がぼやける場合に有効にしてください。ギャラリーを閉じて開き直すと反映されます。"},
  {"UI size","UI倍率"},
@@ -308,6 +322,8 @@ const std::map<std::string,std::string> japanese{
 {"Currently worn equipment","現在着用している装備"},
 {"Check items, then choose Remove selected. Removing clothing may leave the character in underwear or naked.","外したい装備にチェックし「選択した装備を外す」で実行します。衣服を外すと下着や裸になる場合があります。"},
 {"Only applied appearance items are listed. Actual equipment and its effects are kept.","一覧は重ね着に適用した装備です。実際の装備と性能は維持します。"},
+{"Remove all equipment","すべて外す"},
+{"Restore all equipment","すべて戻す"},
 {"Refresh equipment list","装備一覧を更新"},
 {"Removal requested. Refresh the list to check the current equipment.","解除を要求しました。一覧を更新すると現在の状態を確認できます。"},
 {"No removable equipment.","解除対象の装備はありません。"},
@@ -496,6 +512,22 @@ const char* Tr(const char* key) {
     if(language==2) {auto it=externalTranslation.strings.find(key); if(it!=externalTranslation.strings.end()) return it->second.c_str();}
     if(language==1) {auto it=japanese.find(key); if(it!=japanese.end()) return it->second.c_str();}
     return key;
+}
+// New equipment tools use the same language pack as the main gallery.
+// Retain the tested visible text and explicit ImGui IDs in built-in languages.
+const char* EquipmentText(const char* japaneseText, const char* englishText) {
+    if (language == 1) return japaneseText;
+    if (language != 2) return englishText;
+    static thread_local std::map<std::string, std::string> cache;
+    auto [it, inserted] = cache.try_emplace(englishText);
+    if (inserted) {
+        const std::string_view label(englishText);
+        const auto split = label.find("###");
+        const std::string key(label.substr(0, split));
+        it->second = Tr(key.c_str());
+        if (split != label.npos) it->second += label.substr(split);
+    }
+    return it->second.c_str();
 }
 const char* Label(const char* key) {
     static std::map<std::string,std::string> cache;

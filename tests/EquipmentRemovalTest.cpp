@@ -17,6 +17,20 @@ int main(){try{
     require(!RemovalSelectionStillCurrent(rows,{1},current));
     require(!RemovalSelectionStillCurrent(rows,{4},rows));
     // Keep stable rows while two items are removed/restored independently.
+    require(PendingRemovalRows(rows,{},true)==std::vector<unsigned>({0,1,2}));
+    require(PendingRemovalRows(rows,{1},true)==std::vector<unsigned>({0,2}));
+    require(PendingRemovalRows(rows,{0,1,2},true).empty());
+    require(PendingRemovalRows(rows,{0,2},false)==std::vector<unsigned>({0,2}));
+    require(PendingRemovalRows(rows,{},false).empty());
+    // Model the same validated row queue: complete removal, then complete restoration.
+    std::set<unsigned> removed;
+    for(auto n:PendingRemovalRows(rows,removed,true)) {
+        require(RemovalCurrentMatches(rows,removed,[&]{std::vector<RemovalItem> c;for(unsigned i=0;i<rows.size();++i)if(!removed.contains(i))c.push_back(rows[i]);return c;}()));
+        removed.insert(n);
+    }
+    require(RemovalCurrentMatches(rows,removed,{}));
+    for(auto n:PendingRemovalRows(rows,removed,false)) removed.erase(n);
+    require(RemovalCurrentMatches(rows,removed,rows));
     const auto baseline=rows;
     require(RemovalCurrentMatches(rows,{},baseline));
     current={baseline[0],baseline[2]};

@@ -33,6 +33,12 @@ inline bool RemovalCurrentMatches(const std::vector<RemovalItem>& rows,const std
         if(!removed.contains(n) && std::find(current.begin(),current.end(),rows[n])==current.end()) return false;
     return true;
 }
+// Queue only rows that need changing; stable indices preserve per-item restore data.
+inline std::vector<unsigned> PendingRemovalRows(const std::vector<RemovalItem>& rows,const std::set<unsigned>& removed,bool remove) {
+    std::vector<unsigned> result;
+    for(unsigned n=0;n<rows.size();++n) if(removed.contains(n)!=remove) result.push_back(n);
+    return result;
+}
 std::vector<RemovalItem> SnapshotRemovalEquipment(RE::Actor*);
 std::vector<RemovalItem> SnapshotRemovalAppearance(RE::Actor*);
 bool RemoveEquipmentIDs(RE::Actor*,const std::vector<std::uint32_t>&);

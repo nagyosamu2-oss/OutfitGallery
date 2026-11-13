@@ -26,6 +26,19 @@ void RenderEquipmentRemoval(bool compact=false) {
         }
         if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Refreshing starts a new list. Items already removed will no longer be listed."));
         UI::EndDisabled();
+        UI::SameLine();
+        UI::BeginDisabled(removalPending || verificationTicks || !state.ready || !state.error.empty() || state.rows.empty());
+        const auto batch=[&](bool remove) {
+            auto rows=PendingRemovalRows(state.rows,state.removed,remove);
+            if(rows.empty()) return;
+            {std::scoped_lock lock(removalMutex);removalState.actionRow=rows.front();
+             removalState.queuedRows.assign(rows.begin()+1,rows.end());removalState.removeWanted=remove;}
+            removalPending=true;command=35;
+        };
+        if(UI::Button(Label("Remove all equipment"))) batch(true);
+        UI::SameLine();
+        if(UI::Button(Label("Restore all equipment"))) batch(false);
+        UI::EndDisabled();
         UI::BeginChild("Removal choices",{0,-UI::GetFrameHeightWithSpacing()-UI::GetStyle()->ItemSpacing.y});
         if(!state.ready) UI::TextUnformatted(Tr("Loading equipment slots..."));
         else if(state.rows.empty()) UI::TextUnformatted(Tr("No removable equipment."));
@@ -39,7 +52,7 @@ void RenderEquipmentRemoval(bool compact=false) {
                 }
                 UI::PushID(static_cast<int>(n));
                 if(UI::Checkbox("##removeChoice",&removed)) {
-                    {std::scoped_lock lock(removalMutex);removalState.actionRow=n;removalState.removeWanted=removed;}
+                    {std::scoped_lock lock(removalMutex);removalState.actionRow=n;removalState.queuedRows.clear();removalState.removeWanted=removed;}
                     removalPending=true;command=35;
                 }
                 UI::SameLine();UI::TextWrapped("[%s] %s",slots.empty()?Tr("No biped slot"):slots.c_str(),row.name.c_str());

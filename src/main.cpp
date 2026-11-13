@@ -1,13 +1,22 @@
+#include "PointerPositionScope.h"
 #include "EquipmentRemoval.h"
 #include "AccessoryToggle.h"
 #include "ItemIdentity.h"
 #include "Transmog.h"
+#include "TransmogIdentity.h"
+#include <random>
+#include <tuple>
+#include "RandomTryOnNames.h"
+#include "EquipmentPluginCatalog.h"
+#include "TryOnCustomization.h"
 #include <d3d11.h>
 #include <wrl/client.h>
 #include "Capture.h"
 #include "PhotoUpdate.h"
 #include "ExternalTranslation.h"
 #include "TranslationKeys.h"
+#include "VariationGroups.h"
+#include "VariationStripLayout.h"
 #include <fstream>
 #include "PreviewLayout.h"
 #include "GalleryLayout.h"
@@ -43,7 +52,7 @@
 
 using namespace REL::literals;
 SKSEPluginInfo(
-    .Version = "2.0.1.2"_v,
+    .Version = "2.2.0.0"_v,
     .Name = "OutfitGallery",
     .Author = "Outfit Gallery contributors",
     // SKSE's final component is the store identifier: GOG is 1, not 0.
@@ -71,6 +80,7 @@ std::string startupTab=initialCamera.startupTab;
 std::atomic<float> distance{initialCamera.distance}, height{initialCamera.height}, orbit{initialCamera.orbit}, pitch{initialCamera.pitch}, fov{initialCamera.fov}, lateral{initialCamera.lateral}, elevation{initialCamera.elevation};
 bool showNames=true, showCounts=false;
 bool compactGallery{}, compactOrganizeRequested{};
+bool showEquipmentTools{true};
 // Manual and automatic player outfits share the per-save appearance mode.
 float uiZoom=1.f;
 bool addMissing{true}, showCameraSettings{}; std::atomic<bool> preferEnchanted{true}; std::string enchantNotice;
@@ -99,7 +109,7 @@ ULONGLONG settingsChangedAt{};
 const std::filesystem::path settingsFile="Data/SKSE/Plugins/OutfitGallery/StudioSettings.json";
 void SaveSettingsIfDue(bool force=false) {
     if (!force && (!settingsChangedAt || GetTickCount64()-settingsChangedAt<600)) return;
-    try { WriteStudioSettings({distance.load(),height.load(),orbit.load(),pitch.load(),fov.load(),gridColumns,showNames,showCounts,language,allowFreeCamera.load(),addMissing,lateral.load(),elevation.load(),partialSlots.load(),startupTab,detachedPreview.load(),previewRect,followerTargeting.load(),preferEnchanted.load(),portraitThumbnails,cleanupCompatibility.load(),allowCombatGallery.load(),compactGallery,reclaimRenamedGeneratedItems.load(),uiZoom,fullOutfitToggle.load(),upscalerCompatibility.load()},settingsFile); }
+    try { WriteStudioSettings({distance.load(),height.load(),orbit.load(),pitch.load(),fov.load(),gridColumns,showNames,showCounts,language,allowFreeCamera.load(),addMissing,lateral.load(),elevation.load(),partialSlots.load(),startupTab,detachedPreview.load(),previewRect,followerTargeting.load(),preferEnchanted.load(),portraitThumbnails,cleanupCompatibility.load(),allowCombatGallery.load(),compactGallery,reclaimRenamedGeneratedItems.load(),uiZoom,fullOutfitToggle.load(),upscalerCompatibility.load(),showEquipmentTools},settingsFile); }
     catch(const std::exception& e) { SKSE::log::error("Settings save: {}",e.what()); }
     settingsChangedAt=0;
 }
@@ -114,6 +124,8 @@ std::atomic<unsigned> padEdges{}, padHeld{};
 // Physical state also tracks the opening press while the gallery is closed.
 std::atomic<unsigned> physicalPadHeld{}, openingPadBlock{};
 std::atomic<unsigned> padResetSerial{};
+// Physical input determines pointer ownership; a recentered stationary cursor is not mouse input.
+std::atomic<bool> galleryPadPointer{};
 void ResetGalleryPadInput(const char*) {
     padHeld.exchange(0); padEdges.exchange(0);
     ++padResetSerial;
@@ -324,6 +336,7 @@ void Close() {
         }
         saved.valid = false;
     }
+    EndTransmogTryOn(RE::PlayerCharacter::GetSingleton());
     studioActor.reset(); studioFollower=false; studioActorID=0;
     Release();
 }
@@ -531,8 +544,14 @@ bool PlayerTransmogMode(){return autoAppearanceOnly.load();}
 bool PlayerTransmogAutoOwned(){return autoAppearanceOwned.load();}
 void RestorePlayerTransmogMode(bool mode,bool owned){autoAppearanceOnly=mode;autoAppearanceOwned=owned;}
 #include "EquipmentRemovalRuntime.inc"
+#include "RandomTryOn.inc"
 void Tick() {
     const unsigned requested = command.exchange(0);
+    if (requested && requested != kRandomTryOn && requested != kRerollTryOn && requested != kOpenTryOnCustom && requested != kChangeTryOnCustom &&
+        requested != kPrepareTryOnItems && requested != kAcquireTryOnItems && requested != 2 && requested != 3 && requested != 5 && requested != 6) {
+        if (EndTransmogTryOn(RE::PlayerCharacter::GetSingleton()))
+            SetStatus(language == 1 ? "試着前の外見に戻しました。" : "Restored the appearance from before try-on.");
+    }
     TickTransmogDiagnostic();
     for(auto id:TransmogAutoOwnedActors()) {
         auto* actor=RE::TESForm::LookupByID<RE::Actor>(id);
@@ -598,6 +617,13 @@ void Tick() {
         SKSE::log::info("OG-FOLLOWER studio closed: {}",targetReason);
         Close(); SetStatus(targetReason); return;
     }
+    if (!follower && randomPluginListRequested.exchange(false)) RefreshRandomTryOnPlugins(player);
+    if ((requested == kRandomTryOn || requested == kRerollTryOn) && !follower && !saveBusy && !verificationTicks && !photoRetakeActive)
+        RunRandomTryOn(player, requested == kRerollTryOn);
+    if (!follower) {
+        ProcessTryOnCustomization(requested, player);
+        ProcessTryOnInventory(requested, player);
+    }
     if(requested==30 && !saveBusy) {
         try {
             Preset p; {std::scoped_lock lock(presetsMutex); p=requestedPreset;}
@@ -628,11 +654,31 @@ void Tick() {
     }
     if (!photoRetakeActive && (requested == 3 || requested == 5 || requested == 6)) {
         try {
-            if(TransmogActive(subject->GetFormID())) throw std::runtime_error("Restore actual appearance before registering equipment.");
+            auto trial = requested == 3 ? GetTransmogTryOnPreset(subject.get()) : std::nullopt;
+            if(!trial && TransmogActive(subject->GetFormID())) throw std::runtime_error("Restore actual appearance before registering equipment.");
             const auto scope=requested==5?partialSlots.load():0;
             if(requested==5 && !scope) throw std::runtime_error("Select at least one slot.");
-            auto p = requested==6?SnapshotAccessories(subject.get(),true,true):SnapshotEquipment(subject.get(),scope,true,true);
-            { std::scoped_lock lock(presetsMutex); p.name = requestedName.empty() ? "Outfit " + std::to_string(presets.size()+1) : requestedName; stagedPreset = std::move(p); }
+            auto p = trial ? std::move(*trial) :
+                (requested==6?SnapshotAccessories(subject.get(),true,true):SnapshotEquipment(subject.get(),scope,true,true));
+            {
+                std::scoped_lock lock(presetsMutex);
+                if(!requestedName.empty()) p.name = requestedName;
+                else if(!trial) {
+                    // Match try-on registration: use an item name, preferring
+                    // the body piece for full outfits over inventory iteration order.
+                    const Item* named=nullptr;
+                    for(const auto& item:p.items) {
+                        if(item.name.empty()) continue;
+                        if(!named) named=&item;
+                        if(requested!=3) continue;
+                        auto* form=ResolveItem(item);
+                        const auto* armor=form?form->As<RE::TESObjectARMO>():nullptr;
+                        if(armor && (armor->GetSlotMask().underlying() & (1u<<2))) {named=&item;break;}
+                    }
+                    p.name=named?named->name:"Outfit "+std::to_string(presets.size()+1);
+                }
+                stagedPreset = std::move(p);
+            }
             captureRequested = true;
         } catch (const std::exception& e) { saveBusy = false; SetStatus(e.what()); }
     }
@@ -974,6 +1020,16 @@ void __stdcall RenderStudio() {
     ProcessCapturedHotkey();
     static char name[160]{};
     UpdatePadFrame();
+    if(framePadEdges || UI::IsKeyDown(UI::ImGuiKey_GamepadLStickUp) || UI::IsKeyDown(UI::ImGuiKey_GamepadLStickDown) ||
+       UI::IsKeyDown(UI::ImGuiKey_GamepadLStickLeft) || UI::IsKeyDown(UI::ImGuiKey_GamepadLStickRight)) galleryPadPointer=true;
+    // SMF shares its ImGui context. Suppress hover only during this callback and
+    // restore IO before another mod draws; do not warp the OS cursor or set global NoMouse.
+    const bool hideGalleryPointer=galleryPadPointer.load();
+    PointerPositionScope pointerPosition(*UI::GetIO(),hideGalleryPointer);
+    struct CursorScope {
+        bool hidden;
+        ~CursorScope() {if(hidden) UI::SetMouseCursor(UI::ImGuiMouseCursor_None);}
+    } cursorScope{hideGalleryPointer};
     if(UI::IsKeyPressed(UI::ImGuiKey_Escape,false)) GALLERY_DIAG("OG-OPEN-DIAG UI Escape");
     static unsigned openedSerial{};
 
@@ -1116,6 +1172,7 @@ void __stdcall RenderStudio() {
         UI::SetCursorPosX(UI::GetCursorPosX()+std::max(0.f,removeAvailable-removalWidth));
         RenderEquipmentRemoval(compactRemoval);
         }
+        if (showEquipmentTools && !autoPanel && !photoRetakeActive && !studioFollower) RenderRandomTryOn();
         std::string text, image;
         { std::scoped_lock lock(statusMutex); text = status; image = lastImage; }
         if(!text.empty() && !(photoRetakeActive && text=="Photo preview only. Not saved yet.") && text!="Adjust composition and press F9/Y to save." && text!="Save equipment with F9; click a photo to apply a preset.") UI::TextWrapped(Tr("%s"), StatusText(text).c_str());
@@ -1240,7 +1297,7 @@ void __stdcall RenderStudio() {
 void __stdcall RenderSettings() {
     ProcessCapturedHotkey();
     RenderHotkeys();
-    UI::TextUnformatted("Outfit Gallery 2.0.1");
+    UI::TextUnformatted("Outfit Gallery 2.2.0");
     UI::TextWrapped(Tr("Close this menu and press the configured hotkey (default F8) while standing in a safe open area."));
     UI::TextUnformatted(Tr("F9 in the studio saves a photo and equipment. Click a preset photo to apply."));
     UI::Text(Tr("SmoothCam API: %s / TDM API: %s"), smooth ? "ready" : "not available", tdm ? "ready" : "not available");
@@ -1251,10 +1308,13 @@ void __stdcall RenderSettings() {
 bool __stdcall Input(RE::InputEvent* event) {
 
     if (!event || !ready) return false;
+    if(const auto* mouse=event->AsMouseMoveEvent();mouse && (mouse->mouseInputX || mouse->mouseInputY)) galleryPadPointer=false;
     auto* button = event->AsButtonEvent();
     if (!button) return false;
     const auto device=button->GetDevice();
     const auto code=button->GetIDCode();
+    if(device==RE::INPUT_DEVICE::kMouse && button->IsPressed()) galleryPadPointer=false;
+    if(device==RE::INPUT_DEVICE::kGamepad && button->IsDown()) galleryPadPointer=true;
     const unsigned binding=bindingMode.load();
     if(binding && GetTickCount64()<=bindingDeadline && button->IsDown()) {
         if(device==RE::INPUT_DEVICE::kKeyboard && code==1) {bindingMode=0; return true;}
@@ -1303,6 +1363,7 @@ bool __stdcall Input(RE::InputEvent* event) {
     if(active && code==1 && organizerInputActive.load()) return false; // Let the organizer handle Escape without closing the studio.
     if ((code == hotkey && HotkeyChord::Matches(keyboardModifiers.load(),HeldKeyboardModifiers() & ~HotkeyChord::ModifierForKey(code))) || (active && code == 1)) {
         GALLERY_DIAG("OG-OPEN-DIAG keyboard-toggle code={} active={}",code,active.load());
+        if(!active) galleryPadPointer=false;
         command = active ? 2 : 1;
         // Closing must also work if the next UI render callback never arrives.
         QueueTick();
@@ -1344,7 +1405,7 @@ void Message(SKSE::MessagingInterface::Message* message) {
         try {
             if(std::filesystem::exists(settingsFile)) {
                 const auto s=ReadStudioSettings(settingsFile);
-                distance=s.distance; height=s.height; orbit=s.orbit; pitch=s.pitch; fov=s.fov; lateral=s.lateral; elevation=s.elevation; gridColumns=s.columns; showNames=s.showNames; showCounts=s.showCounts; language=s.language; allowFreeCamera=s.allowFreeCamera; addMissing=s.addMissing; partialSlots=s.headSlots; startupTab=s.startupTab; detachedPreview=s.detachedPreview; previewRect=s.previewRect; followerTargeting=s.followerTargeting; preferEnchanted=s.preferEnchanted; portraitThumbnails=s.portraitThumbnails; cleanupCompatibility=s.cleanupCompatibility; allowCombatGallery=s.allowCombatGallery; compactGallery=s.compactGallery; reclaimRenamedGeneratedItems=s.reclaimRenamedGeneratedItems; uiZoom=s.uiZoom; fullOutfitToggle=s.fullOutfitToggle; upscalerCompatibility=s.upscalerCompatibility;
+                distance=s.distance; height=s.height; orbit=s.orbit; pitch=s.pitch; fov=s.fov; lateral=s.lateral; elevation=s.elevation; gridColumns=s.columns; showNames=s.showNames; showCounts=s.showCounts; language=s.language; allowFreeCamera=s.allowFreeCamera; addMissing=s.addMissing; partialSlots=s.headSlots; startupTab=s.startupTab; detachedPreview=s.detachedPreview; previewRect=s.previewRect; followerTargeting=s.followerTargeting; preferEnchanted=s.preferEnchanted; portraitThumbnails=s.portraitThumbnails; cleanupCompatibility=s.cleanupCompatibility; allowCombatGallery=s.allowCombatGallery; compactGallery=s.compactGallery; reclaimRenamedGeneratedItems=s.reclaimRenamedGeneratedItems; uiZoom=s.uiZoom; fullOutfitToggle=s.fullOutfitToggle; upscalerCompatibility=s.upscalerCompatibility; showEquipmentTools=s.showEquipmentTools;
                 SKSE::log::info("Loaded persistent studio settings");
                 if(s.followerTargetingMigrationPending) {
                     try {
@@ -1408,7 +1469,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     spdlog::set_default_logger(logger);
     spdlog::set_level(spdlog::level::info);
     spdlog::flush_on(spdlog::level::info);
-    SKSE::log::info("OutfitGallery release=2.0.1; optional upscaler compatibility, Skyrim 1.7.104 transmog fix, TDM headtracking compatibility");
+    SKSE::log::info("OutfitGallery release=2.2.0; equipment acquisition, random try-on, customization and reroll; 2.0.1 compatibility fixes retained");
     const auto runtime=skse->RuntimeVersion();
     const auto supported=SKSEPlugin_Version.GetRuntimeCompatibility().GetCompatibleRuntimeVersions();
     if(std::none_of(supported.begin(),supported.end(),[&](const auto& version){return static_cast<REL::Version>(version)==runtime;})) {
@@ -1423,8 +1484,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     Gallery::saveHotkey = GetPrivateProfileIntW(L"Input", L"SaveHotkey", 67, ini.c_str());
     Gallery::captureKeys[0]=Gallery::saveHotkey;
     Gallery::gamepadHotkey = GetPrivateProfileIntW(L"Input", L"GamepadHotkey", 32, ini.c_str());
-    SKSE::log::info("OutfitGallery 2.0.1");
-    SKSE::log::info("OutfitGallery 2.0.1 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
+    SKSE::log::info("OutfitGallery 2.2.0");
+    SKSE::log::info("OutfitGallery 2.2.0 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
     return SKSE::GetMessagingInterface()->RegisterListener(Gallery::Message);
 }
 

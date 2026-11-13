@@ -20,7 +20,7 @@ void WriteAutoOutfitSettings(const AutoOutfitSettings&,const std::filesystem::pa
 struct InputSettings { unsigned keyboard{66}, gamepad{32}; float holdSeconds{0.8f}; std::array<unsigned,3> captureKeys{67,68,87}; std::array<unsigned,3> capturePads{32768,16384,64}; unsigned keyboardModifiers{}; unsigned autoKeyboard{}, autoModifiers{}, autoGamepad{}; float autoHoldSeconds{.8f}; };
 InputSettings ReadInputSettings(const std::filesystem::path&);
 void WriteInputSettings(const InputSettings&,const std::filesystem::path&);
-struct StudioSettings { float distance{217.130f}, height{67.619f}, orbit{-22.831f}, pitch{0.350f}, fov{60.060f}; int columns{3}; bool showNames{true}, showCounts{false}; int language{0}; bool allowFreeCamera{true}; bool addMissing{true}; float lateral{13.929f}, elevation{0.000f}; std::uint32_t headSlots{0x1803}; std::string startupTab{}; bool detachedPreview{}; std::array<float,4> previewRect{.54f,.08f,.45f,.84f}; bool followerTargeting{true}; bool preferEnchanted{true}; bool portraitThumbnails{}; bool cleanupCompatibility{}; bool allowCombatGallery{true}; bool compactGallery{}; bool reclaimRenamedGeneratedItems{}; float uiZoom{1.f}; bool fullOutfitToggle{}; bool upscalerCompatibility{}; bool followerTargetingMigrationPending{}; };
+struct StudioSettings { float distance{217.130f}, height{67.619f}, orbit{-22.831f}, pitch{0.350f}, fov{60.060f}; int columns{3}; bool showNames{true}, showCounts{false}; int language{0}; bool allowFreeCamera{true}; bool addMissing{true}; float lateral{13.929f}, elevation{0.000f}; std::uint32_t headSlots{0x1803}; std::string startupTab{}; bool detachedPreview{}; std::array<float,4> previewRect{.54f,.08f,.45f,.84f}; bool followerTargeting{true}; bool preferEnchanted{true}; bool portraitThumbnails{}; bool cleanupCompatibility{}; bool allowCombatGallery{true}; bool compactGallery{}; bool reclaimRenamedGeneratedItems{}; float uiZoom{1.f}; bool fullOutfitToggle{}; bool upscalerCompatibility{}; bool showEquipmentTools{true}; bool followerTargetingMigrationPending{}; };
 struct CameraBank {
     std::array<std::optional<StudioSettings>,7> slots;
     std::array<std::string,7> names;
@@ -31,9 +31,28 @@ struct CameraBank {
 };
 CameraBank ReadCameraBank(const std::filesystem::path&);
 void WriteCameraBank(const CameraBank&,const std::filesystem::path&);
-struct Category { std::string id, name; };
+struct Category { std::string id, name; bool accessories{}; };
 struct PresetLabel { std::string name; std::vector<std::string> categories; bool deleted{}; std::optional<std::uint32_t> exchangeSlots; std::vector<std::string> exchangeSlotless; std::optional<std::vector<std::string>> outfitItems; };
-struct Library { std::vector<Category> categories; std::map<std::string,PresetLabel> labels; std::vector<std::string> order; };
+struct Library { std::vector<Category> categories; std::map<std::string,PresetLabel> labels; std::vector<std::string> order; std::vector<std::vector<std::string>> variations; };
+// Display order only: preserve the saved category and photo membership order.
+inline std::vector<Category> CollectionTabs(const Library& library,bool legacy=false) {
+    std::vector<Category> tabs{{"","All"}};
+    for(const auto& c:library.categories) if(!c.accessories) tabs.push_back(c);
+    tabs.push_back({"#head","Head equipment"});
+    tabs.push_back({"#accessories","Accessories"});
+    for(const auto& c:library.categories) if(c.accessories) tabs.push_back(c);
+    if(legacy) tabs.push_back({"#legacy","Legacy parts"});
+    tabs.push_back({"#trash","Trash"});
+    return tabs;
+}
+inline std::string NextAccessoryTab(const std::string& current,const Library& library) {
+    bool next=current=="#accessories";
+    for(const auto& c:library.categories) if(c.accessories) {
+        if(next) return c.id;
+        if(c.id==current) next=true;
+    }
+    return "#accessories";
+}
 inline std::string ResolveStartupTab(const std::string& preferred,const Library& library) {
     if(preferred.empty() || preferred=="#head" || preferred=="#accessories" || preferred=="#trash") return preferred;
     bool hasFavorites=false;
@@ -91,6 +110,14 @@ inline bool CollectionFits(std::uint32_t scope,const std::string& category,bool 
     if(category=="#head") return SlotFits(scope,0x1803);
     if(category=="#legacy") return scope && !SlotFits(scope,0x1803);
     return scope==0;
+}
+// User-created accessory tabs classify existing accessory presets; they never
+// change a preset's equipment scope or capture destination.
+inline bool CollectionFits(std::uint32_t scope,const std::string& category,bool accessories,const Library& library) {
+    const auto tab=std::find_if(library.categories.begin(),library.categories.end(),
+        [&](const auto& c){return c.id==category;});
+    if(tab!=library.categories.end() && tab->accessories) return accessories;
+    return CollectionFits(scope,category,accessories);
 }
 // Full outfits expose the union of saved armor slots without changing their
 // original zero (full replacement) scope. Partial outfits retain their scope.

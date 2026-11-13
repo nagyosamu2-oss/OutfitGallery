@@ -1,6 +1,7 @@
 struct EquipmentRemovalState {
     std::vector<RemovalItem> rows;
     std::set<unsigned> removed;
+    std::vector<unsigned> queuedRows;
     std::string error;
     unsigned session{},actionRow{};
     std::uint32_t actor{};
@@ -20,6 +21,8 @@ void ProcessEquipmentRemoval(unsigned request,RE::Actor* actor) {
             state.appearance!=TargetAppearanceMode(actor->GetFormID()) || saveBusy || verificationTicks)
             throw std::runtime_error("Equipment changed. Refresh the list.");
         const auto current=state.appearance?SnapshotRemovalAppearance(actor):SnapshotRemovalEquipment(actor);
+        bool applyNext=false;
+        const bool wasWaiting=state.waiting;
         if(state.waiting) {
             const auto id=state.rows.at(state.actionRow).id;
             const bool present=std::any_of(current.begin(),current.end(),[&](const auto& r){return r.id==id;});
@@ -30,14 +33,18 @@ void ProcessEquipmentRemoval(unsigned request,RE::Actor* actor) {
                     if(state.maintained && !current.empty()) RememberFollowerOutfit(actor);
                     else RefreshFollowerAfterAccessoryRemoval(actor);
                 }
+                if(!state.queuedRows.empty()) {
+                    state.actionRow=state.queuedRows.front();state.queuedRows.erase(state.queuedRows.begin());applyNext=true;
+                }
                 SetStatus(state.removeWanted?"Equipment set removed.":"Equipment restored.");
             } else if(GetTickCount64()<state.deadline) return;
             else throw std::runtime_error("Equipment change could not be confirmed. Refresh the list.");
-        } else if(request==34) {
-            state.rows=current;state.removed.clear();state.error.clear();state.ready=true;
+        }
+        if(!state.waiting && request==34) {
+            state.rows=current;state.removed.clear();state.queuedRows.clear();state.error.clear();state.ready=true;
             state.maintained=IsFollowerOutfitMaintained(actor);
             if(state.appearance) BeginRemovalAppearance(actor);else BeginRemovalEquipment(actor);
-        } else {
+        } else if(!state.waiting && ((request==35 && !wasWaiting) || applyNext)) {
             if(!state.ready || !state.error.empty() || state.actionRow>=state.rows.size())
                 throw std::runtime_error("Equipment changed. Refresh the list.");
             // Other equipment must still match this session. No implicit replacement on restore.
@@ -54,7 +61,7 @@ void ProcessEquipmentRemoval(unsigned request,RE::Actor* actor) {
             AutoManualChange(actor);
             state.waiting=true;state.deadline=GetTickCount64()+750;equipmentLaneDue=state.deadline;
         }
-    } catch(const std::exception& e) {state.ready=true;state.waiting=false;state.error=e.what();}
+    } catch(const std::exception& e) {state.ready=true;state.waiting=false;state.queuedRows.clear();state.error=e.what();}
     const bool pending=state.waiting;
     {std::scoped_lock lock(removalMutex);removalState=std::move(state);}
     removalPending=pending;

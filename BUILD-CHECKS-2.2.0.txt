@@ -1,0 +1,17 @@
+Outfit Gallery 2.2.0 — release checks (2026-11-13)
+Windows x64, MSVC 19.44, CMake/Ninja Release, existing CommonLibSSE-NG 10.1.0 bundle.
+Fresh configure/build succeeded. 52/52 selected automated tests passed.
+TrashVirtualPathSafety excluded as in 2.1.0: the junction fixture is a known
+baseline environment limitation and is not counted as passing.
+SKSEPlugin_Load, SKSEPlugin_Query and SKSEPlugin_Version exports verified.
+Metadata 2.2.0.0. Accepted runtime list unchanged.
+Compared with user-tested variations-test12: native source differs only in
+main.cpp version/footer/log substitutions; every other src file, tests,
+third_party headers, translations and license files is byte-identical.
+CMake project version and user documentation updated for release.
+User reported in-game success through test12, including grouped drag.
+The final 2.2.0-numbered DLL has not yet been launched in-game; final smoke
+check is provided separately. No new all-runtime gameplay claim is made.
+Runtime/source ZIPs verified; runtime contains no user settings/photos/saves.
+Source excludes temporary test work folders. Published/trial files preserved.
+DLL SHA256: 59CEEF2B2B3EC6224D156F7D8C540BE69F28401D97AB28B32A3BC008F70BD808

@@ -4,9 +4,14 @@ struct OrganizerState {
     int action{},focus{},targetFocus{};
     unsigned revision{},presetsRevision{},opening{};
     Library draft;
+    Variations::Interaction variation;
+    UI::ImVec2 variationMin{},variationMax{};
     std::vector<Preset> snapshot;
     std::set<std::string> selection;
     std::string category,anchor,context,error,filter;
+    std::string representativeDragPhoto;
+    std::set<std::string> representativeDragSelection;
+    bool representativeDragging{};
     std::string registrationTab;
     unsigned registrationAdded{},registrationExisting{},registrationRemoved{};
     char search[160]{};
@@ -84,9 +89,7 @@ void RenderOrganizer() {
     bool close=!open,save=false;
     const bool conflict=organizer.revision!=libraryRevision || organizer.presetsRevision!=presetRevision.load();
     if(conflict) UI::TextWrapped("%s",Tr("Gallery changed while organizing. Cancel and reopen before saving."));
-    std::vector<Category> tabs{{"","All"}};
-    tabs.insert(tabs.end(),library.categories.begin(),library.categories.end());
-    tabs.push_back({"#head","Head equipment"});tabs.push_back({"#accessories","Accessories"});tabs.push_back({"#legacy","Legacy parts"});tabs.push_back({"#trash","Trash"});
+    const auto tabs=CollectionTabs(library,true);
     auto tabIt=std::find_if(tabs.begin(),tabs.end(),[&](const auto& c){return c.id==organizer.category;});
     int tab=tabIt==tabs.end()?0:static_cast<int>(tabIt-tabs.begin());
     UI::SetNextItemWidth(UI::GetContentRegionAvail().x*.20f);
@@ -108,16 +111,24 @@ void RenderOrganizer() {
     std::erase_if(cards,[&](const auto& p){
         auto it=organizer.draft.labels.find(p.photo);
         const bool deleted=it!=organizer.draft.labels.end() && it->second.deleted;
-        return deleted!=(organizer.category=="#trash") || !CollectionFits(p.slotMask,organizer.category,p.accessories) ||
+        return deleted!=(organizer.category=="#trash") || !CollectionFits(p.slotMask,organizer.category,p.accessories,organizer.draft) ||
             (!organizer.category.empty() && !organizer.category.starts_with("#") && (it==organizer.draft.labels.end() || std::find(it->second.categories.begin(),it->second.categories.end(),organizer.category)==it->second.categories.end())) ||
             (organizer.search[0] && p.name.find(organizer.search)==std::string::npos);
     });
     const auto filter=organizer.category+"|"+organizer.search;
     const bool reset=filter!=organizer.filter;
-    if(reset) {organizer.filter=filter;organizer.selection.clear();organizer.anchor.clear();organizer.destination=false;organizer.focus=0;organizer.registrationTab.clear();}
+    if(reset) {organizer.representativeDragPhoto.clear();organizer.representativeDragSelection.clear();organizer.representativeDragging=false;organizer.filter=filter;organizer.selection.clear();organizer.anchor.clear();organizer.destination=false;organizer.focus=0;organizer.registrationTab.clear();}
     if(missingCheckMode && !missingCheckPending && missingCheckError.empty())MissingPresetsFirst(cards,missingResults);
-    std::vector<std::string> view;for(const auto& p:cards)view.push_back(p.photo);
-    const bool padOK=!UI::GetIO()->WantTextInput && !UI::IsAnyItemActive() && !UI::IsPopupOpen("Organizer details");
+    const auto allCards=cards;
+    std::vector<std::string> view;for(const auto& p:allCards)view.push_back(p.photo);
+    const auto groups=(!missingCheckMode && organizer.category!="#trash")?Variations::Collapse(cards,organizer.draft):std::map<std::string,std::vector<Preset>>{};
+    if(!organizer.variation.Reconcile(groups) || reset) {
+        if(UI::BeginPopup("Organizer variations")){UI::CloseCurrentPopup();UI::EndPopup();}
+        organizer.variation={};
+    }
+    bool variationHover=false,variationAnchor=false,openVariation=false;
+    const auto now=GetTickCount64();
+    const bool padOK=!UI::IsPopupOpen("Organizer variations") && !UI::GetIO()->WantTextInput && !UI::IsAnyItemActive() && !UI::IsPopupOpen("Organizer details");
     auto pad=[&](auto key,bool repeat=false){return padOK && PadPressed(key,repeat);};
     const bool confirm=pad(UI::ImGuiKey_GamepadFaceDown);
     const bool left=pad(UI::ImGuiKey_GamepadDpadLeft,true)||pad(UI::ImGuiKey_GamepadLStickLeft,true);
@@ -141,7 +152,7 @@ void RenderOrganizer() {
     }
     organizer.focus=std::clamp(organizer.focus,0,std::max(0,static_cast<int>(cards.size())-1));
     if(pad(UI::ImGuiKey_GamepadL1)||pad(UI::ImGuiKey_GamepadR1)) organizer.category=tabs[(tab+(pad(UI::ImGuiKey_GamepadR1)?1:static_cast<int>(tabs.size())-1))%tabs.size()].id;
-    if(!UI::IsPopupOpen("Organizer details") && (pad(UI::ImGuiKey_GamepadFaceRight)||UI::IsKeyPressed(UI::ImGuiKey_Escape,false))) {
+    if(!UI::IsPopupOpen("Organizer details") && !UI::IsPopupOpen("Organizer variations") && (pad(UI::ImGuiKey_GamepadFaceRight)||UI::IsKeyPressed(UI::ImGuiKey_Escape,false))) {
         if(organizer.destination)organizer.destination=false;else close=true;
     }
     auto button=[&](const char* label,int action,bool enabled=true) {
@@ -201,9 +212,37 @@ void RenderOrganizer() {
     }
     if(namesChanged)SaveOrganizerNames();
 
+    const float variationButtonsWidth=UI::CalcTextSize(Tr("Group variations")).x+UI::CalcTextSize(Tr("Ungroup variations")).x+
+        UI::GetStyle()->FramePadding.x*4+UI::GetStyle()->ItemSpacing.x;
+    UI::SameLine();
+    const float variationRight=UI::GetWindowWidth()-UI::GetStyle()->WindowPadding.x-variationButtonsWidth;
+    UI::SetCursorPosX(std::max(UI::GetCursorPosX(),variationRight));
+    UI::BeginDisabled(conflict || !libraryWritable || organizer.category=="#trash" || missingCheckMode);
+    auto groupSelection=[&](const std::set<std::string>& targets) {
+        if(Variations::GroupAndClearSelection(organizer.draft,allCards,targets,organizer.selection)) {
+            organizer.anchor.clear();organizer.registrationTab.clear();
+        }
+    };
+    auto ungroupSelection=[&](const std::set<std::string>& targets) {
+        Variations::UngroupAndClearSelection(organizer.draft,targets,organizer.selection);
+        organizer.anchor.clear();organizer.registrationTab.clear();
+    };
+    UI::BeginDisabled(!Variations::CanGroup(allCards,organizer.selection));
+    if(UI::Button(Label("Group variations"))) groupSelection(organizer.selection);
+    UI::EndDisabled();
+    if(UI::IsItemHovered(UI::ImGuiHoveredFlags_AllowWhenDisabled)) UI::SetTooltip("%s",Tr("Select matching outfit types. The first photo represents the group."));
+    UI::SameLine();
+    bool groupedSelection=false;
+    for(const auto& group:organizer.draft.variations)for(const auto& photo:group)if(organizer.selection.contains(photo))groupedSelection=true;
+    UI::BeginDisabled(!groupedSelection);
+    if(UI::Button(Label("Ungroup variations"))) ungroupSelection(organizer.selection);
+    UI::EndDisabled();
+    if(UI::IsItemHovered(UI::ImGuiHoveredFlags_AllowWhenDisabled)) UI::SetTooltip("%s",Tr("Select matching outfit types. The first photo represents the group."));
+    UI::EndDisabled();
+
     // Registration edits the same draft as ordering/trash. Only Save commits it.
-    const auto registrationTargets=Organize::CategoryTargets(organizer.draft,cards,organizer.selection);
-    const bool canRegister=!conflict && libraryWritable && !registrationTargets.empty();
+    const auto outfitTargets=Organize::CategoryTargets(organizer.draft,allCards,organizer.selection);
+    const auto accessoryTargets=Organize::CategoryTargets(organizer.draft,allCards,organizer.selection,true);
     UI::AlignTextToFramePadding();UI::TextUnformatted(Tr("Register to"));UI::SameLine();
     const auto* stripStyle=UI::GetStyle();
     const auto targetWidth=[&](const Category& c){return std::max(UiPx(60.f),UI::CalcTextSize(CategoryTitle(c).c_str()).x+stripStyle->FramePadding.x*2);};
@@ -218,6 +257,8 @@ void RenderOrganizer() {
     for(std::size_t n=0;n<organizer.draft.categories.size();++n) {
         if(n)UI::SameLine();
         const auto& c=organizer.draft.categories[n];
+        const auto& registrationTargets=c.accessories?accessoryTargets:outfitTargets;
+        const bool canRegister=!conflict && libraryWritable && !registrationTargets.empty();
         const auto title=CategoryTitle(c);
         const bool focused=organizer.targetBar && organizer.targetFocus==static_cast<int>(n);
         UI::BeginDisabled(!canRegister);
@@ -249,7 +290,7 @@ void RenderOrganizer() {
         if(!dragging && UI::IsItemHovered(UI::ImGuiHoveredFlags_AllowWhenDisabled)) {
             if(conflict)UI::SetTooltip("%s",Tr("Gallery changed while organizing. Cancel and reopen before saving."));
             else if(!libraryWritable)UI::SetTooltip("%s",Tr("The gallery library is not writable."));
-            else if(registrationTargets.empty())UI::SetTooltip("%s",Tr("Select full outfits to register. Restore photos from Trash first."));
+            else if(registrationTargets.empty())UI::SetTooltip("%s",Tr(c.accessories?"Select accessory sets to register. Restore photos from Trash first.":"Select full outfits to register. Restore photos from Trash first."));
             else UI::SetTooltip(Tr("Drop or click to add %u selected outfits to this tab. Existing memberships are kept. Save and close to apply."),static_cast<unsigned>(registrationTargets.size()));
         }
     }
@@ -291,12 +332,52 @@ void RenderOrganizer() {
     struct PreviewRect {int index;UI::ImVec2 a,b;};
     std::vector<PreviewRect> previewRects;
     if(organizer.destination && !organizer.toolbar && !organizer.targetBar && !cards.empty() && !organizer.selection.contains(cards[organizer.focus].photo))previewTarget=cards[organizer.focus].photo;
-    bool details=false;
+    auto renderDetails=[&](const char* popupID) {
+    if(UI::BeginPopup(popupID)) {
+        const auto found=std::find_if(allCards.begin(),allCards.end(),[](const auto& p){return p.photo==organizer.context;});
+        if(found!=allCards.end())UI::TextWrapped("%s",found->name.c_str());
+        if(missingCheckMode && !missingCheckPending) {
+            auto it=missingResults.find(organizer.context);
+            if(it!=missingResults.end())for(const auto& item:it->second){UI::TextWrapped("%s",item.name.c_str());UI::TextWrapped("%s / %06X",item.plugin.c_str(),item.localID);}
+        }
+        const auto targets=Organize::TrashTargets(view,organizer.selection,organizer.context);
+        const std::set<std::string> contextSelection(targets.begin(),targets.end());
+        bool groupedContext=false;
+        for(const auto& group:organizer.draft.variations)for(const auto& photo:group)if(contextSelection.contains(photo))groupedContext=true;
+        UI::BeginDisabled(!canTrash || missingCheckMode || organizer.category=="#trash");
+        UI::BeginDisabled(!Variations::CanGroup(allCards,contextSelection));
+        if(UI::Button(Label("Group variations"))) {groupSelection(contextSelection);UI::CloseCurrentPopup();}
+        UI::EndDisabled();
+        UI::BeginDisabled(!groupedContext);
+        if(UI::Button(Label("Ungroup variations"))) {ungroupSelection(contextSelection);UI::CloseCurrentPopup();}
+        UI::EndDisabled();UI::EndDisabled();UI::Separator();
+        if(Organize::IsCategory(organizer.draft,organizer.category)) {
+            UI::BeginDisabled(!canTrash || targets.empty());
+            if(UI::Button((std::string(Tr("Remove from this tab"))+" ("+std::to_string(targets.size())+")##ContextUnregister").c_str())) {
+                categoryRemovals=targets;UI::CloseCurrentPopup();
+            }
+            UI::EndDisabled();
+            if(UI::IsItemHovered())UI::SetTooltip("%s",Tr("Removes only this tab's membership. Photos and other tabs are kept. Applied when saved."));
+            UI::Separator();
+        }
+        UI::BeginDisabled(!canTrash || targets.empty());
+        if(UI::Button((trashLabel(targets.size())+"##ContextTrash").c_str())) {
+            trashTargets=targets;UI::CloseCurrentPopup();
+        }
+        UI::EndDisabled();
+        UI::TextWrapped("%s",Tr("Trash changes are also applied only when saved."));UI::EndPopup();
+    }
+    };
+    bool details=false,variationDetails=false;
     auto choose=[&](const std::string& photo,bool range) {
         organizer.registrationTab.clear();
         if(organizer.destination && !missingCheckMode) {moveTarget=photo;return;}
-        if(range)Organize::SelectRange(organizer.selection,view,organizer.anchor,photo);
-        else {if(!organizer.selection.erase(photo))organizer.selection.insert(photo);organizer.anchor=photo;}
+        if(range) {
+            Organize::SelectRange(organizer.selection,view,organizer.anchor,photo);
+            for(const auto& [representative,choices]:groups)if(organizer.selection.contains(representative))
+                for(const auto& member:choices)organizer.selection.insert(member.photo);
+        }
+        else {Variations::ToggleSelection(organizer.selection,photo,groups);organizer.anchor=photo;}
     };
     if(!organizer.toolbar && !organizer.targetBar && confirm && !cards.empty())choose(cards[organizer.focus].photo,false);
     if(!organizer.toolbar && !organizer.targetBar && pad(UI::ImGuiKey_GamepadR3) && !cards.empty()){organizer.context=cards[organizer.focus].photo;details=true;}
@@ -324,6 +405,17 @@ void RenderOrganizer() {
         const bool clicked=texture?UI::ImageButton(("org"+p.photo).c_str(),texture,{w,h},uv0,uv1):UI::Button((std::string(Tr("Missing photo"))+"##org"+p.photo).c_str(),{w,h});
         if(selected)UI::PopStyleColor();
         const auto a=UI::GetItemRectMin(),b=UI::GetItemRectMax();auto* draw=UI::GetWindowDrawList();
+        if(const auto g=groups.find(p.photo);g!=groups.end()) {
+            const auto badge="+"+std::to_string(g->second.size()-1);
+            const float bw=UI::CalcTextSize(badge.c_str()).x+12.f,bh=UI::GetTextLineHeightWithSpacing()+4.f;
+            UI::ImDrawListManager::AddRectFilled(draw,{b.x-bw-5,b.y-bh-5},{b.x-5,b.y-5},0xEE202020,0,0);
+            UI::ImDrawListManager::AddText(draw,{b.x-bw+1,b.y-bh-3},0xFFFFFFFF,badge.c_str());
+            if(organizer.variation.photo==p.photo) {organizer.variationMin=a;organizer.variationMax=b;variationAnchor=true;}
+            if(UI::IsItemHovered() && organizer.variation.photo.empty() && !UI::IsMouseDown(0) && !UI::GetDragDropPayload() && !organizer.destination) {
+                variationHover=true;
+                if(organizer.variation.clock.Ready(p.photo,now)) {organizer.variation.photo=p.photo;organizer.variationMin=a;organizer.variationMax=b;variationAnchor=true;openVariation=true;}
+            }
+        }
         if(selected) {UI::ImDrawListManager::AddRect(draw,a,b,0xFF70E8FF,0,0,3.f);UI::ImDrawListManager::AddRectFilled(draw,{a.x+5,a.y+5},{a.x+21,a.y+21},0xFF70E8FF,0,0);}
         if(n==organizer.focus && !organizer.toolbar && !organizer.targetBar)UI::ImDrawListManager::AddRect(draw,{a.x+3,a.y+3},{b.x-3,b.y-3},0xFFE0E0E0,0,0,1.f);
         if(missingCheckMode && PresetHasMissingData(missingResults,p.photo)) {UI::ImDrawListManager::AddLine(draw,{b.x-22,a.y+7},{b.x-7,a.y+22},0xFF6060FF,3.f);UI::ImDrawListManager::AddLine(draw,{b.x-7,a.y+7},{b.x-22,a.y+22},0xFF6060FF,3.f);}
@@ -331,10 +423,24 @@ void RenderOrganizer() {
         if(organizer.destination && !selected && !conflict && !missingCheckMode &&
            (UI::IsItemHovered()))previewTarget=p.photo;
         if(UI::IsItemHovered() && !organizer.destination)UI::SetTooltip("%s",p.name.c_str());
-        if(clicked && !confirm && !UI::GetDragDropPayload()){organizer.focus=n;organizer.toolbar=false;organizer.targetBar=false;choose(p.photo,UI::GetIO()->KeyShift);}
-        if(UI::IsItemClicked(1)){organizer.context=p.photo;details=true;}
-        if(!conflict && UI::IsMouseDragging(0,24.f) && UI::BeginDragDropSource()) {
-            if(!selected){organizer.selection.clear();organizer.selection.insert(p.photo);organizer.registrationTab.clear();}
+        // A nonmodal popup blocks its parent widgets even where the source
+        // remains exposed. Permit only this source card's blocked selection click.
+        const bool sourceSelectionClick=organizer.variation.photo==p.photo && !organizer.variation.context &&
+            !UI::IsItemHovered() && UI::IsItemHovered(UI::ImGuiHoveredFlags_AllowWhenBlockedByPopup) && UI::IsMouseClicked(0);
+        // Popup-blocked parent clicks do not own ImGui's active widget ID.
+        // Remember this exposed source gesture without changing ordinary click selection.
+        if(sourceSelectionClick && !confirm && !conflict && !missingCheckMode &&
+           !organizer.destination && !UI::GetDragDropPayload()) {
+            organizer.representativeDragPhoto=p.photo;
+            organizer.representativeDragSelection=Variations::DragSelection(organizer.selection,p.photo,groups);
+        }
+        if((clicked || sourceSelectionClick) && !confirm && !UI::GetDragDropPayload()){organizer.focus=n;organizer.toolbar=false;organizer.targetBar=false;choose(p.photo,UI::GetIO()->KeyShift);}
+        if(UI::IsItemClicked(1)){
+            if(!organizer.selection.contains(p.photo)) {organizer.selection.clear();Variations::ToggleSelection(organizer.selection,p.photo,groups);}
+            organizer.context=p.photo;details=true;
+        }
+        if(!conflict && organizer.representativeDragPhoto.empty() && UI::IsMouseDragging(0,24.f) && UI::BeginDragDropSource()) {
+            organizer.selection=Variations::DragSelection(organizer.selection,p.photo,groups);organizer.registrationTab.clear();
             const int token=1;UI::SetDragDropPayload("OUTFIT_ORGANIZE",&token,sizeof(token));UI::Text(Tr("Selected: %u / Visible: %u"),static_cast<unsigned>(organizer.selection.size()),static_cast<unsigned>(cards.size()));UI::EndDragDropSource();
         }
         if(!missingCheckMode && !conflict && !organizer.selection.contains(p.photo) && UI::BeginDragDropTarget()) {
@@ -362,13 +468,13 @@ void RenderOrganizer() {
     // These are identities, not final screen slots vacated by the source.
     if(!previewTarget.empty() && canMove) {
         auto* draw=UI::GetWindowDrawList();int number=0;
-        std::map<int,int> placements;
+        std::map<std::string,int> placements;
         const auto target=std::find(view.begin(),view.end(),previewTarget);
         for(auto it=target;it!=view.end() && number<static_cast<int>(organizer.selection.size());++it)
-            if(!organizer.selection.contains(*it))placements[static_cast<int>(it-view.begin())]=++number;
+            if(!organizer.selection.contains(*it))placements[*it]=++number;
         for(const auto& rect:previewRects) {
             if(cards[rect.index].photo==previewTarget)UI::ImDrawListManager::AddLine(draw,{rect.a.x-3,rect.a.y},{rect.a.x-3,rect.b.y},0xFF70E8FF,4.f);
-            if(auto it=placements.find(rect.index);it!=placements.end()) {
+            if(auto it=placements.find(cards[rect.index].photo);it!=placements.end()) {
                 UI::ImDrawListManager::AddRectFilled(draw,rect.a,rect.b,0xAA606060,0,0);
                 UI::ImDrawListManager::AddRect(draw,rect.a,rect.b,0xFF70E8FF,0,0,2.f);
                 const auto label=std::to_string(it->second);
@@ -377,33 +483,110 @@ void RenderOrganizer() {
         }
     }
     UI::SetCursorPos({4,origin+rows*stepY});UI::Dummy({1,1});UI::EndChild();
+    if(!organizer.representativeDragPhoto.empty()) {
+        if(conflict || confirm || missingCheckMode || !groups.contains(organizer.representativeDragPhoto)) {
+            organizer.representativeDragPhoto.clear();organizer.representativeDragSelection.clear();organizer.representativeDragging=false;
+        } else {
+            if(UI::IsMouseDown(0) && UI::IsMouseDragging(0,24.f)) {
+                organizer.representativeDragging=true;
+                organizer.selection=organizer.representativeDragSelection;
+                organizer.registrationTab.clear();organizer.destination=false;
+            }
+            // Public external-source API avoids depending on private ImGui ActiveID fields.
+            // Continue offscreen and through release so existing photo/tab drop targets deliver.
+            if(organizer.representativeDragging && UI::BeginDragDropSource(UI::ImGuiDragDropFlags_SourceExtern)) {
+                const int token=1;UI::SetDragDropPayload("OUTFIT_ORGANIZE",&token,sizeof(token));
+                UI::Text(Tr("Selected: %u / Visible: %u"),static_cast<unsigned>(organizer.selection.size()),static_cast<unsigned>(cards.size()));
+                UI::EndDragDropSource();
+            }
+            if(!UI::IsMouseDown(0)) {
+                organizer.representativeDragPhoto.clear();organizer.representativeDragSelection.clear();organizer.representativeDragging=false;
+            }
+        }
+    }
+    if(organizer.variation.photo.empty() && !variationHover)organizer.variation.clock.candidate.clear();
+    if(!organizer.variation.photo.empty() && (!variationAnchor || details || UI::GetDragDropPayload())) {
+        if(UI::IsPopupOpen("Organizer variations")) {
+            if(UI::BeginPopup("Organizer variations")){UI::CloseCurrentPopup();UI::EndPopup();}
+        }
+        organizer.variation={};
+    }
+    if(openVariation)UI::OpenPopup("Organizer variations");
+    if(!organizer.variation.photo.empty()) {
+        const auto& choices=groups.at(organizer.variation.photo);
+        const auto* stripStyle=UI::GetStyle();
+        auto strip=Variations::MakeStripLayout(w,h,choices.size(),dims.width*.9f,dims.height*.9f,
+            stripStyle->WindowPadding.x,stripStyle->WindowPadding.y,stripStyle->FramePadding.x,stripStyle->FramePadding.y,
+            stripStyle->ItemSpacing.x,stripStyle->ItemSpacing.y,UI::GetTextLineHeight(),stripStyle->ScrollbarSize,stripStyle->WindowBorderSize);
+        const auto area=Variations::OrganizerStripArea(organizer.variationMin.y,strip.height,dims.height*.05f,dims.height*.95f,
+            std::max(UiPx(32.f),UI::GetTextLineHeightWithSpacing()+UiPx(8.f)),UiPx(6.f));
+        if(area.height<strip.height)
+            strip=Variations::MakeStripLayout(w,h,choices.size(),dims.width*.9f,area.height,
+                stripStyle->WindowPadding.x,stripStyle->WindowPadding.y,stripStyle->FramePadding.x,stripStyle->FramePadding.y,
+                stripStyle->ItemSpacing.x,stripStyle->ItemSpacing.y,UI::GetTextLineHeight(),stripStyle->ScrollbarSize,stripStyle->WindowBorderSize);
+        const float tw=strip.imageWidth,th=strip.imageHeight,width=strip.width,height=strip.height;
+        const float x=std::clamp((organizer.variationMin.x+organizer.variationMax.x-width)*.5f,dims.width*.03f,dims.width*.97f-width);
+        const float y=area.top;
+        UI::SetNextWindowPos({x,y});UI::SetNextWindowSize({width,height});
+        if(UI::BeginPopup("Organizer variations",UI::ImGuiWindowFlags_NoSavedSettings|UI::ImGuiWindowFlags_NoMove|UI::ImGuiWindowFlags_NoScrollbar|UI::ImGuiWindowFlags_NoScrollWithMouse|UI::ImGuiWindowFlags_NoNavInputs)) {
+            // Paint only the existing heading row, preserving thumbnail geometry and input.
+            const auto headingPos=UI::GetCursorScreenPos();
+            const auto headingWindow=UI::GetWindowPos();
+            UI::ImDrawListManager::AddRectFilled(UI::GetWindowDrawList(),headingPos,
+                {headingWindow.x+UI::GetWindowWidth()-UI::GetStyle()->WindowPadding.x,
+                 headingPos.y+UI::GetTextLineHeight()},0xFF4D3D2C,0,0);
+            UI::TextUnformatted(Tr("Outfit variations"));
+            UI::SetNextWindowContentSize({strip.contentWidth,strip.contentHeight});
+            UI::PushStyleVar(UI::ImGuiStyleVar_WindowPadding,{0,0});
+            UI::BeginChild(("Organizer variation photos##"+organizer.variation.photo).c_str(),{0,0},0,UI::ImGuiWindowFlags_HorizontalScrollbar|UI::ImGuiWindowFlags_NoScrollWithMouse|UI::ImGuiWindowFlags_NoNavInputs);
+            if(!organizer.variation.context && UI::IsWindowHovered(UI::ImGuiHoveredFlags_RootAndChildWindows)) {
+                const auto* wheelIO=UI::GetIO();
+                if(wheelIO->MouseWheel!=0.f || wheelIO->MouseWheelH!=0.f)
+                    UI::SetScrollX(Variations::WheelScroll(UI::GetScrollX(),UI::GetScrollMaxX(),strip.stride,wheelIO->MouseWheel,wheelIO->MouseWheelH));
+            }
+            const auto initial=UI::GetCursorPos();const float stride=strip.stride;
+            const auto first=static_cast<std::size_t>(std::max(0.f,std::floor(UI::GetScrollX()/stride)-1));
+            const auto last=std::min(choices.size(),first+static_cast<std::size_t>(width/stride)+3);
+            for(std::size_t i=first;i<last;++i) {
+                const auto& p=choices[i];UI::SetCursorPos({initial.x+i*stride,initial.y});UI::BeginGroup();
+                const auto path=(std::filesystem::path("Data/SKSE/Plugins/OutfitGallery/Captures")/p.photo).generic_string();visible.push_back(path);
+                const auto texture=LoadPortraitView(path);const auto id="orgvar"+p.photo;
+                UI::ImVec2 uv0{0,0},uv1{1,1};
+                if(texture) {
+                    Microsoft::WRL::ComPtr<ID3D11Resource> resource;
+                    static_cast<ID3D11ShaderResourceView*>(texture)->GetResource(resource.GetAddressOf());
+                    Microsoft::WRL::ComPtr<ID3D11Texture2D> image;
+                    if(resource && SUCCEEDED(resource.As(&image))) {
+                        D3D11_TEXTURE2D_DESC desc{};image->GetDesc(&desc);
+                        if(desc.Width && desc.Height) {
+                            const float aspect=static_cast<float>(desc.Width)/desc.Height,target=tw/th;
+                            if(aspect>target) {const float fraction=target/aspect;uv0.x=(1-fraction)*.5f;uv1.x=1-uv0.x;}
+                            else {const float fraction=aspect/target;uv0.y=(1-fraction)*.5f;uv1.y=1-uv0.y;}
+                        }
+                    }
+                }
+                const bool clicked=texture?UI::ImageButton(id.c_str(),texture,{tw,th},uv0,uv1):UI::Button(id.c_str(),{strip.cardWidth,strip.cardHeight});
+                if(organizer.selection.contains(p.photo))UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF70E8FF,0,0,3.f);
+                if(UI::IsItemHovered())UI::SetTooltip("%s",p.name.c_str());
+                if(clicked){if(!organizer.selection.erase(p.photo))organizer.selection.insert(p.photo);}
+                if(UI::IsItemClicked(1)){organizer.context=p.photo;variationDetails=true;organizer.variation.context=true;}
+                UI::Text("%u / %u",static_cast<unsigned>(i+1),static_cast<unsigned>(choices.size()));UI::EndGroup();
+            }
+            UI::EndChild();UI::PopStyleVar();
+            if(variationDetails)UI::OpenPopup("Organizer variation actions");
+            const bool variationContext=UI::IsPopupOpen("Organizer variation actions");
+            if(organizer.variation.context && !variationContext) {organizer.variation.context=false;organizer.variation.clock.outside=0;}
+            renderDetails("Organizer variation actions");
+            const auto mouse=UI::GetIO()->MousePos;
+            const auto in=[&](UI::ImVec2 a,UI::ImVec2 b){return mouse.x>=a.x-6&&mouse.x<=b.x+6&&mouse.y>=a.y-6&&mouse.y<=b.y+6;};
+            if(details || (!variationContext && organizer.variation.clock.Leave(in({x,y},{x+width,y+height})||in(organizer.variationMin,organizer.variationMax),now))) {UI::CloseCurrentPopup();organizer.variation={};}
+            UI::EndPopup();
+        } else if(!UI::IsPopupOpen("Organizer variations"))organizer.variation={};
+    }
     if(!moveTarget.empty() && canMove) {moveSelection(moveTarget);organizer.destination=false;}
     for(const auto& path:organizer.loaded)if(std::find(visible.begin(),visible.end(),path)==visible.end())DisposePortraitView(path);organizer.loaded=std::move(visible);
     if(details)UI::OpenPopup("Organizer details");
-    if(UI::BeginPopup("Organizer details")) {
-        const auto found=std::find_if(cards.begin(),cards.end(),[](const auto& p){return p.photo==organizer.context;});
-        if(found!=cards.end())UI::TextWrapped("%s",found->name.c_str());
-        if(missingCheckMode && !missingCheckPending) {
-            auto it=missingResults.find(organizer.context);
-            if(it!=missingResults.end())for(const auto& item:it->second){UI::TextWrapped("%s",item.name.c_str());UI::TextWrapped("%s / %06X",item.plugin.c_str(),item.localID);}
-        }
-        const auto targets=Organize::TrashTargets(view,organizer.selection,organizer.context);
-        if(Organize::IsCategory(organizer.draft,organizer.category)) {
-            UI::BeginDisabled(!canTrash || targets.empty());
-            if(UI::Button((std::string(Tr("Remove from this tab"))+" ("+std::to_string(targets.size())+")##ContextUnregister").c_str())) {
-                categoryRemovals=targets;UI::CloseCurrentPopup();
-            }
-            UI::EndDisabled();
-            if(UI::IsItemHovered())UI::SetTooltip("%s",Tr("Removes only this tab's membership. Photos and other tabs are kept. Applied when saved."));
-            UI::Separator();
-        }
-        UI::BeginDisabled(!canTrash || targets.empty());
-        if(UI::Button((trashLabel(targets.size())+"##ContextTrash").c_str())) {
-            trashTargets=targets;UI::CloseCurrentPopup();
-        }
-        UI::EndDisabled();
-        UI::TextWrapped("%s",Tr("Trash changes are also applied only when saved."));UI::EndPopup();
-    }
+    renderDetails("Organizer details");
     if(!categoryRemovals.empty() && canTrash) {
         const auto removed=Organize::RemoveFromCategory(organizer.draft,categoryRemovals,organizer.category);
         if(removed) {

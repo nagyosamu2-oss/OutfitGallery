@@ -1,6 +1,50 @@
-﻿# Outfit Gallery 2.0.1
+# Outfit Gallery 2.2.0
+
+## Changes in 2.2.0
+- Equipment plugins: include accessory-only plugins; consolidate entries with identical acquisition sets while retaining patches with different equipment. Hidden names remain searchable aliases.
+- Create accessory-only tabs, placed beside the built-in Accessories tab. R2 cycles through accessory tabs. Newly registered accessories still enter the built-in tab first.
+- Group outfit variations under a representative photo. Hover to expand, choose a variation, and scroll horizontally with the mouse wheel or controller.
+- Organize groups in the organizer: group selected presets, detach only selected members, and drag the representative to move the entire group. Selection clears after grouping or detaching.
+- Generate a name from registered equipment when the registration name is blank. Explicit names and existing presets are preserved.
+- Suspend mouse hover/cursor during controller use; resume on mouse input, preventing stationary-cursor tooltips and accidental variation expansion.
+- Add Remove all equipment / Restore all equipment to the equipment-removal window.
+
+## Variation groups and accessory tabs
+Create an accessory tab in Options using Create tab. It accepts accessory presets, not full outfits; grouping does not change which slots a preset equips. New accessory registrations remain in the built-in Accessories tab; assign them to custom tabs afterward.
+
+In Organize gallery, select matching variations and choose Group variations (also available on right-click). The leading photo represents the group. Save and close commits organizer changes; Cancel discards them. A representative has a +count badge. Hover for about 0.25 seconds to expand; leaving the source and strip for about 0.1 seconds closes it. Controller users can open with A, navigate left/right, and close with B or up/down. Right-click actions keep the strip visible. Overflow uses the available gallery width and horizontal scrolling.
+
+In the organizer, the representative selects the whole visible group; individual expanded photos select independently. Detach removes only selected members. Grab the exposed top of the original representative to drag the group while expanded. Grouping is manual, for 2–100 compatible presets of the same type/slot scope. Search and tabs show only matching members. Grouping does not delete the original photos or merge equipment data.
+
+Blank full-outfit registration names prefer the body item; other registrations use the first named registered item. Remove all / Restore all acts on the current removal-window list with verified sequential operations. Closing keeps the current state; refreshing resets its restoration list. Removing clothes can expose skin.
+
+## Updating / 更新
+Exit Skyrim and install the complete 2.2.0 archive. Disable earlier trial DLL overrides, including variations-test12, accessory-tabs and equipment-list trials. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up Library.json before updating; saving with older releases can discard new tab/group metadata. No new game or preset re-registration is required. Existing external translations still work; untranslated new keys fall back to English.
+
+Skyrimを終了し、完全版2.2.0を導入してください。test12などの試作DLL・旧差し替えパッチを無効にし、写真・プリセット・Library.json・設定・カスタムINI・対の.ess/.skseは保持してください。更新前にLibrary.jsonをバックアップしてください。旧版で保存すると追加タブ・差分の情報が失われる場合があります。ニューゲーム・再登録は不要です。外部翻訳の新規未翻訳項目は英語になります。
+
+Supported runtimes and the optional upscaler compatibility default (OFF) are unchanged. This release does not claim new testing on every supported runtime. GOG 1.6.1179 remains untested.
+
 
 A photo-based outfit gallery with normal equipment changes and appearance-only transmog for the player and followers.
+
+## Changes in 2.1.0
+- Added Equipment & random try-on for the player: discover compatible armor from installed plugins without an external item menu.
+- Filter plugin names (including UBE patch names), select a plugin from the newest-file-first list, and draw a matching outfit.
+- Reroll within the displayed body equipment's plugin, including outfits applied from saved presets.
+- Customize individual parts, swap slot conflicts, and remove/re-add parts immediately while keeping the character preview visible.
+- Acquire one of each playable armor item defined in the selected plugin, after reviewing a confirmation list.
+- Show/hide the equipment tools with the top-bar Equipment button. The choice is saved; default ON.
+- Retains the normal outfit, follower, transmog and compatibility features of 2.0.1.
+
+## Equipment acquisition and random try-on
+These tools are player-only. Open Equipment & random try-on below the registration buttons. Enter part of a plugin filename or select an equipment plugin. The list uses file creation timestamps visible through the game's Data directory; it approximates recent installation and is not an MO2 installation-history database. A winning UBE patch name can match a base plugin's equipment. This is a filename filter, not an automatic body-type guarantee.
+
+Draw and try on changes appearance only, using the transmog system; actual equipment and stats stay unchanged. Reroll uses the currently displayed body item's source plugin, irrespective of the filter. End try-on or close Gallery to restore the appearance from before the trial. Save try-on preset to keep a combination and its photo for later. Closing the customization window keeps the trial; its reset button restores the combination from when that window was opened.
+
+Matching uses outfit records, shared names, color/number variants and non-overlapping equipment slots. Fill empty slots relaxes the name matching within the same plugin. Matching is heuristic: incomplete sets, unintended combinations, clipping or exposed skin are possible. Customize the parts before saving. Items without a compatible race/sex model are not offered for try-on; body equipment must use slot 32. The number and order of random results are not guaranteed, and reroll can repeat when alternatives are limited.
+
+Acquire plugin equipment is separate from try-on. The confirmation list contains named, playable armor defined in or currently overridden by the selected plugin, including color variants and already-owned items; each is added once per confirmation. Weapons are excluded. Acquisition is not race/body filtered and a base-plugin selection does not automatically acquire all items newly defined in a separate patch. It changes the real player inventory and is not undone by End try-on. Closing Gallery during a large acquisition can leave the items already processed in inventory.
 
 ## Changes in 2.0.1
 - Added Upscaler compatibility mode, OFF by default. Enable it in Options if upscaling makes Gallery text blurry or enlarged, then close and reopen Gallery. The choice is saved across game restarts.
@@ -16,7 +60,7 @@ Development testing includes Steam 1.5.97 and 1.6.1170, plus the 1.7.104 transmo
 
 ## Install or update
 Close Skyrim and install this complete archive with your mod manager. It contains the DLL and default INI; no ESP or Papyrus scripts are required.
-Keep generated Data/SKSE/Plugins/OutfitGallery data: photos, presets and JSON settings. Preserve a customized OutfitGallery.ini. With MO2, check the existing mod folder, Overwrite and any output mod before replacing files. Disable older trial DLL overrides and the standalone 1.7.104 Transmog Fix so the 2.0.1 DLL takes priority. Hotkeys.json takes priority over INI hotkeys. A new game or preset re-registration is not required.
+Keep generated Data/SKSE/Plugins/OutfitGallery data: photos, presets and JSON settings. Preserve a customized OutfitGallery.ini. With MO2, check the existing mod folder, Overwrite and any output mod before replacing files. Disable older trial DLL overrides and the standalone 1.7.104 Transmog Fix so the 2.2.0 DLL takes priority. Hotkeys.json takes priority over INI hotkeys. A new game or preset re-registration is not required.
 The first load of legacy settings enables follower targeting once. A later explicit OFF is preserved. This migration does not enable automatic outfits.
 Keep .ess and .skse together. To downgrade, restore pre-update user data and saves as well as the previous DLL: older versions do not understand all newer preset, library and appearance data.
 

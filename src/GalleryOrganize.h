@@ -5,14 +5,14 @@
 #include <vector>
 #include "Presets.h"
 namespace Gallery::Organize {
-// Match ordinary gallery tab membership: visible, selected full outfits only.
+// Match the destination tab type without changing the selected preset's scope.
 // Return identities so registering never changes the selection or photo order.
 inline std::vector<std::string> CategoryTargets(const Library& draft,
-        const std::vector<Preset>& visible,const std::set<std::string>& selected) {
+        const std::vector<Preset>& visible,const std::set<std::string>& selected,bool accessories=false) {
     std::vector<std::string> targets;
     std::set<std::string> seen;
     for(const auto& preset:visible) {
-        if(preset.slotMask || preset.accessories || !selected.contains(preset.photo)) continue;
+        if(preset.accessories!=accessories || (!accessories && preset.slotMask) || !selected.contains(preset.photo)) continue;
         const auto label=draft.labels.find(preset.photo);
         if(label!=draft.labels.end() && label->second.deleted) continue;
         if(seen.insert(preset.photo).second) targets.push_back(preset.photo);

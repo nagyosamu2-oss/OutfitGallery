@@ -30,3 +30,6 @@ References:
 
 JSON persistence uses nlohmann/json (MIT); notice: LICENSES/nlohmann-json.txt.
 
+
+## 2.1.0 equipment tools
+Random try-on, part customization, inventory acquisition, name matching and their tests are project code produced with substantial AI assistance. The archive contains no outfit meshes, textures, plugin records, generated user photos, or third-party item-menu implementation.

@@ -176,6 +176,16 @@ int main() {
         if(ResolveStartupTab("deleted-category",openingLibrary)!="") throw std::runtime_error("All fallback failed");
         {std::ofstream oldSettings(folder/"old-opening.json"); oldSettings << R"({"schema":1,"distance":220,"height":65,"orbit":0,"pitch":0,"fov":60})";}
         if(StudioSettings{}.showCounts || ReadStudioSettings(folder/"old-opening.json").showCounts) throw std::runtime_error("Item counts must default OFF");
+        if(!StudioSettings{}.showEquipmentTools || !ReadStudioSettings(folder/"old-opening.json").showEquipmentTools)
+            throw std::runtime_error("Equipment tools must default ON for new and existing settings");
+        for(bool shown : {false,true}) {
+            auto tools=ReadStudioSettings(folder/"old-opening.json");
+            tools.showEquipmentTools=shown;
+            WriteStudioSettings(tools,folder/"equipment-tools.json");
+            const auto loaded=ReadStudioSettings(folder/"equipment-tools.json");
+            if(loaded.showEquipmentTools!=shown || loaded.distance!=tools.distance || loaded.fov!=tools.fov)
+                throw std::runtime_error("Equipment tools preference did not round trip");
+        }
         auto explicitCounts=ReadStudioSettings(folder/"old-opening.json");explicitCounts.showCounts=true;
         WriteStudioSettings(explicitCounts,folder/"explicit-counts.json");
         if(!ReadStudioSettings(folder/"explicit-counts.json").showCounts) throw std::runtime_error("Explicit item count preference lost");

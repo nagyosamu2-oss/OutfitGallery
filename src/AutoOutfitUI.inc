@@ -111,7 +111,10 @@ void RenderGalleryTitle(bool& opened) {
     const char* title=effectiveMode?(language==1?"Outfit Gallery | 重ね着":"Outfit Gallery | Transmog"):"Outfit Gallery";
     const char* normalLabel=language==1?"通常着替え":"Equip";
     const char* transmogLabel=language==1?"重ね着":"Transmog";
-    const float modeWidth=UI::CalcTextSize(normalLabel).x+UI::CalcTextSize(transmogLabel).x+UI::GetStyle()->FramePadding.x*4.f+gap;
+    const char* toolsLabel=EquipmentText("装備取得", "Equipment");
+    const float toolsGap=std::max(gap*3.f,UI::GetFontSize()*1.2f);
+    const float toolsWidth=studioFollower?0.f:UI::CalcTextSize(toolsLabel).x+UI::GetStyle()->FramePadding.x*2.f+toolsGap;
+    const float modeWidth=UI::CalcTextSize(normalLabel).x+UI::CalcTextSize(transmogLabel).x+UI::GetStyle()->FramePadding.x*4.f+gap+toolsWidth;
     const float controlsWidth=buttonWidth+followerWidth+closeWidth+gap*2.f;
     const float titleInset=effectiveMode?std::max(2.f,closeWidth*.065f)+UI::GetStyle()->ItemInnerSpacing.x:0.f;
     const float titleWidth=UI::CalcTextSize(title).x+titleInset;
@@ -143,6 +146,18 @@ void RenderGalleryTitle(bool& opened) {
         if(UI::IsItemHovered()) {
             if(!TransmogAvailable()) UI::SetTooltip("%s",TransmogUnavailableReason(language==1).c_str());
             else UI::SetTooltip("%s",language==1?"手動・自動とも見た目だけ変更します。実際の装備と性能は変わりません。プレイヤー・フォロワー対応・作業台用は対象外。":"Manual and automatic outfits change appearance only. Equipment and stats stay unchanged. Player and followers supported; crafting outfits excluded.");
+        }
+        if(!studioFollower) {
+            UI::SameLine(0.f,toolsGap);
+            const bool toolsShown=showEquipmentTools;
+            if(toolsShown) PushSelectedOutfitModeColors();
+            if(UI::Button(toolsLabel)) {
+                showEquipmentTools=!showEquipmentTools;
+                if(!showEquipmentTools) tryOnCustomVisible=false;
+                SaveSettingsIfDue(true);
+            }
+            if(toolsShown) UI::PopStyleColor(3);
+            if(UI::IsItemHovered()) UI::SetTooltip("%s",EquipmentText("装備取得・おまかせ試着の表示を切り替えます。試着中の装備は維持します。", "Show or hide equipment acquisition and random try-on. Keeps the current try-on outfit."));
         }
         UI::EndDisabled();
     };

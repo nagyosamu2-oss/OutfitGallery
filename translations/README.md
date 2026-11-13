@@ -38,3 +38,5 @@ characters missing from that font require suitable framework font configuration.
 You are welcome to distribute your Translation.json as a separate translation package.
 
 Translation packages should require the main Outfit Gallery mod. Distribute the translation file and any separately permitted font configuration; rebuilding or bundling the plugin DLL is unnecessary. Compare the latest template for new keys after updates.
+
+Version 2.1.0 adds equipment acquisition, random try-on, reroll and customization labels/messages to the template. Keep its visible keys only; stable ImGui IDs are appended by the plugin.

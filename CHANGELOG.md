@@ -1,4 +1,42 @@
-﻿# Outfit Gallery 2.0.1
+# Outfit Gallery 2.2.0
+
+## Changes in 2.2.0
+- Equipment plugins: include accessory-only plugins; consolidate entries with identical acquisition sets while retaining patches with different equipment. Hidden names remain searchable aliases.
+- Create accessory-only tabs, placed beside the built-in Accessories tab. R2 cycles through accessory tabs. Newly registered accessories still enter the built-in tab first.
+- Group outfit variations under a representative photo. Hover to expand, choose a variation, and scroll horizontally with the mouse wheel or controller.
+- Organize groups in the organizer: group selected presets, detach only selected members, and drag the representative to move the entire group. Selection clears after grouping or detaching.
+- Generate a name from registered equipment when the registration name is blank. Explicit names and existing presets are preserved.
+- Suspend mouse hover/cursor during controller use; resume on mouse input, preventing stationary-cursor tooltips and accidental variation expansion.
+- Add Remove all equipment / Restore all equipment to the equipment-removal window.
+
+## 2.2.0の更新内容
+- アクセサリのみの装備プラグインも一覧に表示。取得対象が同じプラグインは重複を整理し、装備内容が異なるパッチは個別に残します。非表示になった名前でも検索できます。
+- 小物専用タブを作成できるようにしました。標準の小物タブの右に並び、R2で順に切り替えられます。新しく登録した小物は従来どおり標準の小物タブに入ります。
+- 色違いなどの差分を代表写真1枚にまとめ、カーソルを合わせて横方向に展開できます。ホイール・パッドで横スクロールできます。
+- 整理画面で差分をまとめる、選んだ差分だけ解除する、代表写真からグループ全体をドラッグして並べ替える操作に対応。まとめ・解除後は選択を自動解除します。
+- 登録名が空欄の場合、登録装備から自動命名します。入力した名前と既存のセット名は変更しません。
+- パッド操作中はマウス位置による名前表示・差分展開を抑止。マウス入力でマウス操作へ戻ります。
+- 装備解除ウインドウに「すべて外す」「すべて戻す」を追加しました。
+
+# Outfit Gallery 2.1.0
+
+## Changes in 2.1.0
+- Added Equipment & random try-on for the player: discover compatible armor from installed plugins without an external item menu.
+- Filter plugin names (including UBE patch names), select a plugin from the newest-file-first list, and draw a matching outfit.
+- Reroll within the displayed body equipment's plugin, including outfits applied from saved presets.
+- Customize individual parts, swap slot conflicts, and remove/re-add parts immediately while keeping the character preview visible.
+- Acquire one of each playable armor item defined in the selected plugin, after reviewing a confirmation list.
+- Show/hide the equipment tools with the top-bar Equipment button. The choice is saved; default ON.
+- Retains the normal outfit, follower, transmog and compatibility features of 2.0.1.
+
+## 2.1.0の更新内容
+- プレイヤー向け「装備取得・おまかせ試着」を追加。外部のアイテム取得ツールを経由せず装備を探して試着できます。
+- プラグイン名の検索・一覧選択、同じプラグイン内の再抽選、パーツの交換・解除・復元、一括取得に対応しました。
+- 上部の「装備取得」で欄全体を表示・非表示にできます。初期ONで、選択は次回起動にも引き継ぎます。
+- 2.0.1の通常着替え・フォロワー・重ね着・各種互換修正を引き継いでいます。
+
+
+# Outfit Gallery 2.0.1
 
 ## English
 - Added Upscaler compatibility mode, OFF by default. Enable it in Options if upscaling makes Gallery text blurry or enlarged, then close and reopen Gallery. The choice is saved across game restarts.

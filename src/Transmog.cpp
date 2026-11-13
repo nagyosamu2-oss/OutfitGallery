@@ -30,6 +30,8 @@ struct Look {
     std::uint32_t scope{~0u}; // cumulative controlled slots; full outfit owns all clothing
     RE::TESRace* race{};
     bool female{};
+    bool tryOn{};
+    std::shared_ptr<const Look> beforeTryOn;
 };
 struct ActorLook {
     std::uint32_t id{};
@@ -445,7 +447,7 @@ void TickTransmogDiagnostic() {
     DumpBiped(player->GetBiped1(true).get(),diagnosticSamples==2?"firstperson-settle-1.5s":"firstperson-settle-4s");
     --diagnosticSamples;diagnosticDue=GetTickCount64()+2500;
 }
-void ApplyTransmog(const Preset& preset,RE::Actor* player) {
+void ApplyTransmog(const Preset& preset,RE::Actor* player,bool tryOn) {
     if(!installed) throw std::runtime_error(TransmogUnavailableReason(false));
     const bool partial=preset.slotMask || preset.accessories;
     auto next=std::make_shared<Look>();
@@ -520,11 +522,16 @@ void ApplyTransmog(const Preset& preset,RE::Actor* player) {
         next->slots|=slots; next->armor.push_back(armor);
         visualItems.push_back(item);
     }
-    if(next->armor.empty()) {
+    if(next->armor.empty() && (!tryOn || !preset.items.empty())) {
         SKSE::log::warn("PREFLIGHT-DIAG2 request={} actor={:08X} all items rejected; previous appearance retained",request,player->GetFormID());
         throw std::runtime_error("No visual armor in this preset; appearance unchanged.");
     }
     next->preset.items=std::move(visualItems);
+    if (tryOn) {
+        const auto previous = state->look.load();
+        next->tryOn = true;
+        next->beforeTryOn = previous && previous->tryOn ? previous->beforeTryOn : previous;
+    }
     if(partial) {
         // Head presets replace their selected scope, accessories replace only
         // the selected visible items' slots. Validation completes before publish.
@@ -557,6 +564,39 @@ void ApplyTransmog(const Preset& preset,RE::Actor* player) {
     }
     state->look.store(next); renderCoverage=0; logNextPass=true; logNextFirstPerson=true; logNextHairMask=true; Refresh(player);
     SKSE::log::info("Transmog applied: {} armor items; inventory unchanged",next->armor.size());
+}
+bool TransmogTryOnActive(std::uint32_t actorID) {
+    const auto state = FindActorLook(actorID);
+    const auto look = state ? state->look.load() : nullptr;
+    return look && look->tryOn;
+}
+std::optional<Preset> GetTransmogTryOnPreset(RE::Actor* actor) {
+    const auto state = actor ? FindActorLook(actor->GetFormID()) : nullptr;
+    const auto look = state ? state->look.load() : nullptr;
+    if (look && look->tryOn) return look->preset;
+    return std::nullopt;
+}
+bool EndTransmogTryOn(RE::Actor* actor) {
+    const auto state = actor ? FindActorLook(actor->GetFormID()) : nullptr;
+    if (!state) return false;
+    const auto current = state->look.load();
+    if (!current || !current->tryOn) return false;
+    RestoreHiddenNodes(*state);
+    state->look.store(current->beforeTryOn);
+    state->firstPersonTraces = 2;
+    state->firstPersonStyled = false;
+    renderCoverage = 0;
+    Refresh(actor);
+    return true;
+}
+std::optional<std::uint32_t> AppearanceBodyArmorID(RE::Actor* actor) {
+    const auto state = actor ? FindActorLook(actor->GetFormID()) : nullptr;
+    const auto look = state ? state->look.load() : nullptr;
+    constexpr auto body = static_cast<std::uint32_t>(RE::BIPED_MODEL::BipedObjectSlot::kBody);
+    if (!look || !(look->scope & body)) return std::nullopt;
+    for (auto it = look->armor.rbegin(); it != look->armor.rend(); ++it)
+        if ((*it)->GetSlotMask().underlying() & body) return (*it)->GetFormID();
+    return 0;
 }
 std::vector<RemovalItem> SnapshotRemovalAppearance(RE::Actor* actor) {
     std::vector<RemovalItem> rows;
@@ -661,7 +701,8 @@ void SaveTransmog(SKSE::SerializationInterface* s) {
         for(const auto& state:*snapshot) {
             TransmogSave::State saved;saved.actor=state->id;
             saved.mode=state->id==0x14?PlayerTransmogMode():state->mode.load();
-            const auto current=state->look.load();
+            auto current=state->look.load();
+            if (current && current->tryOn) current = current->beforeTryOn;
             if(current) {
                 saved.race=current->race->GetFormID();saved.female=current->female;saved.scope=current->scope;
                 saved.autoOwned=state->id==0x14?PlayerTransmogAutoOwned():state->autoOwned.load();

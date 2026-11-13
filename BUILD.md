@@ -1,4 +1,4 @@
-# Building Outfit Gallery 2.0.1
+# Building Outfit Gallery 2.2.0
 
 Use Windows x64, Visual Studio 2022 C++ tools (tested MSVC 19.44), CMake 3.24+, Ninja and C++23 support.
 
@@ -14,7 +14,7 @@ From an x64 VS developer shell, replace the example dependency paths:
 
 ```powershell
 $env:VSLANG = '1033'
-cmake -S . -B build -G Ninja -DSKSE_SUPPORT_PATCH_SAFETY=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCOMMONLIB_SOURCE="C:/deps/CommonLibSSE-NG-10.1.0" -DCMAKE_PREFIX_PATH="C:/deps/vcpkg/installed/x64-windows-static-md"
+cmake -S . -B build -G Ninja -DSKSE_SUPPORT_PATCH_SAFETY=OFF -DCMAKE_BUILD_TYPE=Release -DCOMMONLIB_SOURCE="C:/deps/CommonLibSSE-NG-10.1.0" -DCMAKE_PREFIX_PATH="C:/deps/vcpkg/installed/x64-windows-static-md"
 cmake --build build --parallel 6
 ctest --test-dir build --output-on-failure
 ```
@@ -29,3 +29,5 @@ The normal release archive contains the DLL, INI, user documentation and license
 
 
 The release uses the existing CommonLib 10.1.0 static bundle used for the verified 2.0 feature builds. The dependency source archive is included under dependencies in the source ZIP. Use COMMONLIB_SOURCE to build it with your toolchain. Set VSLANG=1033 so Ninja can track MSVC include dependencies correctly.
+
+2.1.0 also exercises shared-name, CamelCase, numbered/color variants, slot replacement and equipment-tools visibility persistence. These software tests do not simulate actual Skyrim equipment or preview rendering.

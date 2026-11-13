@@ -146,6 +146,7 @@ StudioSettings ReadStudioSettings(const std::filesystem::path& path) {
     s.uiZoom=NormalizeUiZoom(j.value("uiZoom",1.f));
     s.fullOutfitToggle=j.value("fullOutfitToggle",false);
     s.upscalerCompatibility=j.value("upscalerCompatibility",false);
+    s.showEquipmentTools=j.value("showEquipmentTools",true);
     s.headSlots=j.value("headSlots",0x1803u);
     s.startupTab=j.value("startupTab",std::string{});
     s.followerTargetingMigrationPending=j.value("followerTargetingDefaultVersion",0)<1;
@@ -156,7 +157,7 @@ StudioSettings ReadStudioSettings(const std::filesystem::path& path) {
 }
 void WriteStudioSettings(const StudioSettings& s,const std::filesystem::path& path) {
     ValidateSettings(s);
-    Json j={{"schema",1},{"uiZoom",NormalizeUiZoom(s.uiZoom)},{"distance",s.distance},{"height",s.height},{"orbit",s.orbit},{"pitch",s.pitch},{"fov",s.fov},{"columns",s.columns},{"showNames",s.showNames},{"showCounts",s.showCounts},{"language",s.language},{"allowFreeCamera",s.allowFreeCamera},{"addMissing",s.addMissing},{"preferEnchanted",s.preferEnchanted},{"portraitThumbnails",s.portraitThumbnails},{"cleanupCompatibility",s.cleanupCompatibility},{"allowCombatGallery",s.allowCombatGallery},{"compactGallery",s.compactGallery},{"reclaimRenamedGeneratedItems",s.reclaimRenamedGeneratedItems},{"lateral",s.lateral},{"elevation",s.elevation},{"headSlots",s.headSlots},{"startupTab",s.startupTab},{"detachedPreview",s.detachedPreview},{"previewRect",s.previewRect},{"followerTargeting",s.followerTargeting},{"followerTargetingDefaultVersion",1},{"fullOutfitToggle",s.fullOutfitToggle},{"upscalerCompatibility",s.upscalerCompatibility}};
+    Json j={{"schema",1},{"uiZoom",NormalizeUiZoom(s.uiZoom)},{"distance",s.distance},{"height",s.height},{"orbit",s.orbit},{"pitch",s.pitch},{"fov",s.fov},{"columns",s.columns},{"showNames",s.showNames},{"showCounts",s.showCounts},{"language",s.language},{"allowFreeCamera",s.allowFreeCamera},{"addMissing",s.addMissing},{"preferEnchanted",s.preferEnchanted},{"portraitThumbnails",s.portraitThumbnails},{"cleanupCompatibility",s.cleanupCompatibility},{"allowCombatGallery",s.allowCombatGallery},{"compactGallery",s.compactGallery},{"reclaimRenamedGeneratedItems",s.reclaimRenamedGeneratedItems},{"lateral",s.lateral},{"elevation",s.elevation},{"headSlots",s.headSlots},{"startupTab",s.startupTab},{"detachedPreview",s.detachedPreview},{"previewRect",s.previewRect},{"followerTargeting",s.followerTargeting},{"followerTargetingDefaultVersion",1},{"fullOutfitToggle",s.fullOutfitToggle},{"upscalerCompatibility",s.upscalerCompatibility},{"showEquipmentTools",s.showEquipmentTools}};
     std::filesystem::create_directories(path.parent_path());
     auto tmp=path; tmp+=".tmp";
     {std::ofstream out(tmp,std::ios::binary|std::ios::trunc); out.exceptions(std::ios::badbit|std::ios::failbit); out<<j.dump(2); out.close();}
@@ -199,6 +200,13 @@ bool MovePhoto(std::vector<std::string>& order,const std::string& source,const s
     order.insert(after?std::next(at):at,source); return true;
 }
 void CheckLibrary(const Library& l) {
+    std::set<std::string> grouped;
+    if(l.variations.size()>5000) throw std::runtime_error("Too many variation groups");
+    for(const auto& group:l.variations) {
+        if(group.size()<2 || group.size()>100) throw std::runtime_error("Invalid variation group size");
+        for(const auto& photo:group) if(photo.empty() || photo.size()>280 || photo.find_first_of("/\\:")!=std::string::npos || std::filesystem::path(photo).extension()!=".png" || !grouped.insert(photo).second)
+            throw std::runtime_error("Invalid variation membership");
+    }
     std::set<std::string> ordered;
     if(l.order.size()>10000) throw std::runtime_error("Too many ordered photos");
     for(const auto& photo:l.order) if(photo.empty() || photo.find_first_of("/\\:")!=std::string::npos || std::filesystem::path(photo).extension()!=".png" || !ordered.insert(photo).second) throw std::runtime_error("Invalid photo order");
@@ -218,7 +226,8 @@ Library ReadLibrary(const std::filesystem::path& path) {
     if(j.at("schema").get<int>()!=1) throw std::runtime_error("Unsupported library schema");
     Library l;
     l.order=j.value("order",std::vector<std::string>{});
-    for(const auto& c:j.at("categories")) l.categories.push_back({c.at("id"),c.at("name")});
+    l.variations=j.value("variations",std::vector<std::vector<std::string>>{});
+    for(const auto& c:j.at("categories")) l.categories.push_back({c.at("id"),c.at("name"),c.value("accessories",false)});
     for(const auto& [key,value]:j.at("labels").items()) l.labels[key]={value.at("name"),value.at("categories").get<std::vector<std::string>>(),value.at("deleted")};
     for(const auto& [key,value]:j.at("labels").items()) if(value.contains("exchangeSlots")) {
         const auto& m=value.at("exchangeSlots");
@@ -385,7 +394,12 @@ void WriteLibrary(const Library& l,const std::filesystem::path& path) {
     CheckLibrary(l);
     Json j={{"schema",1},{"categories",Json::array()},{"labels",Json::object()}};
     j["order"]=l.order;
-    for(const auto& c:l.categories) j["categories"].push_back({{"id",c.id},{"name",c.name}});
+    if(!l.variations.empty()) j["variations"]=l.variations;
+    for(const auto& c:l.categories) {
+        Json category={{"id",c.id},{"name",c.name}};
+        if(c.accessories) category["accessories"]=true;
+        j["categories"].push_back(std::move(category));
+    }
     for(const auto& [key,value]:l.labels) j["labels"][key]={{"name",value.name},{"categories",value.categories},{"deleted",value.deleted}};
     for(const auto& [key,value]:l.labels) if(value.outfitItems) j["labels"][key]["outfitItems"]=*value.outfitItems;
     for(const auto& [key,value]:l.labels) if(value.exchangeSlots) {j["labels"][key]["exchangeSlots"]=*value.exchangeSlots;j["labels"][key]["exchangeSlotless"]=value.exchangeSlotless;}
