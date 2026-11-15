@@ -22,5 +22,6 @@ struct TransmogRuntimeSites {
     std::uintptr_t maskCall{},visitCall{};
     std::string maskModule,visitModule;
 };
+void LogTransmogRuntimeFailureDetail();
 std::optional<TransmogRuntimeSites> LocateTransmogRuntime(TransmogFailure& failure);
 }

@@ -3,6 +3,7 @@
 #include "AccessoryToggle.h"
 #include "ItemIdentity.h"
 #include "Transmog.h"
+#include "TransmogRuntime.h"
 #include "TransmogIdentity.h"
 #include <random>
 #include <tuple>
@@ -36,6 +37,7 @@
 #include "SceneSuspendPolicy.h"
 #include "ActivePluginLookup.h"
 #include "StudioSafety.h"
+#include "PhotoPause.h"
 #include "StudioMovement.h"
 #include "HoldButton.h"
 #include "HotkeyChord.h"
@@ -52,7 +54,7 @@
 
 using namespace REL::literals;
 SKSEPluginInfo(
-    .Version = "2.2.0.0"_v,
+    .Version = "2.2.1.0"_v,
     .Name = "OutfitGallery",
     .Author = "Outfit Gallery contributors",
     // SKSE's final component is the store identifier: GOG is 1, not 0.
@@ -74,6 +76,9 @@ std::atomic<bool> active{}, ready{}, pending{}, captureRequested{};
 std::atomic<unsigned> command{}, epoch{};
 std::atomic<unsigned> studioOpenSerial{};
 std::atomic<bool> upscalerCompatibility{}; // persisted option, applied on the next open
+// Requests cross from render UI to the existing game-thread tick.
+std::atomic<bool> photoPauseRequested{}, photoTimeFrozen{}, photoPauseOwned{};
+PhotoPause photoPause; // game-thread only; never persisted
 unsigned captureDelay{}; // render-thread only, lets the last camera edit reach the game
 const StudioSettings initialCamera{};
 std::string startupTab=initialCamera.startupTab;
@@ -293,6 +298,9 @@ void Release() {
 // Game-thread only. Also called before a save is loaded so no previous-session
 // camera snapshot is ever applied to the newly loaded game.
 void Close() {
+    photoPauseRequested=false;
+    if(auto* main=RE::Main::GetSingleton()) photoPause.Release(main->GetRuntimeData().freezeTime);
+    photoTimeFrozen=false; photoPauseOwned=false;
     openingPadBlock=0;
     ResetGalleryPadInput("close/preload");
     editPending=false;
@@ -598,6 +606,14 @@ void Tick() {
         // polling clocks differ. Ready player work claims the lane first;
         // an unsafe or not-yet-ready player never holds followers back.
         MaintainAutoOutfits(FollowerAutoDue()); MaintainFollowerAutoOutfits(); return;
+    }
+    if(auto* main=RE::Main::GetSingleton()) {
+        auto& frozen=main->GetRuntimeData().freezeTime;
+        if(photoPauseRequested.exchange(false)) {
+            photoPause.Toggle(frozen);
+            SKSE::log::info("OG-PHOTO-PAUSE frozen={} owned={}",frozen,photoPause.Owns());
+        }
+        photoTimeFrozen=frozen; photoPauseOwned=photoPause.Owns();
     }
     HideStudioCursor(); // The queued Cursor Menu show may complete after Open().
     // Another mod may release its disable grant after Gallery switches cameras.
@@ -909,6 +925,24 @@ void RenderCameraSlots(bool retakeColumns=false) {
             } else SetStatus("Empty camera slot: "+std::to_string(n+1));
         }
     }
+    // Font-independent play/pause glyph, next to camera preset 7.
+    if(UI::GetWindowPos().x+UI::GetWindowWidth()-UI::GetStyle()->WindowPadding.x-UI::GetItemRectMax().x>side+UI::GetStyle()->ItemSpacing.x) UI::SameLine();
+    const bool frozen=photoTimeFrozen.load(), owned=photoPauseOwned.load();
+    UI::BeginDisabled(frozen && !owned);
+    // Keep the action visible in every theme and preserve state colors on hover/press.
+    UI::PushStyleColor(UI::ImGuiCol_Button,frozen ? UI::ImVec4{.55f,.43f,.19f,1.f} : UI::ImVec4{.16f,.36f,.56f,1.f});
+    UI::PushStyleColor(UI::ImGuiCol_ButtonHovered,frozen ? UI::ImVec4{.65f,.51f,.23f,1.f} : UI::ImVec4{.21f,.46f,.70f,1.f});
+    UI::PushStyleColor(UI::ImGuiCol_ButtonActive,frozen ? UI::ImVec4{.48f,.36f,.15f,1.f} : UI::ImVec4{.12f,.29f,.47f,1.f});
+    if(UI::Button("##photoPause",{side,side})) photoPauseRequested=true;
+    UI::PopStyleColor(3);
+    const auto pauseMin=UI::GetItemRectMin();
+    if(frozen) {
+        UI::ImDrawListManager::AddTriangleFilled(draw,{pauseMin.x+side*.35f,pauseMin.y+side*.23f},{pauseMin.x+side*.77f,pauseMin.y+side*.50f},{pauseMin.x+side*.35f,pauseMin.y+side*.77f},color);
+    } else {
+        for(float x:{.29f,.57f}) UI::ImDrawListManager::AddRectFilled(draw,{pauseMin.x+side*x,pauseMin.y+side*.25f},{pauseMin.x+side*(x+.14f),pauseMin.y+side*.75f},color,0,0);
+    }
+    UI::EndDisabled();
+    if(UI::IsItemHovered(UI::ImGuiHoveredFlags_AllowWhenDisabled)) UI::SetTooltip("%s",Tr(frozen && !owned?"Time is already paused by another feature.":frozen?"Resume game. Closing the gallery also resumes time.":"Pause game for photos. Camera and gallery controls remain available."));
     if(retakeColumns) {
         const float width=side+20.f;
         const auto* toolbarStyle=UI::GetStyle();
@@ -1297,7 +1331,7 @@ void __stdcall RenderStudio() {
 void __stdcall RenderSettings() {
     ProcessCapturedHotkey();
     RenderHotkeys();
-    UI::TextUnformatted("Outfit Gallery 2.2.0");
+    UI::TextUnformatted("Outfit Gallery 2.2.1");
     UI::TextWrapped(Tr("Close this menu and press the configured hotkey (default F8) while standing in a safe open area."));
     UI::TextUnformatted(Tr("F9 in the studio saves a photo and equipment. Click a preset photo to apply."));
     UI::Text(Tr("SmoothCam API: %s / TDM API: %s"), smooth ? "ready" : "not available", tdm ? "ready" : "not available");
@@ -1469,7 +1503,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     spdlog::set_default_logger(logger);
     spdlog::set_level(spdlog::level::info);
     spdlog::flush_on(spdlog::level::info);
-    SKSE::log::info("OutfitGallery release=2.2.0; equipment acquisition, random try-on, customization and reroll; 2.0.1 compatibility fixes retained");
+    SKSE::log::info("OutfitGallery release=2.2.1; equipment acquisition, random try-on, customization and reroll; 2.0.1 compatibility fixes retained");
     const auto runtime=skse->RuntimeVersion();
     const auto supported=SKSEPlugin_Version.GetRuntimeCompatibility().GetCompatibleRuntimeVersions();
     if(std::none_of(supported.begin(),supported.end(),[&](const auto& version){return static_cast<REL::Version>(version)==runtime;})) {
@@ -1484,8 +1518,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     Gallery::saveHotkey = GetPrivateProfileIntW(L"Input", L"SaveHotkey", 67, ini.c_str());
     Gallery::captureKeys[0]=Gallery::saveHotkey;
     Gallery::gamepadHotkey = GetPrivateProfileIntW(L"Input", L"GamepadHotkey", 32, ini.c_str());
-    SKSE::log::info("OutfitGallery 2.2.0");
-    SKSE::log::info("OutfitGallery 2.2.0 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
+    SKSE::log::info("OutfitGallery 2.2.1");
+    SKSE::log::info("OutfitGallery 2.2.1 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
     return SKSE::GetMessagingInterface()->RegisterListener(Gallery::Message);
 }
 

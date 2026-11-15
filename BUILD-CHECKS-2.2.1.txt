@@ -1,0 +1,16 @@
+Outfit Gallery 2.2.1 — release checks (2026-11-15)
+Windows x64, MSVC 19.44, CMake/Ninja Release, CommonLibSSE-NG 10.1.0 bundle.
+Fresh configure/build succeeded. 53/53 selected automated tests passed.
+TrashVirtualPathSafety excluded: known baseline junction fixture limitation;
+it is not counted as passing.
+SKSEPlugin_Load, SKSEPlugin_Query and SKSEPlugin_Version exports verified.
+Metadata 2.2.1.0. Accepted runtimes and INI defaults unchanged.
+Compared with next-update-test1: only main.cpp version/footer/log labels differ
+in native source. Other source, tests, headers, translations and licenses match.
+User confirmed try-on improvements, tab focus, photo pause/resume and automatic
+release on gallery close. Integrated failure diagnostics have build/automated
+coverage only, not in-game verification. Hook acceptance rules are unchanged.
+The final 2.2.1-numbered DLL has not yet been launched in-game.
+Runtime/source ZIP integrity and DLL hashes verified; user data not included.
+Published and trial artifacts preserved. No upload performed.
+DLL SHA256: 823359946D710AAF71823EB4E6A1F33AF400C347DEE39872AB8172DF78A10CA3

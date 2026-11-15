@@ -2,6 +2,10 @@
 #include <set>
 #include <string>
 namespace Gallery::Translation { inline const std::set<std::string>& Keys() { static const std::set<std::string> keys{
+"Pause game for photos. Camera and gallery controls remain available.",
+"Resume game. Closing the gallery also resumes time.",
+"Time is already paused by another feature.",
+
 "Select matching outfit types. The first photo represents the group.",
 "Ungroup variations",
 "Group variations",

@@ -1,4 +1,14 @@
-# Outfit Gallery 2.2.0 — 導入と使い方
+# Outfit Gallery 2.2.1 — 導入と使い方
+
+## 2.2.1
+
+- おまかせ試着の部品名・A/B/C差分の判定を改善し、同じ系統の部品の取りこぼしを軽減しました。
+- L1/R1で分類タブを切り替えた後、そのままセット一覧を操作できるようにしました。タブ上での左右操作は従来どおりです。
+- カメラプリセット7の右に、撮影用の一時停止・再開ボタンを追加しました。通常は青、停止中はオレンジで表示します。停止中もカメラとギャラリーは操作でき、終了時にはこの機能による停止を解除します。
+- 重ね着の起動時検証に失敗した際の情報を「詳細ログを記録」で確認できるようにしました。重ね着のフックを受け入れる判定は変更していません。
+
+互換情報：ApparelPreview（Nexus 185334）との併用時に重ね着が利用できなくなる報告があります。報告環境ではApparelPreview自体の無効化で改善しています。互換対応は未確認で、制限の回避処理は追加していません。
+
 
 ## 2.2.0の更新内容
 - アクセサリのみの装備プラグインも一覧に表示。取得対象が同じプラグインは重複を整理し、装備内容が異なるパッチは個別に残します。非表示になった名前でも検索できます。
@@ -23,9 +33,9 @@
 名前空欄で全身セットを登録するとボディ装備名を優先し、それ以外は登録した装備の最初の名前を使います。「すべて外す」「すべて戻す」は装備解除画面の現在の一覧を順に変更・確認します。閉じると現在の状態を維持し、一覧を更新すると復元リストを作り直します。服を外すと肌が露出する場合があります。
 
 ## Updating / 更新
-Exit Skyrim and install the complete 2.2.0 archive. Disable earlier trial DLL overrides, including variations-test12, accessory-tabs and equipment-list trials. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up Library.json before updating; saving with older releases can discard new tab/group metadata. No new game or preset re-registration is required. Existing external translations still work; untranslated new keys fall back to English.
+Exit Skyrim and install the complete 2.2.1 archive. Disable earlier trial DLL overrides, including next-update-test1, transmog diagnostic builds, variations-test12, accessory-tabs and equipment-list trials. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up Library.json before updating; saving with older releases can discard new tab/group metadata. No new game or preset re-registration is required. Existing external translations still work; untranslated new keys fall back to English.
 
-Skyrimを終了し、完全版2.2.0を導入してください。test12などの試作DLL・旧差し替えパッチを無効にし、写真・プリセット・Library.json・設定・カスタムINI・対の.ess/.skseは保持してください。更新前にLibrary.jsonをバックアップしてください。旧版で保存すると追加タブ・差分の情報が失われる場合があります。ニューゲーム・再登録は不要です。外部翻訳の新規未翻訳項目は英語になります。
+Skyrimを終了し、完全版2.2.1を導入してください。next-update-test1・重ね着診断版・test12などの試作DLL・旧差し替えパッチを無効にし、写真・プリセット・Library.json・設定・カスタムINI・対の.ess/.skseは保持してください。更新前にLibrary.jsonをバックアップしてください。旧版で保存すると追加タブ・差分の情報が失われる場合があります。ニューゲーム・再登録は不要です。外部翻訳の新規未翻訳項目は英語になります。
 
 Supported runtimes and the optional upscaler compatibility default (OFF) are unchanged. This release does not claim new testing on every supported runtime. GOG 1.6.1179 remains untested.
 
@@ -276,4 +286,4 @@ OFFにしても登録済みの付呪情報は消えません。付呪情報の�
 
 オプションの「UI倍率」で75～200%に調整でき、再起動後も保持します。初期値へ戻すと100%になります。以前OFFで保存した戦闘中・フリーカメラ中の起動許可はOFFのままです。必要に応じてONにしてください。表示中も戦闘が続く場合があります。着席・家具使用など、その他の制限は変わりません。
 
-更新時は以前のHUD試作版、2.0.1候補版、単独の1.7.104 Transmog Fixを無効にし、2.2.0のDLLを使用してください。カスタムINIと生成済みの写真・プリセット・設定、対応する.ess/.skseを保持して更新してください。
+更新時は以前のHUD試作版、2.0.1候補版、単独の1.7.104 Transmog Fixを無効にし、2.2.1のDLLを使用してください。カスタムINIと生成済みの写真・プリセット・設定、対応する.ess/.skseを保持して更新してください。

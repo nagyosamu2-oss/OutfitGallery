@@ -1,0 +1,2 @@
+Release build succeeded; 52/52 selected tests passed. TrashVirtualPathSafety excluded: existing sandbox junction-fixture limitation. SKSE exports verified. New parser regressions cover letter suffixes, shared accessories, fallback footwear, and preserved family/series names. Metadata 2.2.0.1. In-game behavior unverified. No game deployment.
+DLL SHA256: 4B9640ED41EDDA2B34EEDF3765FED3C288CE4EB1C1F41A60E0DB90F15D31B283

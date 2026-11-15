@@ -1,3 +1,14 @@
+# Changelog
+
+## 2.2.1
+
+- Improved random try-on matching for part names and A/B/C variants, reducing omitted matching pieces.
+- L1/R1 tab switching now moves focus to the outfit list. Left/right navigation while focused on the tabs is unchanged.
+- Added a photo pause/resume button beside camera preset 7. Blue indicates the pause action; orange indicates an active pause. Camera and gallery controls remain available. Closing the gallery releases pauses started by this feature.
+- Added failure diagnostics to detailed logging for transmog startup validation. Hook acceptance rules are unchanged.
+
+Known compatibility report: Transmog has been reported unavailable with ApparelPreview (Nexus 185334). Disabling ApparelPreview restored transmog in the reported setup. Compatibility remains unverified; no compatibility bypass is included.
+
 # Outfit Gallery 2.2.0
 
 ## Changes in 2.2.0

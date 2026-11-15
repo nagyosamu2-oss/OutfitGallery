@@ -1,4 +1,14 @@
-# Outfit Gallery 2.2.0
+# Outfit Gallery 2.2.1
+
+## 2.2.1
+
+- Improved random try-on matching for part names and A/B/C variants, reducing omitted matching pieces.
+- L1/R1 tab switching now moves focus to the outfit list. Left/right navigation while focused on the tabs is unchanged.
+- Added a photo pause/resume button beside camera preset 7. Blue indicates the pause action; orange indicates an active pause. Camera and gallery controls remain available. Closing the gallery releases pauses started by this feature.
+- Added failure diagnostics to detailed logging for transmog startup validation. Hook acceptance rules are unchanged.
+
+Known compatibility report: Transmog has been reported unavailable with ApparelPreview (Nexus 185334). Disabling ApparelPreview restored transmog in the reported setup. Compatibility remains unverified; no compatibility bypass is included.
+
 
 ## Changes in 2.2.0
 - Equipment plugins: include accessory-only plugins; consolidate entries with identical acquisition sets while retaining patches with different equipment. Hidden names remain searchable aliases.
@@ -19,9 +29,9 @@ In the organizer, the representative selects the whole visible group; individual
 Blank full-outfit registration names prefer the body item; other registrations use the first named registered item. Remove all / Restore all acts on the current removal-window list with verified sequential operations. Closing keeps the current state; refreshing resets its restoration list. Removing clothes can expose skin.
 
 ## Updating / 更新
-Exit Skyrim and install the complete 2.2.0 archive. Disable earlier trial DLL overrides, including variations-test12, accessory-tabs and equipment-list trials. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up Library.json before updating; saving with older releases can discard new tab/group metadata. No new game or preset re-registration is required. Existing external translations still work; untranslated new keys fall back to English.
+Exit Skyrim and install the complete 2.2.1 archive. Disable earlier trial DLL overrides, including next-update-test1, transmog diagnostic builds, variations-test12, accessory-tabs and equipment-list trials. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up Library.json before updating; saving with older releases can discard new tab/group metadata. No new game or preset re-registration is required. Existing external translations still work; untranslated new keys fall back to English.
 
-Skyrimを終了し、完全版2.2.0を導入してください。test12などの試作DLL・旧差し替えパッチを無効にし、写真・プリセット・Library.json・設定・カスタムINI・対の.ess/.skseは保持してください。更新前にLibrary.jsonをバックアップしてください。旧版で保存すると追加タブ・差分の情報が失われる場合があります。ニューゲーム・再登録は不要です。外部翻訳の新規未翻訳項目は英語になります。
+Skyrimを終了し、完全版2.2.1を導入してください。next-update-test1・重ね着診断版・test12などの試作DLL・旧差し替えパッチを無効にし、写真・プリセット・Library.json・設定・カスタムINI・対の.ess/.skseは保持してください。更新前にLibrary.jsonをバックアップしてください。旧版で保存すると追加タブ・差分の情報が失われる場合があります。ニューゲーム・再登録は不要です。外部翻訳の新規未翻訳項目は英語になります。
 
 Supported runtimes and the optional upscaler compatibility default (OFF) are unchanged. This release does not claim new testing on every supported runtime. GOG 1.6.1179 remains untested.
 
@@ -60,7 +70,7 @@ Development testing includes Steam 1.5.97 and 1.6.1170, plus the 1.7.104 transmo
 
 ## Install or update
 Close Skyrim and install this complete archive with your mod manager. It contains the DLL and default INI; no ESP or Papyrus scripts are required.
-Keep generated Data/SKSE/Plugins/OutfitGallery data: photos, presets and JSON settings. Preserve a customized OutfitGallery.ini. With MO2, check the existing mod folder, Overwrite and any output mod before replacing files. Disable older trial DLL overrides and the standalone 1.7.104 Transmog Fix so the 2.2.0 DLL takes priority. Hotkeys.json takes priority over INI hotkeys. A new game or preset re-registration is not required.
+Keep generated Data/SKSE/Plugins/OutfitGallery data: photos, presets and JSON settings. Preserve a customized OutfitGallery.ini. With MO2, check the existing mod folder, Overwrite and any output mod before replacing files. Disable older trial DLL overrides and the standalone 1.7.104 Transmog Fix so the 2.2.1 DLL takes priority. Hotkeys.json takes priority over INI hotkeys. A new game or preset re-registration is not required.
 The first load of legacy settings enables follower targeting once. A later explicit OFF is preserved. This migration does not enable automatic outfits.
 Keep .ess and .skse together. To downgrade, restore pre-update user data and saves as well as the previous DLL: older versions do not understand all newer preset, library and appearance data.
 

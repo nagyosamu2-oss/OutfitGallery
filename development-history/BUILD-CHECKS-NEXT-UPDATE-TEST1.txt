@@ -1,0 +1,2 @@
+Release build succeeded; 53/53 selected tests passed. TrashVirtualPathSafety excluded: existing sandbox junction-fixture limitation. SKSE exports verified. Failure-only target snapshot, replay on explicit detailed-log enable. Acceptance logic compared unchanged against photo-pause-test2. Previously verified features retained. Metadata 2.2.0.6. Integration not verified in-game. No deployment.
+DLL SHA256: 844B2A4C030247D2744C182E7BC80EFD0343612DCE2547FA594721BBFC76428B

@@ -5,6 +5,8 @@
 #include "TransmogFunctionBounds.h"
 #include "TransmogHookDiagnostics.h"
 #include <map>
+#include <mutex>
+#include "DiagnosticSettings.h"
 #include <windows.h>
 namespace Gallery {
 namespace {
@@ -28,6 +30,61 @@ std::string ModuleName(std::uintptr_t at,bool externalOnly=false) {
     wchar_t path[MAX_PATH]{};
     if(!GetModuleFileNameW(module,path,MAX_PATH)) return {};
     return std::filesystem::path(path).filename().string();
+}
+// Captured once on validation failure, replayed only on explicit detailed-log enable.
+std::mutex targetDetailMutex;
+std::vector<std::string> targetDetails;
+template<class... Args>
+void CacheTargetDetail(std::format_string<Args...> format,Args&&... args) {
+    targetDetails.push_back(std::format(format,std::forward<Args>(args)...));
+}
+// Failure-only readback. This never participates in hook acceptance or installation.
+void CaptureRejectedTarget(std::uintptr_t site,std::uintptr_t vanilla,const char* kind) {
+    std::scoped_lock lock(targetDetailMutex);
+    targetDetails.clear();
+    try {
+        const auto base=REL::Module::get().base();
+        CacheTargetDetail("OG-DIAG transmog-target kind={} site={:#x} siteRVA={:#x} expected={:#x} expectedRVA={:#x}",kind,site,site-base,vanilla,vanilla-base);
+        auto cursor=site;
+        std::array<std::uintptr_t,8> seen{};
+        for(unsigned hop=0;hop<seen.size();++hop) {
+            for(unsigned i=0;i<hop;++i) if(seen[i]==cursor) {
+                CacheTargetDetail("OG-DIAG transmog-target stop=cycle hop={} address={:#x}",hop,cursor);return;
+            }
+            seen[hop]=cursor;
+            MEMORY_BASIC_INFORMATION region{};
+            const auto queried=VirtualQuery(reinterpret_cast<const void*>(cursor),&region,sizeof(region));
+            std::array<std::uint8_t,64> bytes{};
+            std::size_t count{};
+            while(count<bytes.size() && Read(cursor+count,&bytes[count],1)) ++count;
+            std::string hex;
+            for(std::size_t i=0;i<count;++i) hex+=std::format("{:02X} ",bytes[i]);
+            const auto module=ModuleName(cursor);
+            HMODULE image{};
+            GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(cursor),&image);
+            CacheTargetDetail("OG-DIAG transmog-target hop={} address={:#x} module={} moduleBase={:#x} moduleOffset={:#x} query={} allocation={:#x} regionSize={:#x} state={:#x} protect={:#x} type={:#x} executable={} bytesRead={} bytes={}",
+                hop,cursor,module.empty()?"<unmapped-to-DLL>":module,reinterpret_cast<std::uintptr_t>(image),image?cursor-reinterpret_cast<std::uintptr_t>(image):0,
+                queried!=0,reinterpret_cast<std::uintptr_t>(region.AllocationBase),region.RegionSize,region.State,region.Protect,region.Type,Executable(cursor),count,hex);
+            if(!cursor || count<2) {CacheTargetDetail("OG-DIAG transmog-target stop=unreadable");return;}
+            if(cursor==vanilla && hop) {CacheTargetDetail("OG-DIAG transmog-target stop=expected-target");return;}
+            std::int32_t displacement{};
+            if(count>=5 && (bytes[0]==0xE9 || (hop==0 && bytes[0]==0xE8))) {
+                std::memcpy(&displacement,bytes.data()+1,4);cursor=cursor+5+displacement;
+            } else if(count>=6 && bytes[0]==0xFF && bytes[1]==0x25) {
+                std::memcpy(&displacement,bytes.data()+2,4);
+                const auto pointer=cursor+6+displacement;
+                if(!Read(pointer,&cursor,sizeof(cursor))) {
+                    CacheTargetDetail("OG-DIAG transmog-target stop=unreadable-jump-pointer pointer={:#x}",pointer);return;
+                }
+            } else if(bytes[0]==0xEB) {
+                cursor=cursor+2+static_cast<std::int8_t>(bytes[1]);
+            } else {
+                const auto related=HookDiagnostics::RelatedModule(cursor,Read,[](auto at){return ModuleName(at,true);});
+                CacheTargetDetail("OG-DIAG transmog-target stop=non-plain-stub relatedModule={} (diagnostic clue only)",related.empty()?"<unknown>":related);return;
+            }
+        }
+        CacheTargetDetail("OG-DIAG transmog-target stop=diagnostic-hop-limit");
+    } catch(const std::exception& e) {CacheTargetDetail("OG-DIAG transmog-target readback failed: {}",e.what());}
 }
 TransmogFailure MissingCall(const std::vector<Callsites::Instruction>& code,bool hair) {
     for(const auto& ins:code) {
@@ -57,6 +114,11 @@ std::optional<std::vector<Callsites::Instruction>> Function(std::uintptr_t at) {
     if(!decoded) SKSE::log::warn("RUNTIME4 decode stopped at RVA={:#x}",at+failed-image);
     return decoded;
 }
+}
+void LogTransmogRuntimeFailureDetail() {
+    if(!DetailEnabled()) return;
+    std::scoped_lock lock(targetDetailMutex);
+    for(const auto& line:targetDetails) SKSE::log::info("{}",line);
 }
 std::optional<TransmogRuntimeSites> LocateTransmogRuntime(TransmogFailure& failure) {
     const auto fail=[&](TransmogFailure error)->std::optional<TransmogRuntimeSites> {
@@ -102,7 +164,7 @@ std::optional<TransmogRuntimeSites> LocateTransmogRuntime(TransmogFailure& failu
         }
         if(!maskSite) return fail(MissingCall(*mask,true));
         const auto maskChain=HookChain::Validate(*maskSite,sites.maskTarget,Read,Owner,Executable);
-        if(!maskChain.direct) return fail({TransmogFailureCode::Target,true,{},std::format("Hair call target rejected RVA={:#x}",*maskSite-base)});
+        if(!maskChain.direct) { CaptureRejectedTarget(*maskSite,sites.maskTarget,"hair"); return fail({TransmogFailureCode::Target,true,{},std::format("Hair call target rejected RVA={:#x}",*maskSite-base)}); }
         // Discovery by target keeps the vanilla/IED identity rule. Other DLLs
         // can be chained at an independently verified, decoded measured site.
         auto knownWorn=[&](auto site,auto){return HookChain::Validate(site,sites.visitTarget,Read,Owner,Executable,false).direct!=0;};
@@ -124,7 +186,7 @@ std::optional<TransmogRuntimeSites> LocateTransmogRuntime(TransmogFailure& failu
         }
         if(!visitSite) return fail(MissingCall(candidates,false));
         const auto visitChain=HookChain::Validate(*visitSite,sites.visitTarget,Read,Owner,Executable);
-        if(!visitChain.direct) return fail({TransmogFailureCode::Target,false,{},std::format("Worn call target rejected RVA={:#x}",*visitSite-base)});
+        if(!visitChain.direct) { CaptureRejectedTarget(*visitSite,sites.visitTarget,"worn"); return fail({TransmogFailureCode::Target,false,{},std::format("Worn call target rejected RVA={:#x}",*visitSite-base)}); }
         sites.maskSite=*maskSite;sites.visitSite=*visitSite;
         sites.maskCall=maskChain.direct;sites.visitCall=visitChain.direct;
         sites.maskModule=ModuleName(maskChain.resolved);sites.visitModule=ModuleName(visitChain.resolved);

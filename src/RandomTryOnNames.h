@@ -43,10 +43,10 @@ inline OutfitName ParseOutfitName(std::string_view name) {
         "armor"sv, "armour"sv, "body"sv, "cuirass"sv, "dress"sv, "robe"sv,
         "top"sv, "upper"sv, "shirt"sv, "blouse"sv, "jacket"sv, "coat"sv, "vest"sv,
         "bottom"sv, "lower"sv, "pants"sv, "trousers"sv, "shorts"sv, "skirt"sv,
-        "boots"sv, "shoes"sv, "heels"sv, "sabatons"sv,
+        "boots"sv, "shoes"sv, "heels"sv, "sabatons"sv, "feet"sv,
         "socks"sv, "stocking"sv, "stockings"sv, "tights"sv, "pantyhose"sv, "calf"sv, "thigh"sv,
         "bra"sv, "panty"sv, "panties"sv, "underwear"sv,
-        "gloves"sv, "gauntlets"sv, "bracers"sv, "helmet"sv, "helm"sv, "hood"sv, "hat"sv,
+        "glove"sv, "gloves"sv, "gauntlets"sv, "bracers"sv, "helmet"sv, "helm"sv, "hood"sv, "hat"sv,
         "cape"sv, "cloak"sv, "belt"sv, "mask"sv, "collar"sv, "necktie"sv, "choker"sv,
         "necklace"sv, "earring"sv, "earrings"sv, "bracelet"sv, "ring"sv,
         "acc"sv, "accessory"sv, "accessories"sv
@@ -75,6 +75,20 @@ inline OutfitName ParseOutfitName(std::string_view name) {
             ++i;
             continue;
         }
+        // Compound accessory labels are parts, not outfit-family words.
+        if ((word == "id" && i + 1 < words.size() && words[i + 1] == "card") ||
+            (word == "eye" && i + 1 < words.size() && words[i + 1] == "acc")) {
+            result.part = word == "id" ? "id card" : "eye accessory";
+            ++i;
+            continue;
+        }
+        // Only treat St as stockings in a trailing part position (not St Mary).
+        if (word == "st" && (i + 1 == words.size() || (i + 2 == words.size() &&
+            ((words[i + 1].size() == 1 && words[i + 1][0] >= 'a' && words[i + 1][0] <= 'z') ||
+             std::all_of(words[i + 1].begin(), words[i + 1].end(), [](char ch) { return ch >= '0' && ch <= '9'; }))))) {
+            result.part = "stockings";
+            continue;
+        }
         if (word == "main" && i + 1 == words.size()) {
             result.part = "main";
             continue;
@@ -82,8 +96,9 @@ inline OutfitName ParseOutfitName(std::string_view name) {
         const auto part = std::find(partNames.begin(), partNames.end(), word);
         if (part != partNames.end()) {
             result.part = *part;
-            if (word == "heels" || word == "shoes" || word == "boots" || word == "sabatons")
+            if (word == "heels" || word == "shoes" || word == "boots" || word == "sabatons" || word == "feet")
                 result.part = "footwear";
+            if (word == "glove") result.part = "gloves";
             if (word == "panty" || word == "panties") result.part = "underwear";
             if (i + 2 == words.size()) {
                 const auto variant = std::find(variantNames.begin(), variantNames.end(), words[i + 1]);
@@ -92,6 +107,15 @@ inline OutfitName ParseOutfitName(std::string_view name) {
                     ++i;
                 }
             }
+            continue;
+        }
+        // A trailing single letter after a recognized part is a matching hint.
+        // Reuse the owned suffix field so exact/shared/fallback ranking applies.
+        if (i > 0 && i + 1 == words.size() && !result.part.empty() &&
+            word.size() == 1 && word[0] >= 'a' && word[0] <= 'z' &&
+            (std::find(partNames.begin(), partNames.end(), words[i - 1]) != partNames.end() ||
+             words[i - 1] == "st")) {
+            result.number = word;
             continue;
         }
         // A final standalone decimal after a part is a variant, including

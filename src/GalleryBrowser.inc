@@ -181,6 +181,7 @@ void RenderBrowser(bool& addMissing) {
         bool diagnostics=DetailEnabled();
         if(UI::Checkbox(Label("Record detailed diagnostic log"),&diagnostics)) {
             detailedLogging=diagnostics;
+            if(diagnostics) LogTransmogRuntimeFailureDetail();
             ResetTransferObservations();
             SKSE::log::info("OG-DIAG session {} build=1.0.15 compatibility={}",diagnostics?"enabled":"disabled",cleanupCompatibility.load());
         }
@@ -257,8 +258,8 @@ void RenderBrowser(bool& addMissing) {
             missingCheckFocused=target==static_cast<int>(tabs.size())+2;
             if(!columnsFocused && !layoutButtonFocused && !missingCheckFocused) {idx=target; tabChanged=true;}
         }
-        if(PadPressed(UI::ImGuiKey_GamepadL1,false)) {idx=(idx+static_cast<int>(tabs.size())-1)%static_cast<int>(tabs.size()); tabsFocused=true; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; tabChanged=true;}
-        if(PadPressed(UI::ImGuiKey_GamepadR1,false)) {idx=(idx+1)%static_cast<int>(tabs.size()); tabsFocused=true; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; tabChanged=true;}
+        if(PadPressed(UI::ImGuiKey_GamepadL1,false)) {idx=(idx+static_cast<int>(tabs.size())-1)%static_cast<int>(tabs.size()); tabsFocused=false; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; tabChanged=true;shortcutToPhotos=true;}
+        if(PadPressed(UI::ImGuiKey_GamepadR1,false)) {idx=(idx+1)%static_cast<int>(tabs.size()); tabsFocused=false; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; tabChanged=true;shortcutToPhotos=true;}
         category=tabs[idx].id;
         if(PadPressed(UI::ImGuiKey_GamepadL2,false)) {category="#head";tabsFocused=false;columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false;tabChanged=true;shortcutToPhotos=true;}
         if(PadPressed(UI::ImGuiKey_GamepadR2,false)) {category=NextAccessoryTab(category,library);tabsFocused=false;columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false;tabChanged=true;shortcutToPhotos=true;}

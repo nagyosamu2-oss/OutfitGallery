@@ -1,0 +1,2 @@
+Release build succeeded; 53/53 selected tests passed. TrashVirtualPathSafety excluded: existing sandbox junction-fixture limitation. SKSE exports verified. Photo pause uses Main runtime freezeTime on the existing game-thread task; UI uses atomic snapshots/requests. Close/preload restores only our freeze transition. Font-independent play/pause icon after camera preset 7. Letter variant and pad tab fixes retained. Metadata 2.2.0.3. In-game behavior unverified. No game deployment.
+DLL SHA256: 00931C63162A563157EFDB61400A1EAFB6CA547AE69AE242493EB74299511550

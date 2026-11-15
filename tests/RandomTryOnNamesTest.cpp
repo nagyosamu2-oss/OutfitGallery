@@ -13,6 +13,28 @@ int main() {
         assert(HasSeriesPrefix(ParseFillName(top).series, shared));
         assert(!HasSeriesPrefix(ParseFillName(other).series, shared));
     }
+    const auto nurse = ParseOutfitName("AE PinkyNurse Body B");
+    assert(nurse.family == "ae pinky nurse" && nurse.number == "b");
+    for (const auto* text : {"AE PinkyNurse Hat B", "AE PinkyNurse Skirt B", "AE PinkyNurse Top B",
+                             "AE PinkyNurse Glove B", "AE PinkyNurse St B"}) {
+        const auto part = ParseOutfitName(text);
+        assert(part.family == nurse.family && part.number == "b");
+    }
+    for (const auto* text : {"AE PinkyNurse Feet A", "AE PinkyNurse ID Card", "AE PinkyNurse EyeACC"}) {
+        const auto part = ParseOutfitName(text);
+        assert(part.family == nurse.family);
+        assert(HasSeriesPrefix(ParseFillName(part).series, ParseFillName(nurse).series));
+    }
+    assert(NumberMatch(nurse.number, ParseOutfitName("AE PinkyNurse Glove B").number) <
+           NumberMatch(nurse.number, ParseOutfitName("AE PinkyNurse Glove A").number));
+    assert(NumberMatch(nurse.number, ParseOutfitName("AE PinkyNurse ID Card").number) <
+           NumberMatch(nurse.number, ParseOutfitName("AE PinkyNurse Feet A").number));
+    assert(ParseOutfitName("AE PinkyNurse Feet A").part == "footwear");
+    assert(ParseOutfitName("AE PinkyNurse Glove B").part == "gloves");
+    assert(ParseOutfitName("AE PinkyNurse St B").part == "stockings");
+    assert(ParseOutfitName("St Mary Dress").family == "st mary");
+    assert(ParseOutfitName("Collection B Dress").family == "collection b");
+    assert(ParseOutfitName("AE PinkyNurse Body B").family != ParseOutfitName("AE OtherNurse Body B").family);
     const std::vector<std::uint32_t> customSlots{1, 2, 4, 3};
     auto custom = CustomizeSelection(customSlots, {true,true,true,false}, 3, true);
     assert(!custom[0] && !custom[1] && custom[2] && custom[3]);

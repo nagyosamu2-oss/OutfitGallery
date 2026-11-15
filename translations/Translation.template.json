@@ -671,6 +671,9 @@
     "Outfit variations": "Outfit variations",
     "Group variations": "Group variations",
     "Ungroup variations": "Ungroup variations",
-    "Select matching outfit types. The first photo represents the group.": "Select matching outfit types. The first photo represents the group."
+    "Select matching outfit types. The first photo represents the group.": "Select matching outfit types. The first photo represents the group.",
+    "Pause game for photos. Camera and gallery controls remain available.": "Pause game for photos. Camera and gallery controls remain available.",
+    "Resume game. Closing the gallery also resumes time.": "Resume game. Closing the gallery also resumes time.",
+    "Time is already paused by another feature.": "Time is already paused by another feature."
   }
 }

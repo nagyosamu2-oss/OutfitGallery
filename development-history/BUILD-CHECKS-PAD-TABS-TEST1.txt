@@ -1,0 +1,2 @@
+Release build succeeded; 52/52 selected tests passed. TrashVirtualPathSafety excluded: existing sandbox junction-fixture limitation. SKSE exports verified. L1/R1 now use the existing L2/R2 shortcut-to-photo focus path; directional tab navigation unchanged. Prior letter-variant fixes retained. Metadata 2.2.0.2. In-game behavior unverified. No game deployment.
+DLL SHA256: B4D50D1706B7E0CEED6BA610BBCC1D0427240A9B26654A90B3842AACF0EA9410
