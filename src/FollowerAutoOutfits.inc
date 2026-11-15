@@ -148,7 +148,7 @@ void MaintainFollowerAutoOutfits() {
                 !(camera->IsInFirstPerson() || camera->IsInThirdPerson()) || actor->IsDead() || actor->IsInKillMove() || actor->IsInRagdollState() ||
                 state->IsUnconscious() || state->IsStaggered() || actor->IsOnMount() || actor->IsInMidair() ||
                 !AutoOutfit::SwimmingChangeAllowed(state->IsSwimming(),condition,slots)) {block("Waiting for normal play");return;}
-            if(!fighting && !env.ready) {block("Waiting for environment data");return;}
+            if(!fighting && condition!=AutoOutfit::Place::Sleeping && !env.ready) {block("Waiting for environment data");return;}
             if(styled) {
                 const auto weapon=state->GetWeaponState();
                 if(!actor->GetActorRuntimeData().currentProcess || (weapon!=RE::WEAPON_STATE::kDrawn && weapon!=RE::WEAPON_STATE::kSheathed)) {block("Waiting for stable combat equipment");return;}

@@ -152,12 +152,12 @@ int main() {
     for(unsigned i=10;i<extended.size();++i)extended[i]="extra"+std::to_string(i)+".png";
     WriteAutoOutfitSettings({extended,0,5,20},file);
     auto expanded=ReadAutoOutfitSettings(file);
-    require(expanded.slots==extended && expanded.ostimRecoverySeconds==20 && expanded.columns==5,"all twenty-seven assignments persist");
+    require(expanded.slots==extended && expanded.ostimRecoverySeconds==20 && expanded.columns==5,"all twenty-eight assignments persist");
     {std::ofstream out(file);out<<R"({"schema":1,"slots":["old.png","",""],"dungeonPhoto":"dungeon.png","ostimRecoverySeconds":15})";}
     auto migrated=ReadAutoOutfitSettings(file);
     require(migrated.slots[0]=="old.png" && migrated.slots[8]=="dungeon.png" && migrated.ostimRecoverySeconds==15,"old trial settings retained");
     for(unsigned i=10;i<migrated.slots.size();++i)require(migrated.slots[i].empty(),"new conditions default unassigned");
-    for(const auto key:{"swimmingPhoto","dawnguardPhoto","collegePhoto","brotherhoodPhoto","companionsPhoto","bardsPhoto","thievesPhoto","bluePalacePhoto","meleePhoto","magicPhoto","archeryPhoto","unarmedPhoto","sneakingPhoto","smithingPhoto","alchemyPhoto","enchantingPhoto","shopPhoto"}) {
+    for(const auto key:{"swimmingPhoto","dawnguardPhoto","collegePhoto","brotherhoodPhoto","companionsPhoto","bardsPhoto","thievesPhoto","bluePalacePhoto","meleePhoto","magicPhoto","archeryPhoto","unarmedPhoto","sneakingPhoto","smithingPhoto","alchemyPhoto","enchantingPhoto","shopPhoto","sleepPhoto"}) {
         {std::ofstream out(file);out<<"{\"schema\":1,\"slots\":[\"\",\"\",\"\"],\""<<key<<"\":\"../bad.png\"}";}
         bool invalidRejected=false;try{(void)ReadAutoOutfitSettings(file);}catch(const std::exception&){invalidRejected=true;}
         require(invalidRejected,"new assignments validate photo paths");

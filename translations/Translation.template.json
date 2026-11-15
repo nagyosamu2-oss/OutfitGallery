@@ -674,6 +674,14 @@
     "Select matching outfit types. The first photo represents the group.": "Select matching outfit types. The first photo represents the group.",
     "Pause game for photos. Camera and gallery controls remain available.": "Pause game for photos. Camera and gallery controls remain available.",
     "Resume game. Closing the gallery also resumes time.": "Resume game. Closing the gallery also resumes time.",
-    "Time is already paused by another feature.": "Time is already paused by another feature."
+    "Time is already paused by another feature.": "Time is already paused by another feature.",
+    "Move to another tab": "Move to another tab",
+    "No other compatible tabs.": "No other compatible tabs.",
+    "%s: moved %u from the current tab. Other tabs are kept. Applied when saved.": "%s: moved %u from the current tab. Other tabs are kept. Applied when saved.",
+    "Move to %s (Alt). Other tabs are kept.": "Move to %s (Alt). Other tabs are kept.",
+    "Move to another tab (Alt)": "Move to another tab (Alt)",
+    "Add to tab; hold Alt to move.": "Add to tab; hold Alt to move.",
+    "Sleeping": "Sleeping",
+    "Avoid using other sleepwear features at the same time.": "Avoid using other sleepwear features at the same time."
   }
 }

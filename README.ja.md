@@ -1,4 +1,21 @@
-# Outfit Gallery 2.2.1 — 導入と使い方
+# Outfit Gallery 2.2.2 — 導入と使い方
+
+## 2.2.2
+
+- 重ね着中に実際の頭装備を装備すると、耳が欠けたり頭全体が消えたりする不具合を修正しました。
+- 整理画面の右クリックに「別のタブに移動」を追加しました。Alt＋登録先タブへのドラッグでも移動できます。登録を外すのは現在のタブだけで、他のタブへの登録は維持します。通常のドラッグは追加登録、Shift＋クリックは範囲選択のままです。
+- プレイヤー・自動着替え登録済みのフォロワーに「睡眠」枠を追加しました。未登録なら睡眠時の切り替えは行いません。起床後は現在の自動着替え条件に従います。
+
+### タブ間の移動
+
+整理画面でセットを選択し、右クリック→「別のタブに移動」→移動先を選びます。Altを押しながら上の登録先タブへドラッグする方法も使えます。反映は「保存して終了」の時で、キャンセルすれば今回の整理を破棄します。移動元は分類タブ、移動先は同じ種類の別タブです。「すべて」・標準の頭装備／小物・ゴミ箱などからは移動できません。移動先に登録済みの場合も、現在のタブからだけ登録を外します。写真、装備内容、他のタブへの登録、並び順は維持します。
+
+### 睡眠時の自動着替え
+
+自動着替えを有効にし、「睡眠」へ全身セットを割り当てます。通常着替え・重ね着の選択に従います。ゲームの就寝状態とプレイヤーの睡眠時間選択画面を判定し、単なる待機・着席・夜間では切り替えません。起床後は通常の条件判定に戻り、設定した待機時間や装備処理の順番待ちも適用します。「通常」または起床場所の装備も割り当ててください。起床後の条件が未登録なら、その時の装備が残る場合があります。
+
+他の寝間着機能との併用は避けてください。短い注意書きは睡眠枠が未登録の時だけ表示します。ゲーム標準の就寝状態を使わず独自アニメーションだけで寝かせるMODでは反応しない場合があり、個別の睡眠MODすべての互換性を保証するものではありません。対象は自動着替え登録済みのフォロワーで、一般NPC全員に寝間着を配布する機能ではありません。
+
 
 ## 2.2.1
 
@@ -33,9 +50,9 @@
 名前空欄で全身セットを登録するとボディ装備名を優先し、それ以外は登録した装備の最初の名前を使います。「すべて外す」「すべて戻す」は装備解除画面の現在の一覧を順に変更・確認します。閉じると現在の状態を維持し、一覧を更新すると復元リストを作り直します。服を外すと肌が露出する場合があります。
 
 ## Updating / 更新
-Exit Skyrim and install the complete 2.2.1 archive. Disable earlier trial DLL overrides, including next-update-test1, transmog diagnostic builds, variations-test12, accessory-tabs and equipment-list trials. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up Library.json before updating; saving with older releases can discard new tab/group metadata. No new game or preset re-registration is required. Existing external translations still work; untranslated new keys fall back to English.
+Exit Skyrim and install the complete 2.2.2 archive. Disable earlier trial DLL overrides, including next-update-test1, transmog diagnostic builds, variations-test12, accessory-tabs and equipment-list trials. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up Library.json before updating; saving with older releases can discard new tab/group metadata. No new game or preset re-registration is required. Existing external translations still work; untranslated new keys fall back to English.
 
-Skyrimを終了し、完全版2.2.1を導入してください。next-update-test1・重ね着診断版・test12などの試作DLL・旧差し替えパッチを無効にし、写真・プリセット・Library.json・設定・カスタムINI・対の.ess/.skseは保持してください。更新前にLibrary.jsonをバックアップしてください。旧版で保存すると追加タブ・差分の情報が失われる場合があります。ニューゲーム・再登録は不要です。外部翻訳の新規未翻訳項目は英語になります。
+Skyrimを終了し、完全版2.2.1を導入してください。next-update-test1/2/3・headgear-test1・重ね着診断版・test12などの試作DLL・旧差し替えパッチを無効にし、写真・プリセット・Library.json・設定・カスタムINI・対の.ess/.skseは保持してください。更新前にLibrary.jsonをバックアップしてください。旧版で保存すると追加タブ・差分の情報が失われる場合があります。ニューゲーム・再登録は不要です。外部翻訳の新規未翻訳項目は英語になります。
 
 Supported runtimes and the optional upscaler compatibility default (OFF) are unchanged. This release does not claim new testing on every supported runtime. GOG 1.6.1179 remains untested.
 
@@ -286,4 +303,4 @@ OFFにしても登録済みの付呪情報は消えません。付呪情報の�
 
 オプションの「UI倍率」で75～200%に調整でき、再起動後も保持します。初期値へ戻すと100%になります。以前OFFで保存した戦闘中・フリーカメラ中の起動許可はOFFのままです。必要に応じてONにしてください。表示中も戦闘が続く場合があります。着席・家具使用など、その他の制限は変わりません。
 
-更新時は以前のHUD試作版、2.0.1候補版、単独の1.7.104 Transmog Fixを無効にし、2.2.1のDLLを使用してください。カスタムINIと生成済みの写真・プリセット・設定、対応する.ess/.skseを保持して更新してください。
+更新時は以前のHUD試作版、2.0.1候補版、単独の1.7.104 Transmog Fixを無効にし、2.2.2のDLLを使用してください。カスタムINIと生成済みの写真・プリセット・設定、対応する.ess/.skseを保持して更新してください。

@@ -7,6 +7,7 @@
 // See TRANSMOG-SKIN1.md for source references and prototype limitations.
 #include "TransmogHookChain.h"
 #include "TransmogIdentity.h"
+#include "TransmogHead.h"
 #include "TransmogSave.h"
 #include "TransmogRuntime.h"
 #include <mutex>
@@ -48,6 +49,11 @@ struct ActorLook {
     std::atomic<bool> firstPersonStyled{};
     std::uint64_t traceDue{}; // game-thread-only delayed observations
     unsigned traceSamples{};
+    std::atomic<bool> headRepairQueued{};
+    std::atomic<std::uint64_t> lastHeadMask{~std::uint64_t{}};
+    std::shared_ptr<const Look> headRepairLook; // game-thread-only retry ownership
+    unsigned headRepairRemaining{};
+    std::uint64_t headRepairDue{};
 };
 using ActorLooks=std::vector<std::shared_ptr<ActorLook>>;
 std::atomic<std::shared_ptr<const ActorLooks>> actors{std::make_shared<const ActorLooks>()};
@@ -104,6 +110,101 @@ bool TakeTrace(std::atomic<unsigned>& remaining) {
     auto count=remaining.load();
     while(count && !remaining.compare_exchange_weak(count,count-1)) {}
     return count!=0;
+}
+struct HeadCoverage { std::uint32_t hidden{},appearance{}; };
+std::uint32_t HeadArmorCoverage(RE::TESObjectARMO* armor,const Look& look) {
+    auto result=armor->GetSlotMask().underlying();
+    for(auto* addon:armor->armorAddons) if(addon && addon->IsValidRace(look.race)) {
+        const auto* male=addon->bipedModels[0].GetModel();
+        const auto* female=addon->bipedModels[1].GetModel();
+        if(HasAppearanceModel(look.female,male && *male,female && *female))
+            result|=addon->GetSlotMask().underlying();
+    }
+    return result;
+}
+HeadCoverage ReadHeadCoverage(RE::InventoryChanges* changes,const Look& look) {
+    HeadCoverage result;
+    for(auto* armor:look.armor) result.appearance|=HeadArmorCoverage(armor,look);
+    if(changes && changes->entryList) for(auto* entry:*changes->entryList) {
+        if(!entry || !entry->object || !entry->IsWorn()) continue;
+        auto* armor=entry->object->As<RE::TESObjectARMO>();
+        if(!armor) continue;
+        const auto slots=armor->GetSlotMask().underlying();
+        result.hidden|=HiddenHeadCoverage(slots,HeadArmorCoverage(armor,look),look.scope);
+    }
+    return result;
+}
+bool HeadPartitionRoutineAvailable() {
+    // An absent ID must never resolve to the next database entry. Reuse the
+    // same membership check as transmog's runtime resolver, then check text.
+    static const bool available=[] {
+        const auto id=REL::Module::IsAE()?15753u:15576u;
+        const auto text=REL::Module::get().segment(REL::Segment::textx);
+        const auto base=REL::Module::get().base();
+        for(const auto& entry:REL::Offset2ID{}) if(entry.id==id) {
+            const auto at=base+entry.offset;
+            const bool valid=at>=text.address() && at<text.address()+text.size();
+            SKSE::log::info("HEADGEAR1 partition routine id={} validated={}",id,valid);
+            return valid;
+        }
+        SKSE::log::warn("HEADGEAR1 partition restore disabled: Address Library id={} absent",id);
+        return false;
+    }();
+    return available;
+}
+void RepairHeadPartitions(ActorLook& state) {
+    if(!state.headRepairRemaining || GetTickCount64()<state.headRepairDue) return;
+    --state.headRepairRemaining;state.headRepairDue=GetTickCount64()+150;
+    const auto current=state.look.load();
+    auto held=state.actor.get();auto* actor=held.get();
+    if(!current || current!=state.headRepairLook || !actor || actor->IsDead() || !actor->GetActorBase() ||
+       actor->GetRace()!=current->race || actor->GetActorBase()->IsFemale()!=current->female) {
+        state.headRepairRemaining=0;state.headRepairLook.reset();return;
+    }
+    auto* root=actor->Get3D(false);
+    if(!root) {if(!state.headRepairRemaining) state.headRepairLook.reset();return;}
+    const auto coverage=ReadHeadCoverage(actor->GetInventoryChanges(true),*current);
+    const auto restore=HeadPartitionsToRestore(coverage.hidden,coverage.appearance);
+    if(!restore || !HeadPartitionRoutineAvailable()) {
+        state.headRepairRemaining=0;state.headRepairLook.reset();return;
+    }
+    unsigned inspected{},changed{};
+    // Head overlays have independent skin instances. Inspect the actor's
+    // current geometry, but change ONLY existing head/ear partitions freed
+    // by hidden real headgear, never arbitrary body or decapitation sections.
+    RE::BSVisit::TraverseScenegraphGeometries(root,[&](RE::BSGeometry* geometry) {
+        auto* skin=geometry->GetGeometryRuntimeData().skinInstance.get();
+        auto* dis=netimmerse_cast<RE::BSDismemberSkinInstance*>(skin);
+        if(!dis) return RE::BSVisit::BSVisitControl::kContinue;
+        const auto& data=dis->GetRuntimeData();
+        if(!data.partitions || data.numPartitions<=0) return RE::BSVisit::BSVisitControl::kContinue;
+        for(std::int32_t i=0;i<data.numPartitions;++i) {
+            const auto& partition=data.partitions[i];
+            if(!(restore&HeadPartitionBit(partition.slot))) continue;
+            ++inspected;
+            if(!partition.visible) {dis->UpdateDismemberPartion(partition.slot,true);++changed;}
+        }
+        return RE::BSVisit::BSVisitControl::kContinue;
+    });
+    if(changed || state.headRepairRemaining==0)
+        SKSE::log::info("HEADGEAR1 actor={:08X} scope={:08X} hidden={:08X} appearance={:08X} restore={:08X} inspected={} changed={} retries={}",
+            state.id,current->scope,coverage.hidden,coverage.appearance,restore,inspected,changed,state.headRepairRemaining);
+    if(!state.headRepairRemaining) state.headRepairLook.reset();
+}
+void QueueHeadPartitionRepair(const std::shared_ptr<ActorLook>& state) {
+    if(state->headRepairQueued.exchange(true)) return;
+    auto* tasks=SKSE::GetTaskInterface();
+    if(!tasks) {state->headRepairQueued=false;return;}
+    tasks->AddTask([state] {
+        state->headRepairQueued=false;
+        // Ignore an old registry after load/new game. Resolve the current
+        // actor, look and geometry; no scene pointer survives a rebuild.
+        if(FindActorLook(state->id)!=state) return;
+        state->headRepairLook=state->look.load();
+        state->headRepairRemaining=state->headRepairLook?4u:0u;
+        state->headRepairDue=0;
+        RepairHeadPartitions(*state);
+    });
 }
 void DumpFollowerBiped(const ActorLook& state,RE::BipedAnim* biped,const char* phase) {
     SKSE::log::info("FOLLOWER-DIAG1 seq={} actor={:08X} phase={} biped={:X}",
@@ -191,7 +292,12 @@ std::uint32_t HairMask(RE::InventoryChanges* changes) {
     if(!current) return real;
     auto* base=player->GetActorBase();
     if(!base || player->GetRace()!=current->race || base->IsFemale()!=current->female) return real;
-    const auto result=(current->scope&2u)?AppearanceHairMask(real,current->slots):real;
+    const auto coverage=ReadHeadCoverage(changes,*current);
+    const auto result=AppearanceHeadMask(real,coverage.appearance,current->scope,coverage.hidden);
+    const auto stamp=(std::uint64_t(real)<<32)|result;
+    if(state->lastHeadMask.exchange(stamp)!=stamp)
+        SKSE::log::info("HEADGEAR1 actor={:08X} mask real={:08X} appearance={:08X} scope={:08X} hidden={:08X} result={:08X}",
+            state->id,real,coverage.appearance,current->scope,coverage.hidden,result);
     if(TakeTrace(state->traceMasks))
         SKSE::log::info("FOLLOWER-DIAG1 seq={} actor={:08X} hair-mask real={:08X} appearance={:08X} scope={:08X} result={:08X}",
             state->traceSequence.load(),state->id,real,current->slots,current->scope,result);
@@ -354,6 +460,7 @@ void Visit(RE::InventoryChanges* changes,RE::InventoryChanges::IItemChangeVisito
             state->traceSequence.load(),state->id,current->slots,applied,skinSlots,skin->GetFormID(),skinFallback);
     }
     if(logNextPass.exchange(false)) SKSE::log::info("SKIN-FIRST4 requested {:08X}, final appearance {:08X}, final skin {:08X}; skin={:08X} fallback={:08X}",current->slots,applied,skinSlots,skin->GetFormID(),skinFallback);
+    if(!firstPersonPass) QueueHeadPartitionRepair(state);
 }
 bool ExpectedCall(std::uintptr_t site,std::uintptr_t target) {
     if(*reinterpret_cast<std::uint8_t*>(site)!=0xE8) return false;
@@ -430,7 +537,7 @@ void BeginTransmogDiagnostic(const Preset& preset,bool transmog) {
 }
 void TickTransmogDiagnostic() {
     RestorePendingTransmog();
-    const auto snapshot=actors.load();for(auto& state:*snapshot) MaintainFullLook(*state);
+    const auto snapshot=actors.load();for(auto& state:*snapshot) {MaintainFullLook(*state);RepairHeadPartitions(*state);}
     for(const auto& state:*snapshot) {
         if(!state->traceSamples || GetTickCount64()<state->traceDue) continue;
         auto held=state->actor.get(); auto* actor=held.get();

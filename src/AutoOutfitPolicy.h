@@ -3,8 +3,8 @@
 #include <string>
 #include <cstdint>
 namespace Gallery::AutoOutfit {
-enum class Place : unsigned { Normal, Town, Home, Inn, Combat, Night, Rain, Snow, Dungeon, Temple, Swimming, Dawnguard, College, Brotherhood, Companions, Bards, Thieves, BluePalace, Melee, Magic, Archery, Unarmed, Sneaking, Smithing, Alchemy, Enchanting, Shop };
-using Slots=std::array<std::string,27>;
+enum class Place : unsigned { Normal, Town, Home, Inn, Combat, Night, Rain, Snow, Dungeon, Temple, Swimming, Dawnguard, College, Brotherhood, Companions, Bards, Thieves, BluePalace, Melee, Magic, Archery, Unarmed, Sneaking, Smithing, Alchemy, Enchanting, Shop, Sleeping };
+using Slots=std::array<std::string,28>;
 inline bool IsCombat(Place p) {return p==Place::Combat || (p>=Place::Melee && p<=Place::Unarmed);}
 inline bool HasCombatStyles(const Slots& slots) {
     for(unsigned i=18;i<=static_cast<unsigned>(Place::Unarmed);++i) if(!slots[i].empty()) return true;
@@ -33,7 +33,10 @@ inline Place Classify(bool home,bool inn,bool town,bool dungeon=false,bool templ
     return home?Place::Home:inn?Place::Inn:temple?Place::Temple:(dungeon && interior)?Place::Dungeon:(shop && interior)?Place::Shop:town?Place::Town:Place::Normal;
 }
 inline bool IsGuild(Place p) {return p>=Place::Dawnguard && p<=Place::BluePalace;}
-struct Environment {bool outside{}, night{}, rain{}, snow{}, swimming{}, sneaking{};};
+struct Environment {bool outside{}, night{}, rain{}, snow{}, swimming{}, sneaking{}, sleeping{};};
+// Vanilla SIT_SLEEP_STATE 5..8: approach/animation, asleep, and waking.
+// Sitting (1..4), waiting, and standing are not sleepwear triggers.
+constexpr bool SleepingState(unsigned state) {return state>=5 && state<=8;}
 // Water entry is opt-in by assignment. Do not relax ordinary gallery entry.
 inline bool SwimmingChangeAllowed(bool swimming,Place condition,const Slots& slots) {
     return !swimming || (!slots[10].empty() && (condition==Place::Swimming || IsCombat(condition)));
@@ -41,6 +44,7 @@ inline bool SwimmingChangeAllowed(bool swimming,Place condition,const Slots& slo
 inline bool IsNight(float hour) {return hour>=0.f && hour<24.f && (hour>=20.f || hour<6.f);}
 inline Place SelectCondition(Place location,const Environment& env,bool combat,const Slots& slots,Place guild=Place::Normal) {
     if(combat) return Place::Combat; // Combat enable/unassigned handling remains a separate gate.
+    if(env.sleeping && !slots[27].empty()) return Place::Sleeping;
     if(env.swimming && !slots[10].empty()) return Place::Swimming;
     if(env.sneaking && !slots[22].empty()) return Place::Sneaking;
     if(!env.outside && IsGuild(guild) && !slots[static_cast<unsigned>(guild)].empty()) return guild;
@@ -58,7 +62,7 @@ inline int ChooseSlot(Place place,const Slots& slots,bool inTown) {
         const auto i=static_cast<unsigned>(place);
         return !slots[i].empty()?static_cast<int>(i):slots[4].empty()?-1:4;
     }
-    if(place==Place::Enchanting || place==Place::Alchemy || place==Place::Smithing || place==Place::Sneaking || IsGuild(place) || place==Place::Swimming || place==Place::Combat || place==Place::Night || place==Place::Rain || place==Place::Snow) {
+    if(place==Place::Sleeping || place==Place::Enchanting || place==Place::Alchemy || place==Place::Smithing || place==Place::Sneaking || IsGuild(place) || place==Place::Swimming || place==Place::Combat || place==Place::Night || place==Place::Rain || place==Place::Snow) {
         const auto i=static_cast<unsigned>(place);return slots[i].empty()?-1:static_cast<int>(i);
     }
     if(place==Place::Shop && !slots[26].empty()) return 26;

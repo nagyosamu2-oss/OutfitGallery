@@ -1,4 +1,21 @@
-# Outfit Gallery 2.2.1
+# Outfit Gallery 2.2.2
+
+## 2.2.2
+
+- Fixed missing ears or an invisible head when real headgear is equipped during transmog.
+- Added **Move to another tab** to the organizer's right-click menu, plus **Alt + drag** onto a destination tab. Only the current tab's membership is removed; other tabs are kept. Ordinary dragging still adds a registration, and Shift-click still selects a range.
+- Added a **Sleeping** automatic outfit slot for the player and registered automatic-outfit followers. An empty slot leaves sleep switching inactive. After waking, outfits follow the current automatic conditions.
+
+### Moving between tabs
+
+Select outfits in the organizer, right-click and choose Move to another tab, then choose a destination. Alternatively, hold Alt while dropping the selection onto a registration tab. Transfers apply only when you Save and close; Cancel discards the draft. Moves require a category tab as the source and another tab of the same type as the destination. All, built-in Head/Accessories and Trash are not move sources. Moving to a tab that already contains the selection still removes its source membership. Photos, outfit contents, other memberships and photo order are preserved.
+
+### Sleepwear
+
+Enable automatic outfits and assign a full outfit to Sleeping. The selected equip/transmog mode is respected. Game sleep states and the player's sleep-time menu are detected; simply waiting, sitting or reaching night does not trigger sleepwear. After waking, ordinary condition evaluation resumes, with the usual delays and equipment queue. Assign Default or an appropriate location outfit too; if no outfit is assigned to the waking condition, the current outfit can remain.
+
+Avoid using another sleepwear feature at the same time. The short reminder is shown only while Sleeping is unassigned. Mods that use custom animations without the game's sleep state may not trigger this feature; compatibility with individual sleep mods is not guaranteed. Registered automatic followers are supported; this does not distribute sleepwear to every NPC.
+
 
 ## 2.2.1
 
@@ -29,9 +46,9 @@ In the organizer, the representative selects the whole visible group; individual
 Blank full-outfit registration names prefer the body item; other registrations use the first named registered item. Remove all / Restore all acts on the current removal-window list with verified sequential operations. Closing keeps the current state; refreshing resets its restoration list. Removing clothes can expose skin.
 
 ## Updating / 更新
-Exit Skyrim and install the complete 2.2.1 archive. Disable earlier trial DLL overrides, including next-update-test1, transmog diagnostic builds, variations-test12, accessory-tabs and equipment-list trials. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up Library.json before updating; saving with older releases can discard new tab/group metadata. No new game or preset re-registration is required. Existing external translations still work; untranslated new keys fall back to English.
+Exit Skyrim and install the complete 2.2.2 archive. Disable earlier trial DLL overrides, including next-update-test1, transmog diagnostic builds, variations-test12, accessory-tabs and equipment-list trials. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up Library.json before updating; saving with older releases can discard new tab/group metadata. No new game or preset re-registration is required. Existing external translations still work; untranslated new keys fall back to English.
 
-Skyrimを終了し、完全版2.2.1を導入してください。next-update-test1・重ね着診断版・test12などの試作DLL・旧差し替えパッチを無効にし、写真・プリセット・Library.json・設定・カスタムINI・対の.ess/.skseは保持してください。更新前にLibrary.jsonをバックアップしてください。旧版で保存すると追加タブ・差分の情報が失われる場合があります。ニューゲーム・再登録は不要です。外部翻訳の新規未翻訳項目は英語になります。
+Skyrimを終了し、完全版2.2.1を導入してください。next-update-test1/2/3・headgear-test1・重ね着診断版・test12などの試作DLL・旧差し替えパッチを無効にし、写真・プリセット・Library.json・設定・カスタムINI・対の.ess/.skseは保持してください。更新前にLibrary.jsonをバックアップしてください。旧版で保存すると追加タブ・差分の情報が失われる場合があります。ニューゲーム・再登録は不要です。外部翻訳の新規未翻訳項目は英語になります。
 
 Supported runtimes and the optional upscaler compatibility default (OFF) are unchanged. This release does not claim new testing on every supported runtime. GOG 1.6.1179 remains untested.
 
@@ -70,7 +87,7 @@ Development testing includes Steam 1.5.97 and 1.6.1170, plus the 1.7.104 transmo
 
 ## Install or update
 Close Skyrim and install this complete archive with your mod manager. It contains the DLL and default INI; no ESP or Papyrus scripts are required.
-Keep generated Data/SKSE/Plugins/OutfitGallery data: photos, presets and JSON settings. Preserve a customized OutfitGallery.ini. With MO2, check the existing mod folder, Overwrite and any output mod before replacing files. Disable older trial DLL overrides and the standalone 1.7.104 Transmog Fix so the 2.2.1 DLL takes priority. Hotkeys.json takes priority over INI hotkeys. A new game or preset re-registration is not required.
+Keep generated Data/SKSE/Plugins/OutfitGallery data: photos, presets and JSON settings. Preserve a customized OutfitGallery.ini. With MO2, check the existing mod folder, Overwrite and any output mod before replacing files. Disable older trial DLL overrides and the standalone 1.7.104 Transmog Fix so the 2.2.2 DLL takes priority. Hotkeys.json takes priority over INI hotkeys. A new game or preset re-registration is not required.
 The first load of legacy settings enables follower targeting once. A later explicit OFF is preserved. This migration does not enable automatic outfits.
 Keep .ess and .skse together. To downgrade, restore pre-update user data and saves as well as the previous DLL: older versions do not understand all newer preset, library and appearance data.
 

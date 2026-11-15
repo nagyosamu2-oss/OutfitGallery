@@ -49,6 +49,31 @@ inline std::size_t RemoveFromCategory(Library& draft,const std::vector<std::stri
     return removed;
 }
 // A selected context item acts on the visible selection; an unselected one
+// Transfer membership, not the photo or other tab memberships. Invalid and
+// cross-type destinations are rejected before changing any labels.
+inline bool CanMoveToCategory(const Library& draft,const std::string& source,const std::string& destination) {
+    if(source==destination || !IsCategory(draft,source) || !IsCategory(draft,destination)) return false;
+    const auto from=std::find_if(draft.categories.begin(),draft.categories.end(),[&](const auto& c){return c.id==source;});
+    const auto to=std::find_if(draft.categories.begin(),draft.categories.end(),[&](const auto& c){return c.id==destination;});
+    return from->accessories==to->accessories;
+}
+inline std::size_t MoveToCategory(Library& draft,const std::vector<std::string>& targets,
+        const std::string& source,const std::string& destination) {
+    if(!CanMoveToCategory(draft,source,destination)) return 0;
+    std::size_t moved=0;
+    for(const auto& photo:targets) {
+        auto it=draft.labels.find(photo);
+        if(it==draft.labels.end() || it->second.deleted) continue;
+        auto& tabs=it->second.categories;
+        if(std::find(tabs.begin(),tabs.end(),source)==tabs.end()) continue;
+        // Add first, so allocation failure cannot unregister an outfit.
+        if(std::find(tabs.begin(),tabs.end(),destination)==tabs.end()) tabs.push_back(destination);
+        std::erase(tabs,source);++moved;
+    }
+    return moved;
+}
+
+// A selected context item acts on the visible selection; an unselected one
 // acts only on itself. Empty context denotes the toolbar selection action.
 inline std::vector<std::string> TrashTargets(const std::vector<std::string>& visible,
         const std::set<std::string>& selected,const std::string& context={}) {

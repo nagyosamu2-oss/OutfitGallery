@@ -42,7 +42,10 @@ inline void Validate(const AutoOutfitSettings& s) {
 }
 inline std::string Encode(const AutoOutfitSettings& s) {
     Validate(s);
-    return nlohmann::json{{"slots",s.slots},{"delay",s.delaySeconds},{"columns",s.columns},{"recovery",s.ostimRecoverySeconds},
+    // Keep the existing 27-slot array readable by 2.2.1 on rollback.
+    std::array<std::string,27> legacy{};
+    std::copy_n(s.slots.begin(),legacy.size(),legacy.begin());
+    return nlohmann::json{{"slots",legacy},{"sleepPhoto",s.slots[27]},{"delay",s.delaySeconds},{"columns",s.columns},{"recovery",s.ostimRecoverySeconds},
         {"enabled",s.enabled},{"paused",s.paused},{"combat",s.combatEnabled},{"hide",s.hideAssignButtons},
         {"sneak",s.sneakDelaySeconds},{"interval",s.combatIntervalSeconds}}.dump();
 }
@@ -53,8 +56,10 @@ inline AutoOutfitSettings Decode(const std::string& bytes) {
     for(auto key:{"delay","columns","recovery","sneak","interval"})
         if(!j.at(key).is_number_integer() || j.at(key)<0 || j.at(key)>30) throw std::runtime_error("Invalid follower setting");
     AutoOutfitSettings s;
-    if(!j.at("slots").is_array() || j.at("slots").size()!=s.slots.size()) throw std::runtime_error("Invalid follower slots");
-    s.slots=j.at("slots").get<AutoOutfitSlots>();
+    if(!j.at("slots").is_array() || j.at("slots").size()!=27) throw std::runtime_error("Invalid follower slots");
+    const auto legacy=j.at("slots").get<std::array<std::string,27>>();
+    std::copy(legacy.begin(),legacy.end(),s.slots.begin());
+    s.slots[27]=j.value("sleepPhoto",std::string{});
     s.delaySeconds=j.at("delay"); s.columns=j.at("columns"); s.ostimRecoverySeconds=j.at("recovery");
     s.enabled=j.at("enabled"); s.paused=j.at("paused"); s.combatEnabled=j.at("combat"); s.hideAssignButtons=j.at("hide");
     s.sneakDelaySeconds=j.at("sneak"); s.combatIntervalSeconds=j.at("interval"); Validate(s); return s;

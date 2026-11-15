@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.2
+
+- Fixed missing ears or an invisible head when real headgear is equipped during transmog.
+- Added **Move to another tab** to the organizer's right-click menu, plus **Alt + drag** onto a destination tab. Only the current tab's membership is removed; other tabs are kept. Ordinary dragging still adds a registration, and Shift-click still selects a range.
+- Added a **Sleeping** automatic outfit slot for the player and registered automatic-outfit followers. An empty slot leaves sleep switching inactive. After waking, outfits follow the current automatic conditions.
+
 ## 2.2.1
 
 - Improved random try-on matching for part names and A/B/C variants, reducing omitted matching pieces.

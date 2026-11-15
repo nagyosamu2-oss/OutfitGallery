@@ -36,6 +36,15 @@ int main() {
     a.slots[0]="first.png";a.slots[4]="battle.png";a.enabled=true;a.combatEnabled=true;a.delaySeconds=0;a.combatIntervalSeconds=2;
     b.slots[0]="second.png";b.slots[1]="town.png";b.paused=true;b.delaySeconds=9;b.hideAssignButtons=true;
     auto ar=FollowerAuto::Decode(FollowerAuto::Encode(a)),br=FollowerAuto::Decode(FollowerAuto::Encode(b));
+    a.slots[27]="sleep.png";
+    auto sleepJson=nlohmann::json::parse(FollowerAuto::Encode(a));
+    require(sleepJson["slots"].size()==27); // older versions can still read this array
+    require(FollowerAuto::Decode(sleepJson.dump()).slots[27]=="sleep.png");
+    sleepJson.erase("sleepPhoto");
+    require(FollowerAuto::Decode(sleepJson.dump()).slots[27].empty());
+    sleepJson["sleepPhoto"]="../bad.png";
+    bool badSleep=false;try{(void)FollowerAuto::Decode(sleepJson.dump());}catch(...){badSleep=true;}
+    require(badSleep);a.slots[27].clear();
     require(ar.slots==a.slots && ar.enabled && ar.combatEnabled && ar.delaySeconds==0 && ar.combatIntervalSeconds==2);
     require(br.slots==b.slots && br.paused && br.delaySeconds==9 && br.hideAssignButtons && !br.enabled);
     auto invalid=[&](nlohmann::json j) {try {(void)FollowerAuto::Decode(j.dump());return false;}catch(...) {return true;}};

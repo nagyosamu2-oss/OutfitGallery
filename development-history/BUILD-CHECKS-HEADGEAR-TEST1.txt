@@ -1,0 +1,17 @@
+Outfit Gallery 2.2.1-headgear-test1 (DLL metadata 2.2.1.1)
+2026-11-15 Japan. Built with existing MSVC/CommonLibSSE-NG 10.1.0 toolchain.
+Final incremental Release build passed. 54/54 selected automated tests passed.
+TrashVirtualPathSafety excluded for the known baseline environment limitation;
+not counted as passing. No new hook sites or supported-runtime changes.
+SKSEPlugin_Load, SKSEPlugin_Query, SKSEPlugin_Version exports verified.
+Ordinary equipment / inactive transmog returns through the existing path.
+Head restoration limited to existing 30/43/130/143 partitions and hidden real
+headgear coverage not claimed by appearance; runtime ID membership/text guard.
+Game-thread task re-resolves registry/look/actor/3D; no deferred scene pointers.
+At most four partition sweeps per coalesced third-person rebuild, 150ms apart.
+No recursive task requeue; delayed retry uses the existing maintenance tick.
+Actor state, normal clear and load generation are checked before restoration.
+Test ZIP/source ZIP integrity and DLL equality verified. No user data included.
+No in-game verification performed. No deployment or GitHub changes performed.
+DLL SHA256: CDE9274003E1F1FE857A439C2889A45185C99D4F0317AD8D86052B87BD46C61F
+Changed/new source files: CMakeLists.txt, TEST.ja.md, THIRD_PARTY.md, src/Transmog.cpp, src/TransmogHead.h, src/main.cpp, tests/TransmogHeadTest.cpp

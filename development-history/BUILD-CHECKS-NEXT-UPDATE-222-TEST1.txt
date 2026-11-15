@@ -1,0 +1,38 @@
+Outfit Gallery 2.2.2-next-update-test1 / DLL metadata 2.2.2.1
+2026-11-15 Japan. MSVC Release build with existing CommonLibSSE-NG 10.1.0 bundle.
+56/56 selected automatic tests passed. TrashVirtualPathSafety excluded for the
+known baseline environment limitation; excluded test not counted as passing.
+Three SKSE exports verified. Headgear-test1 Transmog.cpp/TransmogHead.h and
+its regression test are byte-identical. INI unchanged.
+Added tested tab-membership transfer: current source only, other memberships,
+order, variations and Trash state preserved; invalid/cross-type targets refused.
+Right-click destination submenu and Alt+tab drag compile; no game/UI test yet.
+Added opt-in-by-assignment sleeping condition at appended slot 27. Combat
+priority, ordinary cooldown, shared equipment lane, manual mode and scene gates
+retained. Genuine sleep menu distinguished from wait menu by engine flag.
+Wake re-evaluates current automatic condition; no pre-sleep snapshot restoration.
+Existing JSON/co-save slot indices preserved; follower array stays length 27,
+sleepPhoto is optional. Persistence/legacy and sleep policy tests passed.
+English template/Japanese strings updated; translation validation passed.
+No installed files or GitHub changes; no upload. Integrated DLL not game-tested.
+DLL SHA256: EB579E9331CEDD17BC8D09829009F06BE808050296733E49FD025873A60BDEF5
+Changed/new trial files:
+CMakeLists.txt
+NEXT-UPDATE-TEST1.ja.md
+src/AutoOutfitPolicy.h
+src/AutoOutfitUI.inc
+src/AutoOutfits.inc
+src/FollowerAutoOutfits.inc
+src/FollowerAutoState.h
+src/GalleryOrganize.h
+src/GalleryOrganizeUI.inc
+src/Localization.inc
+src/Presets.cpp
+src/Presets.h
+src/TranslationKeys.h
+src/main.cpp
+tests/AutoOutfitTest.cpp
+tests/FollowerAutoTest.cpp
+tests/GalleryTabMoveTest.cpp
+tests/SleepOutfitTest.cpp
+translations/Translation.template.json

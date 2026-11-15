@@ -1,0 +1,19 @@
+Outfit Gallery 2.2.2 — release checks (2026-11-16 Japan)
+Fresh Windows x64 Release configure/build with MSVC 19.44 and existing
+CommonLibSSE-NG 10.1.0 bundle succeeded. 56/56 selected tests passed.
+TrashVirtualPathSafety excluded for the known baseline junction fixture
+environment limitation; excluded test is not counted as passing.
+SKSEPlugin_Load, SKSEPlugin_Query and SKSEPlugin_Version exports verified.
+Version source metadata 2.2.2.0. Accepted runtimes and INI defaults unchanged.
+Native sources differ from user-confirmed 2.2.2-next-update-test3 ONLY in
+main.cpp version/footer/log labels. Tests, translation template, integration
+headers and license files match that candidate byte-for-byte.
+User confirmed all trial feature behavior and final unassigned-only sleepwear
+note display. Head/ear improvement confirmed in author and reporter setups.
+This is not verification of every accepted runtime, head mesh or sleep mod.
+The final 2.2.2-numbered DLL has not yet been launched in-game.
+Runtime/source ZIP integrity, complete source file equality and DLL hashes
+verified. No photos, user JSON, saves, local logs or build outputs included
+in the source archive. Runtime archive includes only the intended DLL/INI.
+Earlier published/trial artifacts preserved. No upload or GitHub sync performed.
+DLL SHA256: 1BAA6C21202859AC841EB4F00FCF084DA7A34E9E5A77E128AA4F99342BBE84B3

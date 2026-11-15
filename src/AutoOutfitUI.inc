@@ -1,11 +1,11 @@
 // Renderer-only panel. No engine pointers, no game mutations.
 const char* AutoPlaceLabel(unsigned n) {
-    static constexpr std::array<const char*,27> labels{"Default","Town / City","Player home","Inn","Combat base","Night","Rain","Snow","Dungeon","Temple","Swimming","Fort Dawnguard","College of Winterhold","Dark Brotherhood sanctuaries","Jorrvaskr","Bards College","Ragged Flagon","Blue Palace","Combat: Melee","Combat: Magic","Combat: Archery","Combat: Unarmed","Sneaking","Smithing (test)","Alchemy (test)","Enchanting (test)","Shop"};
+    static constexpr std::array<const char*,28> labels{"Default","Town / City","Player home","Inn","Combat base","Night","Rain","Snow","Dungeon","Temple","Swimming","Fort Dawnguard","College of Winterhold","Dark Brotherhood sanctuaries","Jorrvaskr","Bards College","Ragged Flagon","Blue Palace","Combat: Melee","Combat: Magic","Combat: Archery","Combat: Unarmed","Sneaking","Smithing (test)","Alchemy (test)","Enchanting (test)","Shop","Sleeping"};
     return n<labels.size()?labels[n]:"Default";
 }
 // Presentation order only: saved slot IDs and policy priority remain unchanged.
-constexpr std::array<unsigned,27> AutoDisplayOrder{0,1,2,3,26,9,8,4,18,19,20,21,22,10,5,6,7,11,12,13,14,15,16,17,23,24,25};
-static_assert([] {std::array<bool,27> seen{};for(auto slot:AutoDisplayOrder){if(slot>=seen.size() || seen[slot]) return false;seen[slot]=true;}return true;}());
+constexpr std::array<unsigned,28> AutoDisplayOrder{0,1,2,3,27,26,9,8,4,18,19,20,21,22,10,5,6,7,11,12,13,14,15,16,17,23,24,25};
+static_assert([] {std::array<bool,28> seen{};for(auto slot:AutoDisplayOrder){if(slot>=seen.size() || seen[slot]) return false;seen[slot]=true;}return true;}());
 const char* AutoCardLabel(unsigned slot) {
     return slot==12?"Mage College":slot==13?"Dark Brotherhood":AutoPlaceLabel(slot);
 }
@@ -44,7 +44,7 @@ bool SaveAutoOutfitPreferences(const AutoOutfitSlots& slots,int seconds,int colu
     }catch(const std::exception& e) {SetStatus(e.what()); return false;}
 }
 bool AssignAutoPhoto(unsigned slot,const std::string& photo) {
-    if((!PanelFollowerID() && !autoSlotsWritable) || !libraryWritable || slot>=27 || (PanelFollowerID() && slot>=23 && slot<=25)) return false;
+    if((!PanelFollowerID() && !autoSlotsWritable) || !libraryWritable || slot>=28 || (PanelFollowerID() && slot>=23 && slot<=25)) return false;
     if(!photo.empty()) {
         std::scoped_lock lock(presetsMutex);
         const auto it=std::find_if(presets.begin(),presets.end(),[&](const auto& p){return p.photo==photo;});
@@ -381,6 +381,21 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
             }
             else UI::Button(Tr("Drop outfit here"),{width,cardHeight+frameY*2.f});
             const auto photoMin=UI::GetItemRectMin(),photoMax=UI::GetItemRectMax();
+            if(n==27 && slots[n].empty()) {
+                // Draw within the photo/button, without adding a tall layout
+                // item beneath this card or changing its drag/drop hit area.
+                const char* note=Tr("Avoid using other sleepwear features at the same time.");
+                const float padding=std::max(4.f,UI::GetFontSize()*.25f);
+                const float wrap=std::max(1.f,photoMax.x-photoMin.x-padding*2.f);
+                const auto textSize=UI::CalcTextSize(note,nullptr,false,wrap);
+                const float top=std::max(photoMin.y,photoMax.y-textSize.y-padding*2.f);
+                auto* draw=UI::GetWindowDrawList();
+                UI::ImDrawListManager::PushClipRect(draw,photoMin,photoMax,true);
+                UI::ImDrawListManager::AddRectFilled(draw,{photoMin.x,top},photoMax,0xB0000000,0,0);
+                UI::ImDrawListManager::AddText(draw,UI::GetFont(),UI::GetFontSize(),
+                    {photoMin.x+padding,top+padding},0xFFFFFFFF,note,nullptr,wrap);
+                UI::ImDrawListManager::PopClipRect(draw);
+            }
             const bool photoHovered=UI::IsItemHovered(UI::ImGuiHoveredFlags_AllowWhenOverlappedByItem | UI::ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
             if(UI::BeginDragDropTarget()) {
                 if(const auto* payload=UI::AcceptDragDropPayload("OUTFIT_PHOTO")) {

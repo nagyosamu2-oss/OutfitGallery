@@ -1,19 +1,13 @@
-# Outfit Gallery 2.2.1
+# Outfit Gallery 2.2.2
 
-## 2.2.1
+## 日本語
 
-- Improved random try-on matching for part names and A/B/C variants, reducing omitted matching pieces.
-- L1/R1 tab switching now moves focus to the outfit list. Left/right navigation while focused on the tabs is unchanged.
-- Added a photo pause/resume button beside camera preset 7. Blue indicates the pause action; orange indicates an active pause. Camera and gallery controls remain available. Closing the gallery releases pauses started by this feature.
-- Added failure diagnostics to detailed logging for transmog startup validation. Hook acceptance rules are unchanged.
+- 重ね着中に実際の頭装備を装備すると、耳が欠けたり頭全体が消えたりする不具合を修正しました。
+- 整理画面の右クリックに「別のタブに移動」を追加しました。Alt＋登録先タブへのドラッグでも移動できます。登録を外すのは現在のタブだけで、他のタブへの登録は維持します。通常のドラッグは追加登録、Shift＋クリックは範囲選択のままです。
+- プレイヤー・自動着替え登録済みのフォロワーに「睡眠」枠を追加しました。未登録なら睡眠時の切り替えは行いません。起床後は現在の自動着替え条件に従います。
 
-Known compatibility report: Transmog has been reported unavailable with ApparelPreview (Nexus 185334). Disabling ApparelPreview restored transmog in the reported setup. Compatibility remains unverified; no compatibility bypass is included.
+## English
 
-## 2.2.1
-
-- おまかせ試着の部品名・A/B/C差分の判定を改善し、同じ系統の部品の取りこぼしを軽減しました。
-- L1/R1で分類タブを切り替えた後、そのままセット一覧を操作できるようにしました。タブ上での左右操作は従来どおりです。
-- カメラプリセット7の右に、撮影用の一時停止・再開ボタンを追加しました。通常は青、停止中はオレンジで表示します。停止中もカメラとギャラリーは操作でき、終了時にはこの機能による停止を解除します。
-- 重ね着の起動時検証に失敗した際の情報を「詳細ログを記録」で確認できるようにしました。重ね着のフックを受け入れる判定は変更していません。
-
-互換情報：ApparelPreview（Nexus 185334）との併用時に重ね着が利用できなくなる報告があります。報告環境ではApparelPreview自体の無効化で改善しています。互換対応は未確認で、制限の回避処理は追加していません。
+- Fixed missing ears or an invisible head when real headgear is equipped during transmog.
+- Added **Move to another tab** to the organizer's right-click menu, plus **Alt + drag** onto a destination tab. Only the current tab's membership is removed; other tabs are kept. Ordinary dragging still adds a registration, and Shift-click still selects a range.
+- Added a **Sleeping** automatic outfit slot for the player and registered automatic-outfit followers. An empty slot leaves sleep switching inactive. After waking, outfits follow the current automatic conditions.

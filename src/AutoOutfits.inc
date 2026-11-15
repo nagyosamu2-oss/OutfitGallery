@@ -20,12 +20,19 @@ int autoPlace{};
 struct AutoEnvironmentInfo {AutoOutfit::Environment flags; float hour{12.f}; bool ready{};};
 struct AutoEnvironmentDisplay {AutoEnvironmentInfo environment; int locationPlace{}, selectedSlot{-1};};
 AutoEnvironmentDisplay autoEnvironment; // autoMutex, values only; no engine pointers in UI
+bool PlayerSleepMenu(RE::UI* ui) {
+    if(!ui || !ui->IsMenuOpen(RE::SleepWaitMenu::MENU_NAME)) return false;
+    const auto menu=ui->GetMenu<RE::SleepWaitMenu>();
+    return menu && menu->GetRuntimeData().isSleeping;
+}
 AutoEnvironmentInfo ReadAutoEnvironment(RE::Actor* player) {
     AutoEnvironmentInfo info;
     auto* cell=player->GetParentCell();auto* sky=RE::Sky::GetSingleton();auto* calendar=RE::Calendar::GetSingleton();
     info.flags.outside=cell && !cell->IsInteriorCell();
     info.flags.swimming=player->AsActorState()->IsSwimming();
     info.flags.sneaking=player->IsSneaking();
+    info.flags.sleeping=AutoOutfit::SleepingState(static_cast<unsigned>(player->AsActorState()->GetSitSleepState())) ||
+        (player==RE::PlayerCharacter::GetSingleton() && PlayerSleepMenu(RE::UI::GetSingleton()));
     if(calendar) {info.hour=calendar->GetHour();info.flags.night=AutoOutfit::IsNight(info.hour);}
     info.ready=cell && calendar && info.hour>=0.f && info.hour<24.f && (!info.flags.outside || sky);
     if(info.flags.outside && sky) {info.flags.rain=sky->IsRaining();info.flags.snow=sky->IsSnowing();}
@@ -35,8 +42,8 @@ void AutoEnvironmentStatus(const AutoEnvironmentInfo& info,int location,int slot
     std::scoped_lock lock(autoMutex);
     const auto& old=autoEnvironment.environment;
     if(old.flags.outside!=info.flags.outside || old.flags.night!=info.flags.night || old.flags.rain!=info.flags.rain ||
-       old.flags.snow!=info.flags.snow || old.flags.swimming!=info.flags.swimming || old.flags.sneaking!=info.flags.sneaking || old.ready!=info.ready || autoEnvironment.locationPlace!=location || autoEnvironment.selectedSlot!=slot)
-        SKSE::log::info("OG-AUTO environment outside={} hour={} night={} rain={} snow={} swimming={} ready={} locationPlace={} selectedSlot={}",info.flags.outside,info.hour,info.flags.night,info.flags.rain,info.flags.snow,info.flags.swimming,info.ready,location,slot);
+       old.flags.snow!=info.flags.snow || old.flags.swimming!=info.flags.swimming || old.flags.sneaking!=info.flags.sneaking || old.flags.sleeping!=info.flags.sleeping || old.ready!=info.ready || autoEnvironment.locationPlace!=location || autoEnvironment.selectedSlot!=slot)
+        SKSE::log::info("OG-AUTO environment outside={} hour={} night={} rain={} snow={} swimming={} sleeping={} ready={} locationPlace={} selectedSlot={}",info.flags.outside,info.hour,info.flags.night,info.flags.rain,info.flags.snow,info.flags.swimming,info.flags.sleeping,info.ready,location,slot);
     autoEnvironment={info,location,slot};
 }
 std::string autoOutcome="Ready"; // game thread only
@@ -181,14 +188,18 @@ void MaintainAutoOutfits(bool beforeFollowers=false) {
         autoPolicy.Block();autoStyle.Block();AutoStatus(TransmogUnavailableReason(language==1),place,where.name);return;
     }
     if(sceneBlocked) {autoPolicy.Block();autoStyle.Block();AutoStatus(OStimStateLabel(ostimSceneState.load()),place,where.name);return;}
-    if(!fighting && !environment.ready) {autoPolicy.Block();autoStyle.Block();AutoStatus("Waiting for environment data",place,where.name);return;}
+    const bool sleeping=condition==AutoOutfit::Place::Sleeping;
+    if(!fighting && !sleeping && !environment.ready) {autoPolicy.Block();autoStyle.Block();AutoStatus("Waiting for environment data",place,where.name);return;}
     auto* controls=RE::ControlMap::GetSingleton(); const auto* state=player->AsActorState();
-    const bool blocked=active || saveBusy || ui->GameIsPaused() || ui->numItemMenus || ui->numApplicationMenus ||
+    // Only the genuine sleep menu is exempt, never the wait-time menu or
+    // another pause. Bed animations may disable controls/use furniture cameras.
+    const bool sleepMenu=sleeping && PlayerSleepMenu(ui);
+    const bool blocked=active || saveBusy || (ui->GameIsPaused() && !(sleepMenu && ui->numPausesGame==1)) || ui->numItemMenus || ui->numApplicationMenus>(sleepMenu?1u:0u) ||
         ui->IsMenuOpen("Dialogue Menu") || ui->IsMenuOpen("Console") || ui->IsMenuOpen("PhotoMode") ||
         player->IsDead() || player->IsDisabled() || player->IsInKillMove() || player->IsInRagdollState() || state->IsUnconscious() || state->IsStaggered() || player->IsOnMount() || !AutoOutfit::SwimmingChangeAllowed(state->IsSwimming(),condition,slots) ||
-        state->GetSitSleepState()!=RE::SIT_SLEEP_STATE::kNormal ||
-        !(camera->IsInFirstPerson() || camera->IsInThirdPerson()) || !controls ||
-        !controls->IsMovementControlsEnabled() || !controls->IsActivateControlsEnabled();
+        (state->GetSitSleepState()!=RE::SIT_SLEEP_STATE::kNormal && !sleeping) ||
+        (!(camera->IsInFirstPerson() || camera->IsInThirdPerson()) && !sleeping) || !controls ||
+        ((!controls->IsMovementControlsEnabled() || !controls->IsActivateControlsEnabled()) && !sleeping);
     if(blocked) {autoPolicy.Block();autoStyle.Block(); AutoStatus("Waiting for normal play",place,where.name); return;}
     if(styled) {
         const auto weaponState=state->GetWeaponState();

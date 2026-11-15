@@ -5,7 +5,18 @@ The implementation in `src/` and `tests/` was authored for this project with sub
 ## Runtime1 instruction decoder
 
 - `third_party/hde64/` contains Hacker Disassembler Engine 64 from MinHook (Vyacheslav Patkov; MinHook distribution by Tsuda Kageyu). It is used only to decode instruction boundaries, not to install MinHook detours. Retained BSD notices: `LICENSES/HDE64-MinHook.txt`. Upstream: <https://github.com/TsudaKageyu/minhook/tree/master/src/hde>.
-- The SE/AE call identities were cross-checked against the pinned Fitting Room and Skyrim Fitting System sources recorded in `TRANSMOG-SKIN1.md`, and CommonLibSSE-NG v10.1.0. The new bounded resolver and tests are project code; no game executable or Address Library database is redistributed.
+- The SE/AE call identities were cross-checked against the pinned Fitting Room and Skyrim Fitting System sources recorded in `development-history/TRANSMOG-SKIN1.md`, and CommonLibSSE-NG v10.1.0. The new bounded resolver and tests are project code; no game executable or Address Library database is redistributed.
+
+## Headgear partition restoration (2.2.2)
+
+The scoped dismember-partition restoration in `Transmog.cpp`
+was adapted with reference to Fitting Room (maartenharms), GPL-3.0,
+commit `8717ae7a8fe6185a65721564bac7237ddd411f65`,
+`src/BipedPost.cpp` and `src/SlotMask.h`. Source:
+<https://github.com/maartenharms/fitting-room>. The restoration and this
+project remain under the included GPL-3.0 license. This release restores only
+head/ear partitions freed by hidden real headgear, with actor-local bounded
+retries; it does not import Fitting Room's broader feature set.
 
 ## Public integration headers
 

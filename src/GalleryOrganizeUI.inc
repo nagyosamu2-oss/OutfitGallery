@@ -14,6 +14,7 @@ struct OrganizerState {
     bool representativeDragging{};
     std::string registrationTab;
     unsigned registrationAdded{},registrationExisting{},registrationRemoved{};
+    unsigned registrationMoved{};
     char search[160]{};
     std::vector<std::string> loaded;
     std::optional<std::string> disk;
@@ -268,9 +269,10 @@ void RenderOrganizer() {
         UI::PopStyleColor(2);
         const auto a=UI::GetItemRectMin(),b=UI::GetItemRectMax();
         bool delivered=false,preview=false;
-        if(canRegister && UI::BeginDragDropTarget()) {
+        if(canRegister && (!UI::GetIO()->KeyAlt || Organize::CanMoveToCategory(organizer.draft,organizer.category,c.id)) && UI::BeginDragDropTarget()) {
             if(const auto* payload=UI::AcceptDragDropPayload("OUTFIT_ORGANIZE",UI::ImGuiDragDropFlags_AcceptBeforeDelivery|UI::ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
                 preview=true;delivered=payload->Delivery;
+                if(UI::GetIO()->KeyAlt)UI::SetTooltip(Tr("Move to %s (Alt). Other tabs are kept."),title.c_str());
             }
             UI::EndDragDropTarget();
         }
@@ -281,7 +283,16 @@ void RenderOrganizer() {
             UI::ImDrawListManager::AddRect(draw,a,b,0xFF30C8FF,0,0,2.f);
         }
         if(focused && (left||right||up||down))UI::SetScrollHereX(.5f);
-        if(canRegister && (clicked || delivered || (focused && confirm))) {
+        const bool moveDrop=delivered && UI::GetIO()->KeyAlt;
+        if(canRegister && moveDrop) {
+            const auto count=Organize::MoveToCategory(organizer.draft,registrationTargets,organizer.category,c.id);
+            if(count) {
+                organizer.registrationMoved=static_cast<unsigned>(count);organizer.registrationRemoved=0;
+                organizer.registrationTab=title;organizer.destination=false;organizer.anchor.clear();
+                for(const auto& photo:registrationTargets)organizer.selection.erase(photo);
+            }
+        } else if(canRegister && (clicked || delivered || (focused && confirm))) {
+            organizer.registrationMoved=0;
             organizer.registrationRemoved=0;
             organizer.registrationAdded=static_cast<unsigned>(Organize::AddToCategory(organizer.draft,registrationTargets,c.id));
             organizer.registrationExisting=static_cast<unsigned>(registrationTargets.size())-organizer.registrationAdded;
@@ -306,7 +317,8 @@ void RenderOrganizer() {
     }
     UI::EndChild();
     if(!organizer.registrationTab.empty()) {
-        if(organizer.registrationRemoved)UI::TextWrapped(Tr("%s: removed %u from this tab. Photos are kept. Applied when saved."),organizer.registrationTab.c_str(),organizer.registrationRemoved);
+        if(organizer.registrationMoved)UI::TextWrapped(Tr("%s: moved %u from the current tab. Other tabs are kept. Applied when saved."),organizer.registrationTab.c_str(),organizer.registrationMoved);
+        else if(organizer.registrationRemoved)UI::TextWrapped(Tr("%s: removed %u from this tab. Photos are kept. Applied when saved."),organizer.registrationTab.c_str(),organizer.registrationRemoved);
         else UI::TextWrapped(Tr("%s: added %u; already registered %u. Applied when saved."),organizer.registrationTab.c_str(),organizer.registrationAdded,organizer.registrationExisting);
     }
     if(missingCheckMode) {
@@ -352,6 +364,23 @@ void RenderOrganizer() {
         if(UI::Button(Label("Ungroup variations"))) {ungroupSelection(contextSelection);UI::CloseCurrentPopup();}
         UI::EndDisabled();UI::EndDisabled();UI::Separator();
         if(Organize::IsCategory(organizer.draft,organizer.category)) {
+            const auto source=std::find_if(organizer.draft.categories.begin(),organizer.draft.categories.end(),[&](const auto& c){return c.id==organizer.category;});
+            if(UI::BeginMenu(Tr("Move to another tab"),canTrash && !targets.empty())) {
+                bool any=false;
+                for(const auto& dest:organizer.draft.categories) {
+                    if(dest.id==organizer.category || dest.accessories!=source->accessories) continue;
+                    any=true;
+                    if(UI::MenuItem((CategoryTitle(dest)+"##move-"+dest.id).c_str())) {
+                        const auto count=Organize::MoveToCategory(organizer.draft,targets,organizer.category,dest.id);
+                        organizer.registrationMoved=static_cast<unsigned>(count);organizer.registrationRemoved=0;
+                        organizer.registrationTab=CategoryTitle(dest);organizer.anchor.clear();organizer.destination=false;
+                        for(const auto& photo:targets)organizer.selection.erase(photo);
+                        UI::CloseCurrentPopup();
+                    }
+                }
+                if(!any)UI::TextUnformatted(Tr("No other compatible tabs."));
+                UI::EndMenu();
+            }
             UI::BeginDisabled(!canTrash || targets.empty());
             if(UI::Button((std::string(Tr("Remove from this tab"))+" ("+std::to_string(targets.size())+")##ContextUnregister").c_str())) {
                 categoryRemovals=targets;UI::CloseCurrentPopup();
@@ -441,7 +470,9 @@ void RenderOrganizer() {
         }
         if(!conflict && organizer.representativeDragPhoto.empty() && UI::IsMouseDragging(0,24.f) && UI::BeginDragDropSource()) {
             organizer.selection=Variations::DragSelection(organizer.selection,p.photo,groups);organizer.registrationTab.clear();
-            const int token=1;UI::SetDragDropPayload("OUTFIT_ORGANIZE",&token,sizeof(token));UI::Text(Tr("Selected: %u / Visible: %u"),static_cast<unsigned>(organizer.selection.size()),static_cast<unsigned>(cards.size()));UI::EndDragDropSource();
+            const int token=1;UI::SetDragDropPayload("OUTFIT_ORGANIZE",&token,sizeof(token));
+            UI::TextUnformatted(Tr(UI::GetIO()->KeyAlt?"Move to another tab (Alt)":"Add to tab; hold Alt to move."));
+            UI::Text(Tr("Selected: %u / Visible: %u"),static_cast<unsigned>(organizer.selection.size()),static_cast<unsigned>(cards.size()));UI::EndDragDropSource();
         }
         if(!missingCheckMode && !conflict && !organizer.selection.contains(p.photo) && UI::BeginDragDropTarget()) {
             if(const auto* payload=UI::AcceptDragDropPayload("OUTFIT_ORGANIZE",UI::ImGuiDragDropFlags_AcceptBeforeDelivery|UI::ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
@@ -496,6 +527,7 @@ void RenderOrganizer() {
             // Continue offscreen and through release so existing photo/tab drop targets deliver.
             if(organizer.representativeDragging && UI::BeginDragDropSource(UI::ImGuiDragDropFlags_SourceExtern)) {
                 const int token=1;UI::SetDragDropPayload("OUTFIT_ORGANIZE",&token,sizeof(token));
+                UI::TextUnformatted(Tr(UI::GetIO()->KeyAlt?"Move to another tab (Alt)":"Add to tab; hold Alt to move."));
                 UI::Text(Tr("Selected: %u / Visible: %u"),static_cast<unsigned>(organizer.selection.size()),static_cast<unsigned>(cards.size()));
                 UI::EndDragDropSource();
             }
@@ -590,6 +622,7 @@ void RenderOrganizer() {
     if(!categoryRemovals.empty() && canTrash) {
         const auto removed=Organize::RemoveFromCategory(organizer.draft,categoryRemovals,organizer.category);
         if(removed) {
+            organizer.registrationMoved=0;
             organizer.registrationTab=CategoryTitle(tabs[tab]);
             organizer.registrationRemoved=static_cast<unsigned>(removed);
             for(const auto& photo:categoryRemovals)organizer.selection.erase(photo);

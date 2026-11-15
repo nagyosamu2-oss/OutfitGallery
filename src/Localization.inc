@@ -18,6 +18,15 @@ void LoadExternalTranslation() {
     }
 }
 const std::map<std::string,std::string> japanese{
+    {"Move to another tab","別のタブに移動"},
+    {"No other compatible tabs.","移動できる別のタブがありません。"},
+    {"%s: moved %u from the current tab. Other tabs are kept. Applied when saved.","%s：現在のタブから %u 件移動します。他のタブへの登録は維持し、保存時に反映します。"},
+    {"Move to %s (Alt). Other tabs are kept.","%s へ移動（Alt）。他のタブへの登録は維持します。"},
+    {"Move to another tab (Alt)","別のタブに移動（Alt）"},
+    {"Add to tab; hold Alt to move.","タブに追加登録。Altを押すと移動。"},
+    {"Sleeping","睡眠"},
+    {"Avoid using other sleepwear features at the same time.","他の寝間着機能との併用は避けてください。"},
+
  {"Pause game for photos. Camera and gallery controls remain available.","撮影用にゲームを一時停止します。カメラとギャラリーは操作できます。"},
  {"Resume game. Closing the gallery also resumes time.","ゲームを再開します。ギャラリーを閉じても再開します。"},
  {"Time is already paused by another feature.","他の機能によって時間が停止しています。"},

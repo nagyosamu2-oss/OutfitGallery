@@ -697,4 +697,12 @@ namespace Gallery::Translation { inline const std::set<std::string>& Keys() { st
 "Remove automatic settings",
 "Automatic outfits support up to two followers. Remove another follower's settings first.",
 "Disable automatic outfits before fixed maintenance.",
+"Move to another tab",
+"No other compatible tabs.",
+"%s: moved %u from the current tab. Other tabs are kept. Applied when saved.",
+"Move to %s (Alt). Other tabs are kept.",
+"Move to another tab (Alt)",
+"Add to tab; hold Alt to move.",
+"Sleeping",
+"Avoid using other sleepwear features at the same time.",
 }; return keys; } }

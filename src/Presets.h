@@ -13,7 +13,7 @@
 #include "RegisteredName.h"
 namespace RE { class Actor; }
 namespace Gallery {
-using AutoOutfitSlots=std::array<std::string,27>; // Default, Town, Home, Inn, Combat, Night, Rain, Snow, Dungeon, Temple, Swimming, six guild bases; existing indices stay stable
+using AutoOutfitSlots=std::array<std::string,28>; // Sleeping appended at 27; existing saved indices stay stable.
 struct AutoOutfitSettings { AutoOutfitSlots slots; int delaySeconds{0}; int columns{3}; int ostimRecoverySeconds{10}; bool enabled{}, paused{}, combatEnabled{}, hideAssignButtons{}; int sneakDelaySeconds{1}; int combatIntervalSeconds{2}; };
 AutoOutfitSettings ReadAutoOutfitSettings(const std::filesystem::path&);
 void WriteAutoOutfitSettings(const AutoOutfitSettings&,const std::filesystem::path&);
