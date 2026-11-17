@@ -12,6 +12,14 @@ int main() {
     assert(ResolveUiScale(1280,720,1.5f)==.75f);
     assert(ResolveUiScale(0,0,1)==1);
     assert(NormalizeUiZoom(std::numeric_limits<float>::quiet_NaN())==1);
+    // Defaults/reset follow the active theme; explicit values remain stable.
+    assert(ResolveUiBackgroundOpacity(-1.f,.7f)==.7f);
+    assert(ResolveUiBackgroundOpacity(-1.f,.9f)==.9f);
+    assert(ResolveUiBackgroundOpacity(.3f,.9f)==.3f);
+    assert(ResolveUiBackgroundOpacity(0.f,.9f)==0.f);
+    assert(ResolveUiBackgroundOpacity(1.f,.9f)==1.f);
+    assert(NormalizeUiBackgroundOpacity(9.f)==1.f);
+    assert(NormalizeUiBackgroundOpacity(std::numeric_limits<float>::quiet_NaN())==-1.f);
     // Upscaled 720->1440: coordinate-sized controls preserve the WQHD ratio.
     assert(24*ResolveUiScale(1280,720,1)*2==24*ResolveUiScale(2560,1440,1));
     for(int cols=2;cols<=6;++cols) for(bool portrait:{false,true}) {

@@ -1,0 +1,17 @@
+Outfit Gallery 2.2.3-click-variations-test1 / DLL metadata 2.2.3.2
+2026-11-16 Japan. Release build with existing MSVC/CommonLibSSE-NG 10.1.0.
+56/56 selected automated tests passed. Known baseline TrashVirtualPathSafety
+environment limitation excluded, not counted as passing. Three SKSE exports
+verified. Built on official 2.2.2, NOT the unconfirmed tempered-item trial.
+Click-to-expand is the default for new and legacy studio settings lacking
+hoverVariations. Explicit hover preference persists in the existing JSON.
+Action regression tests separate group expansion from application, preserve
+single-photo/legacy hover clicks, and reject drag/pad/overlay activation.
+Persistence tests cover both choices and legacy missing-key defaults.
+Click-opened strips survive pointer leave; close on outside click/scroll,
+Escape/B, invalid anchor/modal, or explicit controller navigation rules.
+Normal gallery only. Organizer input/drag source and equipment/transmog
+sources are byte-identical to 2.2.2. No new game-thread mutation or polling.
+Runtime/source ZIP integrity, DLL equality and complete source ZIP checked.
+No installed-file changes, GitHub update or upload. In-game UI not verified.
+DLL SHA256: 925D6B11E199D4E09B77EB89FD8F3D96DE359B0ACB34E4954E72A30837211A90

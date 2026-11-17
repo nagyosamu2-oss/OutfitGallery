@@ -54,7 +54,7 @@
 
 using namespace REL::literals;
 SKSEPluginInfo(
-    .Version = "2.2.2.0"_v,
+    .Version = "2.2.4.0"_v,
     .Name = "OutfitGallery",
     .Author = "Outfit Gallery contributors",
     // SKSE's final component is the store identifier: GOG is 1, not 0.
@@ -88,6 +88,8 @@ bool compactGallery{}, compactOrganizeRequested{};
 bool showEquipmentTools{true};
 // Manual and automatic player outfits share the per-save appearance mode.
 float uiZoom=1.f;
+float uiBackgroundOpacity=-1.f; // negative follows the framework theme
+bool hoverVariations=false; // renderer preference: click to expand by default
 bool addMissing{true}, showCameraSettings{}; std::atomic<bool> preferEnchanted{true}; std::string enchantNotice;
 std::atomic<bool> fullOutfitToggle{};
 std::atomic<bool> detachedPreview{}, cameraCentered{}, followerTargeting{true};
@@ -114,7 +116,7 @@ ULONGLONG settingsChangedAt{};
 const std::filesystem::path settingsFile="Data/SKSE/Plugins/OutfitGallery/StudioSettings.json";
 void SaveSettingsIfDue(bool force=false) {
     if (!force && (!settingsChangedAt || GetTickCount64()-settingsChangedAt<600)) return;
-    try { WriteStudioSettings({distance.load(),height.load(),orbit.load(),pitch.load(),fov.load(),gridColumns,showNames,showCounts,language,allowFreeCamera.load(),addMissing,lateral.load(),elevation.load(),partialSlots.load(),startupTab,detachedPreview.load(),previewRect,followerTargeting.load(),preferEnchanted.load(),portraitThumbnails,cleanupCompatibility.load(),allowCombatGallery.load(),compactGallery,reclaimRenamedGeneratedItems.load(),uiZoom,fullOutfitToggle.load(),upscalerCompatibility.load(),showEquipmentTools},settingsFile); }
+    try { WriteStudioSettings({distance.load(),height.load(),orbit.load(),pitch.load(),fov.load(),gridColumns,showNames,showCounts,language,allowFreeCamera.load(),addMissing,lateral.load(),elevation.load(),partialSlots.load(),startupTab,detachedPreview.load(),previewRect,followerTargeting.load(),preferEnchanted.load(),portraitThumbnails,cleanupCompatibility.load(),allowCombatGallery.load(),compactGallery,reclaimRenamedGeneratedItems.load(),uiZoom,fullOutfitToggle.load(),upscalerCompatibility.load(),showEquipmentTools,hoverVariations,uiBackgroundOpacity},settingsFile); }
     catch(const std::exception& e) { SKSE::log::error("Settings save: {}",e.what()); }
     settingsChangedAt=0;
 }
@@ -162,6 +164,7 @@ Preset stagedPreset, requestedPreset;
 // Request/response values only; no game pointers cross to the renderer.
 Preset scopeRequest;
 std::vector<std::uint32_t> scopeMasks;
+std::vector<std::string> scopeNames;
 std::string scopeError;
 bool scopeReady{}; // guarded by presetsMutex
 
@@ -702,9 +705,9 @@ void Tick() {
     ProcessPresetEdit(requested,subject.get());
     if(requested==10) {
         Preset p; {std::scoped_lock lock(presetsMutex); p=scopeRequest;}
-        std::vector<std::uint32_t> masks; std::string error;
-        try {masks=ResolvePresetSlots(p);} catch(const std::exception& e) {error=e.what();}
-        {std::scoped_lock lock(presetsMutex); if(scopeRequest.photo==p.photo) {scopeMasks=std::move(masks); scopeError=std::move(error); scopeReady=true;}}
+        std::vector<std::uint32_t> masks; std::vector<std::string> names; std::string error;
+        try {masks=ResolvePresetSlots(p);names=ResolvePresetDisplayNames(p);} catch(const std::exception& e) {error=e.what();}
+        {std::scoped_lock lock(presetsMutex); if(scopeRequest.photo==p.photo) {scopeMasks=std::move(masks);scopeNames=std::move(names);scopeError=std::move(error);scopeReady=true;}}
     }
     if (requested == 4 && !saveBusy) {
         verificationTicks=0;
@@ -1087,6 +1090,7 @@ void __stdcall RenderStudio() {
     UI::SetNextWindowPos({screen.x*0.01f, screen.y*0.015f}, UI::ImGuiCond_Always);
     UI::SetNextWindowSize({screen.x*0.515f, screen.y*0.97f}, UI::ImGuiCond_Always);
     bool opened = true;
+    if(uiBackgroundOpacity>=0.f) UI::SetNextWindowBgAlpha(NormalizeUiBackgroundOpacity(uiBackgroundOpacity));
     if (UI::Begin("Outfit Gallery", &opened, UI::ImGuiWindowFlags_NoResize | UI::ImGuiWindowFlags_NoMove | UI::ImGuiWindowFlags_NoCollapse | UI::ImGuiWindowFlags_NoNavInputs | UI::ImGuiWindowFlags_NoTitleBar | UI::ImGuiWindowFlags_NoScrollbar | UI::ImGuiWindowFlags_NoScrollWithMouse)) {
         if(photoRetakeActive) {
             const auto titlePos=UI::GetCursorPos();
@@ -1331,7 +1335,7 @@ void __stdcall RenderStudio() {
 void __stdcall RenderSettings() {
     ProcessCapturedHotkey();
     RenderHotkeys();
-    UI::TextUnformatted("Outfit Gallery 2.2.2");
+    UI::TextUnformatted("Outfit Gallery 2.2.4");
     UI::TextWrapped(Tr("Close this menu and press the configured hotkey (default F8) while standing in a safe open area."));
     UI::TextUnformatted(Tr("F9 in the studio saves a photo and equipment. Click a preset photo to apply."));
     UI::Text(Tr("SmoothCam API: %s / TDM API: %s"), smooth ? "ready" : "not available", tdm ? "ready" : "not available");
@@ -1439,7 +1443,7 @@ void Message(SKSE::MessagingInterface::Message* message) {
         try {
             if(std::filesystem::exists(settingsFile)) {
                 const auto s=ReadStudioSettings(settingsFile);
-                distance=s.distance; height=s.height; orbit=s.orbit; pitch=s.pitch; fov=s.fov; lateral=s.lateral; elevation=s.elevation; gridColumns=s.columns; showNames=s.showNames; showCounts=s.showCounts; language=s.language; allowFreeCamera=s.allowFreeCamera; addMissing=s.addMissing; partialSlots=s.headSlots; startupTab=s.startupTab; detachedPreview=s.detachedPreview; previewRect=s.previewRect; followerTargeting=s.followerTargeting; preferEnchanted=s.preferEnchanted; portraitThumbnails=s.portraitThumbnails; cleanupCompatibility=s.cleanupCompatibility; allowCombatGallery=s.allowCombatGallery; compactGallery=s.compactGallery; reclaimRenamedGeneratedItems=s.reclaimRenamedGeneratedItems; uiZoom=s.uiZoom; fullOutfitToggle=s.fullOutfitToggle; upscalerCompatibility=s.upscalerCompatibility; showEquipmentTools=s.showEquipmentTools;
+                distance=s.distance; height=s.height; orbit=s.orbit; pitch=s.pitch; fov=s.fov; lateral=s.lateral; elevation=s.elevation; gridColumns=s.columns; showNames=s.showNames; showCounts=s.showCounts; language=s.language; allowFreeCamera=s.allowFreeCamera; addMissing=s.addMissing; partialSlots=s.headSlots; startupTab=s.startupTab; detachedPreview=s.detachedPreview; previewRect=s.previewRect; followerTargeting=s.followerTargeting; preferEnchanted=s.preferEnchanted; portraitThumbnails=s.portraitThumbnails; cleanupCompatibility=s.cleanupCompatibility; allowCombatGallery=s.allowCombatGallery; compactGallery=s.compactGallery; reclaimRenamedGeneratedItems=s.reclaimRenamedGeneratedItems; uiZoom=s.uiZoom; fullOutfitToggle=s.fullOutfitToggle; upscalerCompatibility=s.upscalerCompatibility; showEquipmentTools=s.showEquipmentTools; hoverVariations=s.hoverVariations; uiBackgroundOpacity=s.uiBackgroundOpacity;
                 SKSE::log::info("Loaded persistent studio settings");
                 if(s.followerTargetingMigrationPending) {
                     try {
@@ -1503,7 +1507,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     spdlog::set_default_logger(logger);
     spdlog::set_level(spdlog::level::info);
     spdlog::flush_on(spdlog::level::info);
-    SKSE::log::info("OutfitGallery release=2.2.2; equipment acquisition, random try-on, customization and reroll; 2.0.1 compatibility fixes retained");
+    SKSE::log::info("OutfitGallery release=2.2.4; equipment acquisition, random try-on, customization and reroll; 2.0.1 compatibility fixes retained");
     const auto runtime=skse->RuntimeVersion();
     const auto supported=SKSEPlugin_Version.GetRuntimeCompatibility().GetCompatibleRuntimeVersions();
     if(std::none_of(supported.begin(),supported.end(),[&](const auto& version){return static_cast<REL::Version>(version)==runtime;})) {
@@ -1518,8 +1522,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     Gallery::saveHotkey = GetPrivateProfileIntW(L"Input", L"SaveHotkey", 67, ini.c_str());
     Gallery::captureKeys[0]=Gallery::saveHotkey;
     Gallery::gamepadHotkey = GetPrivateProfileIntW(L"Input", L"GamepadHotkey", 32, ini.c_str());
-    SKSE::log::info("OutfitGallery 2.2.2");
-    SKSE::log::info("OutfitGallery 2.2.2 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
+    SKSE::log::info("OutfitGallery 2.2.4");
+    SKSE::log::info("OutfitGallery 2.2.4 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
     return SKSE::GetMessagingInterface()->RegisterListener(Gallery::Message);
 }
 

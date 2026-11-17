@@ -48,9 +48,15 @@ void LogGeneratedName(const char* stage, RE::TESBoundObject* object, RE::ExtraDa
 
 std::mutex ledgerMutex;
 ManagedLedger ledger;
+using OrdinaryAddition=FreshAdditionObservation;
+std::optional<OrdinaryAddition> ordinaryAddition; // only during our AddObject call; guarded by ledgerMutex
+std::optional<SmithingCreation> smithingCreation;
+std::map<std::pair<RE::FormID,RE::FormID>,int> unverifiedSmithing; // before-count of a failed generation
+std::optional<Identity> ownReclaim; // guarded by ledgerMutex; only around our verified RemoveItem call
 // Names belong to fresh generation claims, never inferred from current inventory.
 std::map<std::pair<RE::FormID,RE::FormID>,RegisteredName> pendingNames;
 std::map<Identity,RegisteredName> registeredNames;
+std::map<Identity,GeneratedPerformance> generatedPerformance;
 bool SimpleName(const RE::ExtraTextDisplayData* n) {
     return n && n->ownerInstance.underlying()==-2 && !n->displayNameText && !n->ownerQuest && n->temperFactor==1.0f;
 }
@@ -65,7 +71,26 @@ unsigned NextTransferEventSequence() {
 }
 class IdentityChanges final : public RE::BSTEventSink<RE::TESUniqueIDChangeEvent> {
     RE::BSEventNotifyControl ProcessEvent(const RE::TESUniqueIDChangeEvent* e,RE::BSTEventSource<RE::TESUniqueIDChangeEvent>*) override {
-        if(e && (DetailEnabled() || cleanupCompatibility.load())) {
+        if(e) {
+            const bool changed=e->oldBaseID!=e->newBaseID || e->oldUniqueID!=e->newUniqueID;
+            bool creationEvent=false;
+            {
+                std::scoped_lock lock(ledgerMutex);
+                if(smithingCreation && smithingCreation->form==e->objectID) {
+                    const bool continuous=e->oldBaseID==smithingCreation->owner && e->oldUniqueID==smithingCreation->current;
+                    smithingCreation->Change(e->objectID,e->oldBaseID,e->oldUniqueID,e->newBaseID,e->newUniqueID);
+                    creationEvent=continuous && !smithingCreation->invalid;
+                    try {SKSE::log::info("OG-SMITHING2 id-event form={:08X} oldOwner={:08X} oldID={} newOwner={:08X} newID={} changed={} invalid={}",
+                        e->objectID,e->oldBaseID,e->oldUniqueID,e->newBaseID,e->newUniqueID,changed,smithingCreation->invalid);} catch(...) {}
+                }
+                // Actual identity changes invalidate performance evidence regardless
+                // of diagnostic settings. No-op notifications do not erase claims.
+                if(changed && !creationEvent) {
+                    generatedPerformance.erase({e->objectID,e->oldBaseID,e->oldUniqueID});
+                    generatedPerformance.erase({e->objectID,e->newBaseID,e->newUniqueID});
+                }
+            }
+            if(creationEvent || !changed || !(DetailEnabled() || cleanupCompatibility.load())) return RE::BSEventNotifyControl::kContinue;
             const auto seq=NextTransferEventSequence();
             {
                 std::scoped_lock lock(ledgerMutex);
@@ -86,6 +111,7 @@ class IdentityChanges final : public RE::BSTEventSink<RE::TESUniqueIDChangeEvent
 std::map<std::pair<RE::FormID,RE::FormID>,ManagedIdentity> generatedEvidence;
 std::map<std::uint16_t,std::uint64_t> preferredScopes;
 std::set<std::uint16_t> reservedPreferredIDs;
+std::map<std::pair<RE::FormID,std::uint16_t>,std::uint64_t> smithingScopes;
 constexpr std::uint32_t preferredRecord=0x454E4348;
 constexpr std::uint32_t namespaceID=0x4F474D49; // OGMI
 constexpr std::uint32_t itemRecord=0x4954454D; // ITEM
@@ -102,10 +128,10 @@ std::uint16_t AllocateItemID(RE::InventoryChanges* changes, std::set<std::uint16
     return id;
 }
 
-void Forget(const Identity& key) {std::scoped_lock lock(ledgerMutex); ledger.items.erase(key); registeredNames.erase(key); transferChain.Retire(key);}
+void Forget(const Identity& key,bool retain=false) {std::scoped_lock lock(ledgerMutex); ledger.items.erase(key); registeredNames.erase(key); transferChain.Retire(key); if(retain && generatedPerformance.contains(key) && generatedPerformance[key].reproduction) generatedPerformance[key].retained=true; else generatedPerformance.erase(key);}
 void Revert(SKSE::SerializationInterface*) {
     ResetTransmogPersistence();
-    {std::scoped_lock lock(ledgerMutex); ledger.Clear(); pendingNames.clear(); registeredNames.clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); preferredScopes.clear(); reservedPreferredIDs.clear();}
+    {std::scoped_lock lock(ledgerMutex); ledger.Clear(); pendingNames.clear(); registeredNames.clear(); generatedPerformance.clear(); smithingCreation.reset(); ordinaryAddition.reset(); unverifiedSmithing.clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); preferredScopes.clear(); reservedPreferredIDs.clear(); smithingScopes.clear();}
     ClearFollowerOutfits();
     ClearFollowerAutoOutfits();
 }
@@ -118,12 +144,25 @@ void Save(SKSE::SerializationInterface* s) {
         if(!s->OpenRecord(preferredRecord,2) || !s->WriteRecordData(count)) {SKSE::log::error("Enchanted item: identity scope save failed"); return;}
         for(const auto& [id,scope]:preferredScopes) if(!s->WriteRecordData(id) || !s->WriteRecordData(scope)) {SKSE::log::error("Enchanted item: reserved ID save failed"); return;}
     }
+    for(const auto& [key,scope]:smithingScopes) {
+        if(!s->OpenRecord(0x534D4944,1) || !s->WriteRecordData(key.first) || !s->WriteRecordData(key.second) || !s->WriteRecordData(scope)) {
+            SKSE::log::error("Smithing original identity save failed");return;
+        }
+    }
     std::set<Identity> copy;
     std::map<Identity,RegisteredName> names;
     {std::scoped_lock lock(ledgerMutex); copy=ledger.items; names=registeredNames;}
     for(const auto& k:copy) {
         if(!s->OpenRecord(itemRecord,k.owner==0x14 ? 1 : 2) || !s->WriteRecordData(k.form) || !s->WriteRecordData(k.owner) || !s->WriteRecordData(k.id)) {
             SKSE::log::error("Managed item ledger could not be saved"); return;
+        }
+    }
+    std::map<Identity,GeneratedPerformance> performance;
+    {std::scoped_lock lock(ledgerMutex);performance=generatedPerformance;}
+    for(const auto& [k,p]:performance) if(copy.contains(k) || (p.reproduction && p.retained)) {
+        const std::uint8_t flags=(p.reproduction?1:0)|(p.retained?2:0);
+        if(!s->OpenRecord(0x50455246,1) || !s->WriteRecordData(k.form) || !s->WriteRecordData(k.owner) || !s->WriteRecordData(k.id) || !s->WriteRecordData(p.health) || !s->WriteRecordData(flags)) {
+            SKSE::log::error("Generated performance evidence save failed");return;
         }
     }
     // Separate optional record: older releases still understand the ordinary ITEM ledger.
@@ -139,12 +178,32 @@ void Load(SKSE::SerializationInterface* s) {
     ResetTransmogPersistence();
     ClearFollowerOutfits();
     ClearFollowerAutoOutfits();
-    preferredScopes.clear(); reservedPreferredIDs.clear();
+    preferredScopes.clear(); reservedPreferredIDs.clear(); smithingScopes.clear();
     std::set<Identity> next;
     std::map<Identity,RegisteredName> names;
     std::set<Identity> duplicateNames;
+    std::map<Identity,GeneratedPerformance> performance;
+    std::set<Identity> duplicatePerformance;
     std::uint32_t type{},version{},length{};
     while(s->GetNextRecordInfo(type,version,length)) {
+        if(type==0x534D4944) {
+            RE::FormID old{},owner{};std::uint16_t id{};std::uint64_t scope{};
+            if(version!=1 || length!=14 || smithingScopes.size()>=10000) continue;
+            if(s->ReadRecordData(old)!=4 || s->ReadRecordData(id)!=2 || s->ReadRecordData(scope)!=8 || !id || !scope || !s->ResolveFormID(old,owner) || !owner) continue;
+            const auto key=std::make_pair(owner,id);
+            const auto [it,inserted]=smithingScopes.emplace(key,scope);if(!inserted) it->second=0; // conflicting scope never authorizes a match
+            continue;
+        }
+        if(type==0x50455246) {
+            Identity old{},key{};GeneratedPerformance p;std::uint8_t flags{};
+            if(version!=1 || length!=15 || performance.size()>=10000) continue;
+            if(s->ReadRecordData(old.form)!=4 || s->ReadRecordData(old.owner)!=4 || s->ReadRecordData(old.id)!=2 || s->ReadRecordData(p.health)!=4 || s->ReadRecordData(flags)!=1) continue;
+            if(!old.id || flags>3 || (p.health!=1.f && !ValidSmithing(p.health)) || !s->ResolveFormID(old.form,key.form) || !s->ResolveFormID(old.owner,key.owner) || !key.form || !key.owner) continue;
+            key.id=old.id;p.reproduction=flags&1;p.retained=flags&2;
+            if((p.retained && !p.reproduction) || (p.reproduction && !ValidSmithing(p.health))) continue;
+            if(!performance.emplace(key,p).second) duplicatePerformance.insert(key);
+            continue;
+        }
         if(type==0x4E414D45) {
             Identity old{},key{}; RegisteredName n; std::uint32_t a{},b{};
             if(version!=1 || length<20 || length>1042 || names.size()>=1024) continue;
@@ -176,8 +235,9 @@ void Load(SKSE::SerializationInterface* s) {
         current.id=old.id;
         if(current.owner && (version==2 || current.owner==0x14) && next.size()<10000) next.insert(current);
     }
-    std::scoped_lock lock(ledgerMutex); ledger.Clear(); pendingNames.clear(); registeredNames.clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); ledger.items=std::move(next);
+    std::scoped_lock lock(ledgerMutex); ledger.Clear(); pendingNames.clear(); registeredNames.clear(); generatedPerformance.clear(); smithingCreation.reset(); ordinaryAddition.reset(); unverifiedSmithing.clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); ledger.items=std::move(next);
     for(auto& [key,n]:names) if(ledger.items.contains(key) && !duplicateNames.contains(key)) registeredNames.emplace(key,std::move(n));
+    for(const auto& [key,p]:performance) if(!duplicatePerformance.contains(key) && (ledger.items.contains(key) || (p.reproduction && p.retained))) generatedPerformance.emplace(key,p);
 }
 class Transfers final : public RE::BSTEventSink<RE::TESContainerChangedEvent> {
     RE::BSEventNotifyControl ProcessEvent(const RE::TESContainerChangedEvent* e,RE::BSTEventSource<RE::TESContainerChangedEvent>*) override {
@@ -191,6 +251,18 @@ class Transfers final : public RE::BSTEventSink<RE::TESContainerChangedEvent> {
             std::size_t released{}, cancelled{}, observed{};
             {
                 std::scoped_lock lock(ledgerMutex);
+                if(ordinaryAddition && ordinaryAddition->form==e->baseObj) {
+                    auto& addition=*ordinaryAddition;
+                    // Incoming UID is evidence only for this synchronous addition
+                    // from an empty ownership source, never for a manual pickup.
+                    const auto pending=ledger.pending.find({addition.actor,addition.form});
+                    const auto observed=addition.Observe(e->baseObj,e->oldContainer,e->newContainer,e->itemCount,e->uniqueID,
+                        pending!=ledger.pending.end() && pending->second==1);
+                    if(observed) generatedEvidence[{addition.actor,addition.form}]={addition.form,addition.actor,observed};
+                }
+                if(smithingCreation && smithingCreation->form==e->baseObj && smithingCreation->owner==e->oldContainer && e->oldContainer!=e->newContainer) smithingCreation->invalid=true;
+                if(ownReclaim && IsOwnReclaimEvent(ownReclaim->form,ownReclaim->owner,ownReclaim->id,
+                    e->baseObj,e->oldContainer,e->newContainer,e->itemCount,e->uniqueID)) return RE::BSEventNotifyControl::kContinue;
                 if(DetailEnabled() && e->oldContainer && e->oldContainer!=e->newContainer)
                     cancelled=ledger.pending.count({e->oldContainer,e->baseObj});
                 if(DetailEnabled() || cleanupCompatibility.load()) {
@@ -202,6 +274,7 @@ class Transfers final : public RE::BSTEventSink<RE::TESContainerChangedEvent> {
                 if(e->oldContainer && e->oldContainer!=e->newContainer) {
                     pendingNames.erase({e->oldContainer,e->baseObj});
                     std::erase_if(registeredNames,[&](const auto& n){return n.first.owner==e->oldContainer && n.first.form==e->baseObj;});
+                    std::erase_if(generatedPerformance,[&](const auto& n){return n.first.owner==e->oldContainer && n.first.form==e->baseObj;});
                 }
                 released=ledger.Transfer(e->baseObj,e->oldContainer,e->newContainer);
                 if(!generatedEvidence.empty() && e->oldContainer && e->oldContainer!=e->newContainer) generatedEvidence.erase({e->oldContainer,e->baseObj});
@@ -259,8 +332,8 @@ RegisteredName CaptureRegisteredName(RE::TESBoundObject* object,RE::InventoryEnt
 }
 void ResetTransferObservations() {std::scoped_lock lock(ledgerMutex);transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0;}
 std::uint64_t PreferredScope(std::uint16_t id) {const auto it=preferredScopes.find(id); return it==preferredScopes.end()?0:it->second;}
-PreferredItem RememberEnchanted(RE::Actor* actor,RE::ExtraDataList* extra) {
-    if(!actor || actor->GetFormID()!=0x14 || !extra || !extra->HasType<RE::ExtraEnchantment>()) return {};
+PreferredItem RememberOwnedInstance(RE::Actor* actor,RE::ExtraDataList* extra) {
+    if(!actor || actor->GetFormID()!=0x14 || !extra) return {};
     PreferredItem result; result.custom=true;
     if(extra->GetCount()!=1) return result;
     auto* changes=actor->GetInventoryChanges(); if(!changes) return result;
@@ -294,6 +367,176 @@ void InitializeManagedItems() {
 void RegisterManagedItemEvents() {
     if(auto* source=RE::ScriptEventSourceHolder::GetSingleton()) {source->AddEventSink(&transfers); source->AddEventSink(&identityChanges);}
 }
+float ReadSmithingQuality(RE::ExtraDataList* extra) {
+    const auto* health=extra?extra->GetByType<RE::ExtraHealth>():nullptr;
+    return health?health->health:1.f;
+}
+PreferredItem RememberEnchanted(RE::Actor* actor,RE::ExtraDataList* extra) {
+    return extra && extra->HasType<RE::ExtraEnchantment>()?RememberOwnedInstance(actor,extra):PreferredItem{};
+}
+SmithingRecipe RememberSmithing(RE::Actor* actor,RE::ExtraDataList* extra) {
+    const float health=ReadSmithingQuality(extra);
+    if(!ValidSmithing(health) || !extra || extra->GetCount()!=1) return {};
+    if(!actor) return {health};
+    if(actor->GetFormID()==0x14) {
+        const auto original=RememberOwnedInstance(actor,extra);
+        return {health,original.scope,original.id};
+    }
+    auto* changes=actor->GetInventoryChanges();if(!changes) return {health};
+    auto* uid=extra->GetByType<RE::ExtraUniqueID>();
+    if(uid && (uid->baseID!=actor->GetFormID() || !uid->uniqueID)) return {health};
+    if(smithingScopes.size()>=10000) return {health};
+    if(!uid) {
+        std::set<std::uint16_t> used;
+        for(const auto& [key,_]:smithingScopes) if(key.first==actor->GetFormID()) used.insert(key.second);
+        {std::scoped_lock lock(ledgerMutex);for(const auto& key:ledger.items) if(key.owner==actor->GetFormID()) used.insert(key.id);}
+        const auto id=AllocateItemID(changes,used);if(!id) return {health};
+        uid=new RE::ExtraUniqueID(actor->GetFormID(),id);extra->Add(uid);
+    }
+    auto& scope=smithingScopes[{actor->GetFormID(),uid->uniqueID}];
+    if(!scope) {std::random_device random;do {scope=(static_cast<std::uint64_t>(random())<<32)^random();} while(!scope);}
+    return {health,scope,uid->uniqueID};
+}
+std::uint16_t FindSmithingInstance(RE::Actor* actor,RE::TESBoundObject* obj,const SmithingRecipe& recipe) {
+    if(!actor || !obj || !ValidSmithing(recipe.health)) return 0;
+    const auto inventory=actor->GetInventory([obj](RE::TESBoundObject& candidate){return &candidate==obj;});
+    const auto found=inventory.find(obj);
+    if(found==inventory.end() || found->second.first<=0 || !found->second.second || !found->second.second->extraLists) return 0;
+    {std::scoped_lock lock(ledgerMutex);const auto blocked=unverifiedSmithing.find({actor->GetFormID(),obj->GetFormID()});
+        if(blocked!=unverifiedSmithing.end() && found->second.first>blocked->second) return 0;}
+    const auto followerScope=smithingScopes.find({actor->GetFormID(),recipe.id});
+    const auto scope=actor->GetFormID()==0x14?PreferredScope(recipe.id):(followerScope==smithingScopes.end()?0:followerScope->second);
+    const bool original=recipe.id && recipe.scope && scope==recipe.scope;
+    std::vector<SmithingCandidate> candidates;
+    for(auto* extra:*found->second.second->extraLists) if(extra) {
+        const auto* uid=extra->GetByType<RE::ExtraUniqueID>();
+        if(!uid || uid->baseID!=actor->GetFormID()) continue;
+        const Identity key{obj->GetFormID(),uid->baseID,uid->uniqueID};
+        bool reproduction=false;
+        {std::scoped_lock lock(ledgerMutex);const auto profile=generatedPerformance.find(key);
+            reproduction=profile!=generatedPerformance.end() && profile->second.reproduction && profile->second.health==recipe.health;}
+        candidates.push_back({uid->uniqueID,extra->GetCount(),original && uid->uniqueID==recipe.id,reproduction});
+    }
+    const auto selected=SelectSmithingCandidate(candidates);
+    GALLERY_DIAG("OG-SMITHING select actor={:08X} form={:08X} uid={} originalScope={} health={}",actor->GetFormID(),obj->GetFormID(),selected,original,recipe.health);
+    return selected;
+}
+std::uint16_t PrepareSmithingInstance(RE::Actor* actor,RE::TESBoundObject* obj,const SmithingRecipe& recipe,bool allowGeneration) {
+    if(const auto existing=FindSmithingInstance(actor,obj,recipe)) return existing;
+    if(!allowGeneration) throw std::runtime_error("Registered smithing item is missing; enable Add missing base items to reproduce it");
+    if(!actor || !obj || !obj->As<RE::TESObjectARMO>() || !ValidSmithing(recipe.health)) throw std::runtime_error("Invalid smithing reproduction request");
+    const auto beforeInventory=actor->GetInventory([obj](RE::TESBoundObject& candidate){return &candidate==obj;});
+    const auto beforeEntry=beforeInventory.find(obj);
+    const int beforeCount=beforeEntry==beforeInventory.end()?0:std::max(0,beforeEntry->second.first);
+    std::set<std::pair<std::uint32_t,std::uint16_t>> beforeIDs;
+    if(beforeEntry!=beforeInventory.end() && beforeEntry->second.second && beforeEntry->second.second->extraLists)
+        for(auto* e:*beforeEntry->second.second->extraLists) if(e) if(const auto* uid=e->GetByType<RE::ExtraUniqueID>()) beforeIDs.emplace(uid->baseID,uid->uniqueID);
+    const auto blockedKey=std::make_pair(actor->GetFormID(),obj->GetFormID());
+    {std::scoped_lock lock(ledgerMutex);
+        const auto blocked=unverifiedSmithing.find(blockedKey);
+        if(blocked!=unverifiedSmithing.end()) {
+            if(beforeCount>blocked->second) throw std::runtime_error("Generated equipment could not be verified. Further generation is stopped to prevent duplicates. See OutfitGallery.log.");
+            unverifiedSmithing.erase(blocked);
+        }
+        if(smithingCreation) throw std::runtime_error("Nested smithing generation is not supported");
+    }
+    auto* changes=actor->GetInventoryChanges();if(!changes) throw std::runtime_error("Inventory changes unavailable");
+    std::set<std::uint16_t> used=reservedPreferredIDs;
+    {std::scoped_lock lock(ledgerMutex);
+        if(generatedPerformance.size()>=10000) throw std::runtime_error("Generated performance ledger is full");
+        for(const auto& key:ledger.items) if(key.owner==actor->GetFormID()) used.insert(key.id);
+        for(const auto& [key,_]:generatedPerformance) if(key.owner==actor->GetFormID()) used.insert(key.id);
+    }
+    for(const auto& [key,_]:smithingScopes) if(key.first==actor->GetFormID()) used.insert(key.second);
+    const auto id=AllocateItemID(changes,used);if(!id) throw std::runtime_error("No item identity available");
+    const bool post629=REL::Module::IsAE() && REL::Module::get().version()>=REL::Version(1,6,629,0);
+    void* storage=RE::malloc(ExtraListStorageSize(post629));if(!storage) throw std::bad_alloc();
+    // Same engine ctor/dtor as alandtse/CommonLibVR ng ExtraDataList.cpp.
+    // This project's trimmed CommonLib bundle does not export those wrappers.
+    using ListFunction=void(RE::ExtraDataList*);
+    static REL::Relocation<ListFunction> construct{RELOCATION_ID(11437,11583)};
+    auto destroy=[](RE::ExtraDataList* p){if(p) {
+        static REL::Relocation<ListFunction> destruct{RELOCATION_ID(11438,11584)};
+        destruct(p);RE::free(p);
+    }};
+    auto* list=static_cast<RE::ExtraDataList*>(storage);construct(list);
+    std::unique_ptr<RE::ExtraDataList,decltype(destroy)> extra(list,destroy);
+    extra->Add(new RE::ExtraUniqueID(actor->GetFormID(),id));
+    extra->Add(new RE::ExtraHealth(recipe.health));
+    const Identity key{obj->GetFormID(),actor->GetFormID(),id};
+    // Claim before the engine call. An outgoing transfer can cancel the claim.
+    {std::scoped_lock lock(ledgerMutex);ledger.items.insert(key);generatedPerformance[key]={recipe.health,true,false};smithingCreation=SmithingCreation{key.form,key.owner,id,id};}
+    struct CreationScope {~CreationScope(){std::scoped_lock lock(ledgerMutex);smithingCreation.reset();}} creationScope;
+    SKSE::log::info("OG-SMITHING2 begin actor={:08X} form={:08X} allocatedID={} before={} health={}",key.owner,key.form,id,beforeCount,recipe.health);
+    actor->AddObjectToContainer(obj,extra.release(),1,nullptr); // engine takes ownership of the runtime-sized list
+    SmithingCreation proof;
+    {std::scoped_lock lock(ledgerMutex);if(smithingCreation) proof=*smithingCreation;else proof.invalid=true;}
+    // Keep inspection separate from identity repair. The returned pointer is
+    // used only before the event broadcast, and is reacquired afterward.
+    auto inspect=[&](const SmithingCreation& current,const char* stage) {
+        const auto afterInventory=actor->GetInventory([obj](RE::TESBoundObject& candidate){return &candidate==obj;});
+        const auto afterEntry=afterInventory.find(obj);
+        SmithingGenerationEvidence evidence;
+        evidence.invalid=current.invalid;evidence.before=beforeCount;evidence.after=afterEntry==afterInventory.end()?0:std::max(0,afterEntry->second.first);
+        evidence.actor=key.owner;evidence.expected=current.current;evidence.requested=recipe.health;
+        RE::ExtraDataList* candidate{};
+        if(afterEntry!=afterInventory.end() && afterEntry->second.second && afterEntry->second.second->extraLists) {
+            unsigned logged{};
+            for(auto* e:*afterEntry->second.second->extraLists) if(e) {
+                const auto* uid=e->GetByType<RE::ExtraUniqueID>();
+                if(logged++<32) SKSE::log::info("OG-SMITHING3 candidate stage={} form={:08X} owner={:08X} uid={} count={} health={} enchanted={} existed={}",
+                    stage,key.form,uid?uid->baseID:0,uid?uid->uniqueID:0,e->GetCount(),ReadSmithingQuality(e),e->HasType<RE::ExtraEnchantment>(),uid && beforeIDs.contains({uid->baseID,uid->uniqueID}));
+                if(!uid || uid->baseID!=key.owner || uid->uniqueID!=current.current) continue;
+                candidate=e;++evidence.matches;evidence.owner=uid->baseID;evidence.actual=uid->uniqueID;evidence.instanceCount=e->GetCount();
+                evidence.actualHealth=ReadSmithingQuality(e);evidence.customEnchanted=e->HasType<RE::ExtraEnchantment>();
+                evidence.wasPresent=beforeIDs.contains({uid->baseID,uid->uniqueID});evidence.reserved=used.contains(uid->uniqueID);
+            }
+        }
+        return std::pair{evidence,candidate};
+    };
+    auto [evidence,candidate]=inspect(proof,"after-add");
+    bool allocatedOccupied=false;
+    // Include raw zero-count lists, as in the initial allocator. Repair must
+    // not reuse an ID claimed by an item added reentrantly by another system.
+    if(changes->entryList) for(auto* entry:*changes->entryList) if(entry && entry->extraLists)
+        for(auto* e:*entry->extraLists) if(e && e!=candidate) if(const auto* uid=e->GetByType<RE::ExtraUniqueID>())
+            if(uid->baseID==key.owner && uid->uniqueID==id) allocatedOccupied=true;
+    auto* events=RE::ScriptEventSourceHolder::GetSingleton();
+    if(candidate && events && CanRetagSmithingGeneration(evidence,id,used.contains(id),allocatedOccupied)) {
+        auto* uid=candidate->GetByType<RE::ExtraUniqueID>();
+        const auto previous=uid->uniqueID;
+        // Only the newly created singleton proved above is edited. Original
+        // possessions and original-instance scope reservations stay unchanged.
+        uid->uniqueID=id;
+        SKSE::log::info("OG-SMITHING3 retag form={:08X} owner={:08X} engineID={} allocatedID={} reason=engine-used-reserved-id",key.form,key.owner,previous,id);
+        const RE::TESUniqueIDChangeEvent notification{key.owner,key.owner,key.form,previous,id};
+        events->SendEvent(&notification);
+        candidate=nullptr; // event callbacks can rebuild lists; never reuse it
+        {std::scoped_lock lock(ledgerMutex);if(smithingCreation) proof=*smithingCreation;else proof.invalid=true;}
+        evidence=inspect(proof,"after-retag").first;
+    }
+    const bool verified=VerifiedSmithingGeneration(evidence);
+    SKSE::log::info("OG-SMITHING2 result form={:08X} allocatedID={} currentID={} hops={} invalid={} before={} after={} matches={} count={} requested={} actual={} preexisting={} reserved={} verified={}",
+        key.form,id,proof.current,proof.hops,proof.invalid,evidence.before,evidence.after,evidence.matches,evidence.instanceCount,recipe.health,evidence.actualHealth,evidence.wasPresent,evidence.reserved,verified);
+    if(!verified) {
+        // Do not guess an identity, change an existing item or generate repeatedly.
+        {std::scoped_lock lock(ledgerMutex);unverifiedSmithing[blockedKey]=beforeCount;
+            ledger.items.erase(key);generatedPerformance.erase(key);transferChain.Retire(key);
+            if(proof.current!=id && !used.contains(proof.current)) {
+                const Identity unverified{key.form,key.owner,proof.current};ledger.items.erase(unverified);generatedPerformance.erase(unverified);transferChain.Retire(unverified);
+            }
+        }
+        throw std::runtime_error("Generated equipment could not be verified. Further generation is stopped to prevent duplicates. See OutfitGallery.log.");
+    }
+    const Identity actual{key.form,key.owner,proof.current};
+    {std::scoped_lock lock(ledgerMutex);
+        if(actual!=key) {ledger.items.erase(key);generatedPerformance.erase(key);transferChain.Retire(key);}
+        transferChain.Retire(actual);
+        ledger.items.insert(actual);generatedPerformance[actual]={recipe.health,true,false};unverifiedSmithing.erase(blockedKey);
+    }
+    SKSE::log::info("OG-SMITHING generated actor={:08X} form={:08X} uid={} health={}",actual.owner,actual.form,actual.id,recipe.health);
+    return actual.id;
+}
 void BeginManagedAddition(RE::Actor* actor) {
     if(actor) {std::scoped_lock lock(ledgerMutex); ledger.Begin(actor->GetFormID()); std::erase_if(pendingNames,[&](const auto& n){return n.first.first==actor->GetFormID();}); std::erase_if(generatedEvidence,[&](const auto& e){return e.first.first==actor->GetFormID();});}
 }
@@ -305,6 +548,16 @@ void AddManagedItems(RE::Actor* actor,RE::TESBoundObject* obj,int count,bool pre
         if(cleanupCompatibility.load() && count==1 && ValidRegisteredName(name) && pendingNames.size()<1024)
             pendingNames[{actor->GetFormID(),obj->GetFormID()}]=name;}
     GALLERY_DIAG("OG-DIAG generate actor={:08X} form={:08X} count={} previouslyAbsent={}",actor->GetFormID(),obj->GetFormID(),count,previouslyAbsent);
+    const bool observe=previouslyAbsent && count==1;
+    struct AdditionScope {
+        bool active{};
+        ~AdditionScope(){if(active) {std::scoped_lock lock(ledgerMutex);ordinaryAddition.reset();}}
+    } additionScope;
+    if(observe) {
+        std::scoped_lock lock(ledgerMutex);
+        if(ordinaryAddition) throw std::runtime_error("Nested ordinary item addition is not supported");
+        ordinaryAddition=OrdinaryAddition{actor->GetFormID(),obj->GetFormID(),false};additionScope.active=true;
+    }
     actor->AddObjectToContainer(obj,nullptr,count,nullptr);
 }
 void ObserveGeneratedItems(RE::Actor* actor) {
@@ -344,9 +597,12 @@ void TrackNewManagedItems(RE::Actor* actor, bool compatibility) {
         std::scoped_lock lock(ledgerMutex); added=ledger.TakePending(actor->GetFormID());
         if(compatibility) for(const auto& [k,n]:pendingNames) if(k.first==actor->GetFormID() && added.contains(k.second)) names[k.second]=n;
         std::erase_if(pendingNames,[&](const auto& n){return n.first.first==actor->GetFormID();});
-        if(compatibility) for(const auto& [key,value]:generatedEvidence) if(key.first==actor->GetFormID()) evidence[key.second]=value;
+        for(const auto& [key,value]:generatedEvidence) if(key.first==actor->GetFormID()) evidence[key.second]=value;
         std::erase_if(generatedEvidence,[&](const auto& e){return e.first.first==actor->GetFormID();});
-        if(compatibility && !added.empty()) for(const auto& key:ledger.items) if(key.owner==actor->GetFormID()) ledgerIDs.insert(key.id);
+        if(!added.empty()) {
+            for(const auto& key:ledger.items) if(key.owner==actor->GetFormID()) ledgerIDs.insert(key.id);
+            for(const auto& [key,_]:generatedPerformance) if(key.owner==actor->GetFormID()) ledgerIDs.insert(key.id);
+        }
     }
     if(added.empty()) return;
     timing.items=static_cast<unsigned>(added.size());
@@ -361,6 +617,7 @@ void TrackNewManagedItems(RE::Actor* actor, bool compatibility) {
     std::set<std::uint16_t> used;
     std::map<std::uint16_t,unsigned> idOccurrences;
     if(actor->GetFormID()==0x14) used=reservedPreferredIDs;
+    for(const auto& [key,_]:smithingScopes) if(key.first==actor->GetFormID()) {used.insert(key.second);ledgerIDs.insert(key.second);}
     for(const auto& [_,data]:inventory) if(data.second && data.second->extraLists) {
         for(auto* extra:*data.second->extraLists) if(extra) if(auto* id=extra->GetByType<RE::ExtraUniqueID>()) {
             if(id->baseID==actor->GetFormID()) {used.insert(id->uniqueID); if(!evidence.empty()) ++idOccurrences[id->uniqueID];}
@@ -391,32 +648,31 @@ void TrackNewManagedItems(RE::Actor* actor, bool compatibility) {
                 continue;
             }
             if(uid) {
-                if(!compatibility) {
-                    GALLERY_DIAG("OG-DIAG track skip form={:08X} owner={:08X} uid={} reason=existing-id-compatibility-off",obj->GetFormID(),uid->baseID,uid->uniqueID);
-                    continue;
-                }
                 const auto proof=evidence.find(obj->GetFormID());
                 const bool reserved=ledgerIDs.contains(uid->uniqueID) || (actor->GetFormID()==0x14 && reservedPreferredIDs.contains(uid->uniqueID));
                 const GeneratedIdentityEvidence check{true,proof!=evidence.end(),actor->GetFormID(),
                     proof==evidence.end()?0:proof->second.owner,uid->baseID,
                     proof==evidence.end()?std::uint16_t{}:proof->second.id,uid->uniqueID,
                     found->second,data.first,extra->GetCount(),idOccurrences[uid->uniqueID],reserved};
-                if(!CanAdoptGeneratedIdentity(check)) {
+                // The strict identity proof is independent of compatibility mode.
+                // Other pre-numbered possessions never enter this fresh-add path.
+                unsigned formLists{};for(auto* list:*data.second->extraLists) if(list) ++formLists;
+                if(!CanAdoptGeneratedIdentity(check,formLists)) {
                     GALLERY_DIAG("OG-DIAG compatibility skip form={:08X} existingID={} observed={} owner={:08X} matches={} reserved={}",obj->GetFormID(),uid->uniqueID,proof!=evidence.end(),uid->baseID,check.matchingIDs,reserved);
                     continue;
                 }
-                {std::scoped_lock lock(ledgerMutex); ledger.items.insert({obj->GetFormID(),actor->GetFormID(),uid->uniqueID});
+                {std::scoped_lock lock(ledgerMutex); ledger.items.insert({obj->GetFormID(),actor->GetFormID(),uid->uniqueID});generatedPerformance[{obj->GetFormID(),actor->GetFormID(),uid->uniqueID}]={};
                 if(compatibility && found->second==1 && names.contains(obj->GetFormID()) && registeredNames.size()<1024)
                     registeredNames[{obj->GetFormID(),actor->GetFormID(),uid->uniqueID}]=names.at(obj->GetFormID());}
                 ledgerIDs.insert(uid->uniqueID);
-                GALLERY_DIAG("OG-DIAG compatibility adopted form={:08X} uid={} (existing ID unchanged)",obj->GetFormID(),uid->uniqueID);
+                SKSE::log::info("OG-GENERATED4 adopted fresh item form={:08X} owner={:08X} uid={} count=1 compatibility={} (existing ID unchanged)",obj->GetFormID(),actor->GetFormID(),uid->uniqueID,compatibility);
                 continue;
             }
             const auto id=AllocateItemID(changes,used);
             if(!id) continue;
             extra->Add(new RE::ExtraUniqueID(actor->GetFormID(),id));
             used.insert(id);
-            {std::scoped_lock lock(ledgerMutex); ledger.items.insert({obj->GetFormID(),actor->GetFormID(),id});
+            {std::scoped_lock lock(ledgerMutex); ledger.items.insert({obj->GetFormID(),actor->GetFormID(),id});generatedPerformance[{obj->GetFormID(),actor->GetFormID(),id}]={};
                 if(compatibility && found->second==1 && names.contains(obj->GetFormID()) && registeredNames.size()<1024)
                     registeredNames[{obj->GetFormID(),actor->GetFormID(),id}]=names.at(obj->GetFormID());}
             SKSE::log::info("Tracking gallery item {:08X}, instance {}, actor {:08X}",obj->GetFormID(),id,actor->GetFormID());
@@ -454,16 +710,20 @@ void ReclaimManagedItems(RE::Actor* actor) {
             Forget(key); continue;
         }
         LogGeneratedName("before-reclaim",object,instance,actor->GetFormID());
-        const bool ignoreName=reclaimRenamedGeneratedItems.load();
+        GeneratedPerformance baseline;bool knownPerformance=false;
+        {std::scoped_lock lock(ledgerMutex);const auto it=generatedPerformance.find(key);if(it!=generatedPerformance.end() && !it->second.retained) {baseline=it->second;knownPerformance=true;}}
+        const bool ignoreName=knownPerformance || reclaimRenamedGeneratedItems.load();
         const bool hasName=instance->HasType<RE::ExtraTextDisplayData>();
         if(ignoreName && hasName) GALLERY_DIAG("OG-NAME-COMPAT bypass form={:08X} uid={} reason=name-only-protection-disabled",key.form,key.id);
         // Compatibility ignores text changes only. Identity and ownership are
         // still checked above and claimed below; all other protections remain.
+        if(knownPerformance) GALLERY_DIAG("OG-PERFORMANCE reclaim actor={:08X} form={:08X} uid={} initial={} current={} reproduction={} customEnchant={} named={}",
+            key.owner,key.form,key.id,baseline.health,ReadSmithingQuality(instance),baseline.reproduction,instance->HasType<RE::ExtraEnchantment>(),hasName);
         if(ProtectGeneratedItem(ignoreName,protectedItem,
-            instance->HasType<RE::ExtraHealth>(),instance->HasType<RE::ExtraEnchantment>(),
+            knownPerformance?ProtectPerformance(baseline.health,ReadSmithingQuality(instance),false):instance->HasType<RE::ExtraHealth>(),instance->HasType<RE::ExtraEnchantment>(),
             hasName,instance->HasType<RE::ExtraHotkey>(),instance->HasType<RE::ExtraPoison>())) {
             SKSE::log::info("Preserving customized gallery item {:08X}, instance {}: quest={}, health={}, enchant={}, name={}, favorite={}, poison={}",key.form,key.id,protectedItem,instance->HasType<RE::ExtraHealth>(),instance->HasType<RE::ExtraEnchantment>(),instance->HasType<RE::ExtraTextDisplayData>(),instance->HasType<RE::ExtraHotkey>(),instance->HasType<RE::ExtraPoison>());
-            Forget(key); continue;
+            Forget(key,knownPerformance && baseline.reproduction); continue;
         }
         if(instance->HasType<RE::ExtraWorn>() || instance->HasType<RE::ExtraWornLeft>()) {
             GALLERY_DIAG("OG-DIAG reclaim skip form={:08X} uid={} reason=still-worn",key.form,key.id); continue;
@@ -472,7 +732,7 @@ void ReclaimManagedItems(RE::Actor* actor) {
         bool transferClaim=false;
         {
             std::scoped_lock lock(ledgerMutex);
-            claimed=ledger.items.erase(key)!=0; registeredNames.erase(key);
+            claimed=ledger.items.erase(key)!=0; registeredNames.erase(key); generatedPerformance.erase(key);
             if(claimed) transferChain.Retire(key);
             else {transferClaim=transferChain.Consume(key,cleanupCompatibility.load()); claimed=transferClaim;}
         }
@@ -480,7 +740,13 @@ void ReclaimManagedItems(RE::Actor* actor) {
         if(!claimed) {GALLERY_DIAG("OG-DIAG reclaim skip form={:08X} uid={} reason=claim-released",key.form,key.id); continue;}
         // Explicit instance, count one. Never a base-form-only removal fallback.
         GALLERY_DIAG("OG-DIAG remove actor={:08X} form={:08X} uid={} beforeCount={}",key.owner,key.form,key.id,beforeCount);
-        actor->RemoveItem(object,1,RE::ITEM_REMOVE_REASON::kRemove,instance,nullptr);
+        {
+            struct OwnReclaimScope {
+                explicit OwnReclaimScope(const Identity& identity) {std::scoped_lock lock(ledgerMutex);ownReclaim=identity;}
+                ~OwnReclaimScope() {std::scoped_lock lock(ledgerMutex);ownReclaim.reset();}
+            } reclaimScope(key);
+            actor->RemoveItem(object,1,RE::ITEM_REMOVE_REASON::kRemove,instance,nullptr);
+        }
         const auto after=actor->GetInventory();
         const auto found=after.find(object);
         const auto afterCount=found==after.end()?0:found->second.first;

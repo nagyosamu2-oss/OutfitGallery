@@ -1,4 +1,29 @@
-# Outfit Gallery 2.2.2
+# Outfit Gallery 2.2.4
+
+## Changes in 2.2.4
+
+- Save and reproduce smithing improvements on armor for the player and followers, including when the registered item is no longer owned.
+- Improve generated-item tracking and cleanup, including items that already receive an instance ID during creation. Preserve items further improved or custom-enchanted after generation and reuse them with their original outfit.
+- Show the saved smithing quality, such as Fine, in equipment management using the game's localized naming.
+- Make click-to-expand the default for outfit variations in the normal gallery. Hover expansion remains optional. Click-opened strips close after the pointer leaves both the source and strip for about 0.25 seconds.
+- Up/down while a controller variation strip is open now only closes it and returns focus to the original group. Release and press again to navigate normally.
+- Add a gallery background transparency slider and reset. Place UI scale/reset and independent-preview controls on compact rows, with preview help in tooltips.
+- Group organizer registration targets by normal outfits then accessories, preserving order within each type and existing memberships. The view selector follows the main gallery's normal/head/accessories ordering.
+
+### Smithing: what is saved
+
+Wear the improved armor and register the outfit. Re-register an older outfit if you want to add its smithing recipe; existing ordinary outfits still work unchanged. Recipes saved by the smithing trials carry over.
+
+Applying a recipe prefers its identified original item, then a tracked or retained reproduction associated with that saved recipe. If neither is available, enabling Add missing base items permits a new item with the saved smithing value. With generation disabled, application stops with a notice. Existing ordinary items of the same base type are not modified or deleted to reproduce a recipe.
+
+Saved smithing values can carry across a new game. Further improvements to an owned item do not automatically update the saved recipe; equipment management displays the saved value. Legacy outfits without smithing metadata keep the previous behavior.
+
+Custom enchantments, custom names and poison are not recreated. The existing enchantment-preference option uses owned enchanted items. Items further improved or custom-enchanted after generation are protected from cleanup. Unidentified items are never mass-deleted by base type, and previously untracked leftovers are not retroactively adopted for cleanup.
+
+### Updating to 2.2.4
+
+Exit Skyrim and install this release with priority over earlier trial DLLs. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up the existing data before updating. No new game is required. Older versions may not retain the new smithing metadata. Runtime requirements and the supported executable list are unchanged.
+
 
 ## 2.2.2
 
@@ -39,16 +64,16 @@ Known compatibility report: Transmog has been reported unavailable with ApparelP
 ## Variation groups and accessory tabs
 Create an accessory tab in Options using Create tab. It accepts accessory presets, not full outfits; grouping does not change which slots a preset equips. New accessory registrations remain in the built-in Accessories tab; assign them to custom tabs afterward.
 
-In Organize gallery, select matching variations and choose Group variations (also available on right-click). The leading photo represents the group. Save and close commits organizer changes; Cancel discards them. A representative has a +count badge. Hover for about 0.25 seconds to expand; leaving the source and strip for about 0.1 seconds closes it. Controller users can open with A, navigate left/right, and close with B or up/down. Right-click actions keep the strip visible. Overflow uses the available gallery width and horizontal scrolling.
+In Organize gallery, select matching variations and choose Group variations (also available on right-click). The leading photo represents the group. Save and close commits organizer changes; Cancel discards them. A representative has a +count badge. Click to expand by default; hover expansion can be enabled in Options. Click-opened strips close after leaving both source and strip for about 0.25 seconds. Controller users can open with A, navigate left/right, and close with B or up/down; up/down only cancels the strip until released and pressed again. Right-click actions keep the strip visible. Overflow uses the available gallery width and horizontal scrolling.
 
 In the organizer, the representative selects the whole visible group; individual expanded photos select independently. Detach removes only selected members. Grab the exposed top of the original representative to drag the group while expanded. Grouping is manual, for 2–100 compatible presets of the same type/slot scope. Search and tabs show only matching members. Grouping does not delete the original photos or merge equipment data.
 
 Blank full-outfit registration names prefer the body item; other registrations use the first named registered item. Remove all / Restore all acts on the current removal-window list with verified sequential operations. Closing keeps the current state; refreshing resets its restoration list. Removing clothes can expose skin.
 
 ## Updating / 更新
-Exit Skyrim and install the complete 2.2.2 archive. Disable earlier trial DLL overrides, including next-update-test1, transmog diagnostic builds, variations-test12, accessory-tabs and equipment-list trials. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up Library.json before updating; saving with older releases can discard new tab/group metadata. No new game or preset re-registration is required. Existing external translations still work; untranslated new keys fall back to English.
+Exit Skyrim and install the complete 2.2.4 archive. Disable earlier trial DLL overrides, including next-update-test1, transmog diagnostic builds, variations-test12, accessory-tabs and equipment-list trials. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up Library.json before updating; saving with older releases can discard new tab/group metadata. No new game or preset re-registration is required. Existing external translations still work; untranslated new keys fall back to English.
 
-Skyrimを終了し、完全版2.2.1を導入してください。next-update-test1/2/3・headgear-test1・重ね着診断版・test12などの試作DLL・旧差し替えパッチを無効にし、写真・プリセット・Library.json・設定・カスタムINI・対の.ess/.skseは保持してください。更新前にLibrary.jsonをバックアップしてください。旧版で保存すると追加タブ・差分の情報が失われる場合があります。ニューゲーム・再登録は不要です。外部翻訳の新規未翻訳項目は英語になります。
+Skyrimを終了し、完全版2.2.4を導入してください。next-update-test1/2/3・headgear-test1・重ね着診断版・test12などの試作DLL・旧差し替えパッチを無効にし、写真・プリセット・Library.json・設定・カスタムINI・対の.ess/.skseは保持してください。更新前にLibrary.jsonをバックアップしてください。旧版で保存すると追加タブ・差分の情報が失われる場合があります。ニューゲーム・再登録は不要です。外部翻訳の新規未翻訳項目は英語になります。
 
 Supported runtimes and the optional upscaler compatibility default (OFF) are unchanged. This release does not claim new testing on every supported runtime. GOG 1.6.1179 remains untested.
 
@@ -87,7 +112,7 @@ Development testing includes Steam 1.5.97 and 1.6.1170, plus the 1.7.104 transmo
 
 ## Install or update
 Close Skyrim and install this complete archive with your mod manager. It contains the DLL and default INI; no ESP or Papyrus scripts are required.
-Keep generated Data/SKSE/Plugins/OutfitGallery data: photos, presets and JSON settings. Preserve a customized OutfitGallery.ini. With MO2, check the existing mod folder, Overwrite and any output mod before replacing files. Disable older trial DLL overrides and the standalone 1.7.104 Transmog Fix so the 2.2.2 DLL takes priority. Hotkeys.json takes priority over INI hotkeys. A new game or preset re-registration is not required.
+Keep generated Data/SKSE/Plugins/OutfitGallery data: photos, presets and JSON settings. Preserve a customized OutfitGallery.ini. With MO2, check the existing mod folder, Overwrite and any output mod before replacing files. Disable older trial DLL overrides and the standalone 1.7.104 Transmog Fix so the 2.2.4 DLL takes priority. Hotkeys.json takes priority over INI hotkeys. A new game or preset re-registration is not required.
 The first load of legacy settings enables follower targeting once. A later explicit OFF is preserved. This migration does not enable automatic outfits.
 Keep .ess and .skse together. To downgrade, restore pre-update user data and saves as well as the previous DLL: older versions do not understand all newer preset, library and appearance data.
 

@@ -63,6 +63,13 @@ namespace Gallery::Translation { inline const std::set<std::string>& Keys() { st
 "Upscaler compatibility mode",
 "Enable if upscaling makes text blurry. Close and reopen the gallery to apply.",
 "UI size",
+"Registered smithing item is missing; enable Add missing base items to reproduce it",
+"Generated equipment could not be verified. Further generation is stopped to prevent duplicates. See OutfitGallery.log.",
+"Reset",
+"UI transparency",
+"Gallery background only. 0% is opaque; 100% is transparent. Reset restores the framework theme.",
+"Restore the framework's default background transparency.",
+
 "Reset UI size",
 "Adjust text and controls relative to the automatic WQHD layout. Applied on the next frame.",
 
@@ -705,4 +712,8 @@ namespace Gallery::Translation { inline const std::set<std::string>& Keys() { st
 "Add to tab; hold Alt to move.",
 "Sleeping",
 "Avoid using other sleepwear features at the same time.",
+"Gallery variation expansion",
+"On click",
+"On hover",
+"Click is the default: click a group to expand it, then click a variation to equip it. Hover restores automatic expansion. Applies to the normal gallery.",
 }; return keys; } }

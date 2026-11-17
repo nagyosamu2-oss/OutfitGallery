@@ -53,6 +53,13 @@ int main(){try {
     Variations::UngroupAndClearSelection(detachSelection,detachTargets,checked);
     Check(checked.empty() && detachSelection.variations[0]==std::vector<std::string>{"c.png","d.png"},"context detach clears selection and keeps remaining group");
     Variations::HoverClock clock;
+    using Action=Variations::PrimaryAction;
+    Check(Variations::PhotoAction(true,false,false,false)==Action::None,"hover must not open or equip in click mode");
+    Check(Variations::PhotoAction(true,false,true,false)==Action::Expand,"representative click expands instead of equipping");
+    Check(Variations::PhotoAction(false,false,true,false)==Action::Apply,"ordinary photos keep one-click apply");
+    Check(Variations::PhotoAction(true,true,true,false)==Action::Apply,"legacy hover-mode click keeps apply behavior");
+    Check(Variations::PhotoAction(true,false,true,true)==Action::None,"drag/pad/overlay input must not also apply a photo");
+    Check(Variations::PhotoAction(false,true,true,true)==Action::None,"blocked single-photo input stays inert");
     Variations::Interaction interaction;
     // Regression: normal frames with no open strip must preserve accumulated dwell.
     const std::map<std::string,std::vector<Preset>> available{{"a",{cards[0],cards[1]}}};
@@ -80,6 +87,10 @@ int main(){try {
     Check(!clock.Leave(false,2000) && !clock.Leave(false,2099),"close grace");
     Check(!clock.Leave(true,2100),"crossing into strip cancels close");
     Check(!clock.Leave(false,2200) && clock.Leave(false,2300),"close after 100 ms outside");
+    Variations::HoverClock clickClock;
+    Check(!clickClock.Leave(false,3000,250) && !clickClock.Leave(false,3249,250),"click expansion waits before closing");
+    Check(!clickClock.Leave(true,3249,250),"reentering cancels click close grace");
+    Check(!clickClock.Leave(false,3300,250) && clickClock.Leave(false,3550,250),"click expansion closes after sustained 250ms leave");
     std::cout<<"Variation grouping, filtering, persistence and hover timing passed\n";
     return 0;
 }catch(const std::exception& e){std::cerr<<e.what();return 1;}}

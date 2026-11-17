@@ -43,11 +43,12 @@ void RenderBrowser(bool& addMissing) {
         UI::ImVec2 anchorMin{},anchorMax{};
     };
     static VariationView variation;
+    static bool cancelVerticalUntilRelease{};
     const auto variationNow=GetTickCount64();
     static bool tabsFocused{}, columnsFocused{};
     static unsigned lastOpen{};
     if(lastOpen!=studioOpenSerial.load()) {
-        variation={};
+        variation={}; cancelVerticalUntilRelease=false;
         EndOrganizer();
         SetMissingCheckMode(false);
         lastOpen=studioOpenSerial.load(); tabsFocused=false; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; selected.clear(); oldFilter.clear(); search[0]=0;
@@ -74,12 +75,35 @@ void RenderBrowser(bool& addMissing) {
             SaveSettingsIfDue(true);
         }
         UI::TextWrapped("%s", Tr("Enable if upscaling makes text blurry. Close and reopen the gallery to apply."));
+        // Reserve a shared label column and a reset button on both rows.
+        const float optionStartX=UI::GetCursorPos().x;
+        const float optionSpacing=UI::GetStyle()->ItemSpacing.x;
+        const float resetWidth=UI::CalcTextSize(Tr("Reset")).x+UI::GetStyle()->FramePadding.x*2.f;
+        const float optionLabelWidth=std::max(UI::CalcTextSize(Tr("UI size")).x,UI::CalcTextSize(Tr("UI transparency")).x);
+        const float optionSliderWidth=std::max(UiPx(100.f),UI::GetContentRegionAvail().x-resetWidth-optionLabelWidth-optionSpacing*3.f);
         float zoomPercent=uiZoom*100.f;
+        UI::SetNextItemWidth(optionSliderWidth);
         if(UI::SliderFloat(Label("UI size"),&zoomPercent,75.f,200.f,"%.0f%%")) {
             uiZoom=NormalizeUiZoom(zoomPercent/100.f); settingsChangedAt=GetTickCount64();
         }
         if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Adjust text and controls relative to the automatic WQHD layout. Applied on the next frame."));
-        if(UI::Button(Label("Reset UI size"))) {uiZoom=1.f;SaveSettingsIfDue(true);}
+        UI::SameLine(optionStartX+optionSliderWidth+optionLabelWidth+optionSpacing*2.f);
+        UI::PushID(701);
+        if(UI::Button(Label("Reset"),{resetWidth,0.f})) {uiZoom=1.f;SaveSettingsIfDue(true);}
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Reset UI size"));
+        UI::PopID();
+        const float themeAlpha=UI::GetStyle()->Colors[UI::ImGuiCol_WindowBg].w;
+        float transparencyPercent=(1.f-ResolveUiBackgroundOpacity(uiBackgroundOpacity,themeAlpha))*100.f;
+        UI::SetNextItemWidth(optionSliderWidth);
+        if(UI::SliderFloat(Label("UI transparency"),&transparencyPercent,0.f,100.f,"%.0f%%")) {
+            uiBackgroundOpacity=NormalizeUiBackgroundOpacity(1.f-transparencyPercent/100.f); settingsChangedAt=GetTickCount64();
+        }
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Gallery background only. 0% is opaque; 100% is transparent. Reset restores the framework theme."));
+        UI::SameLine(optionStartX+optionSliderWidth+optionLabelWidth+optionSpacing*2.f);
+        UI::PushID(702);
+        if(UI::Button(Label("Reset"),{resetWidth,0.f})) {uiBackgroundOpacity=-1.f;SaveSettingsIfDue(true);}
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Restore the framework's default background transparency."));
+        UI::PopID();
 
         if(UI::BeginCombo("Language / 言語",language==2?"External (Translation.json)":language==1?"日本語":"English")) {
             if(UI::Selectable("日本語",language==1)) {language=1; settingsChangedAt=GetTickCount64();}
@@ -103,10 +127,15 @@ void RenderBrowser(bool& addMissing) {
             detachedPreview=preview; previewSettled=0; resetPreviewRect=true;
             settingsChangedAt=GetTickCount64();
         }
-        if(preview) {
-            UI::TextWrapped(Tr("Drag the preview title to move it; drag its corner to resize. Photos use the centered view. Effects depend on your graphics setup."));
-            if(UI::Button(Label("Reset preview position"))) {previewRect={.54f,.08f,.45f,.84f}; resetPreviewRect=true; settingsChangedAt=GetTickCount64();}
+        if(UI::IsItemHovered()) {
+            UI::BeginTooltip();UI::PushTextWrapPos(UI::GetFontSize()*28.f);
+            UI::TextUnformatted(Tr("Drag the preview title to move it; drag its corner to resize. Photos use the centered view. Effects depend on your graphics setup."));
+            UI::PopTextWrapPos();UI::EndTooltip();
         }
+        UI::SameLine(0.f,UI::GetStyle()->ItemSpacing.x*3.f);
+        UI::BeginDisabled(!preview);
+        if(UI::Button(Label("Reset preview position"))) {previewRect={.54f,.08f,.45f,.84f}; resetPreviewRect=true; settingsChangedAt=GetTickCount64();}
+        UI::EndDisabled();
         UI::EndDisabled();
         if(UI::Checkbox(Label("Compact display"),&compactGallery)) {
             search[0]=0; UI::ClearActiveID(); SaveSettingsIfDue(true);
@@ -115,6 +144,16 @@ void RenderBrowser(bool& addMissing) {
         bool changed=UI::Checkbox(Label("Show preset names"),&showNames);
         changed=UI::Checkbox(Label("Show item counts"),&showCounts)||changed;
         if(changed) settingsChangedAt=GetTickCount64();
+        UI::SetNextItemWidth(std::max(UiPx(140.f),UI::GetContentRegionAvail().x*.35f));
+        if(UI::BeginCombo(Label("Gallery variation expansion"),Tr(hoverVariations?"On hover":"On click"))) {
+            for(bool hoverMode:{false,true}) {
+                if(UI::Selectable(Tr(hoverMode?"On hover":"On click"),hoverMode==hoverVariations)) {
+                    hoverVariations=hoverMode;variation={};SaveSettingsIfDue(true);
+                }
+            }
+            UI::EndCombo();
+        }
+        if(UI::IsItemHovered())UI::SetTooltip("%s",Tr("Click is the default: click a group to expand it, then click a variation to equip it. Hover restores automatic expansion. Applies to the normal gallery."));
         bool fullToggle=fullOutfitToggle.load();
         if(UI::Checkbox(Label("Allow full outfit removal on repeat click"),&fullToggle)) {
             fullOutfitToggle=fullToggle;SaveSettingsIfDue(true);
@@ -234,15 +273,22 @@ void RenderBrowser(bool& addMissing) {
         UI::ClearActiveID();
     }
     const bool navigating=!photoRetakeActive && !modal && !helpOpen && !bindingMode && (!UI::GetIO()->WantTextInput || padIntent) && !UI::IsAnyItemActive() && !saveBusy;
-    const bool down=PadPressed(UI::ImGuiKey_GamepadDpadDown,true)||PadPressed(UI::ImGuiKey_GamepadLStickDown,true);
-    const bool up=PadPressed(UI::ImGuiKey_GamepadDpadUp,true)||PadPressed(UI::ImGuiKey_GamepadLStickUp,true);
+    const bool suppressVertical=cancelVerticalUntilRelease;
+    if(!UI::IsKeyDown(UI::ImGuiKey_GamepadDpadUp) && !UI::IsKeyDown(UI::ImGuiKey_GamepadDpadDown) &&
+       !UI::IsKeyDown(UI::ImGuiKey_GamepadLStickUp) && !UI::IsKeyDown(UI::ImGuiKey_GamepadLStickDown)) cancelVerticalUntilRelease=false;
+    const bool down=!suppressVertical && (PadPressed(UI::ImGuiKey_GamepadDpadDown,true)||PadPressed(UI::ImGuiKey_GamepadLStickDown,true));
+    const bool up=!suppressVertical && (PadPressed(UI::ImGuiKey_GamepadDpadUp,true)||PadPressed(UI::ImGuiKey_GamepadLStickUp,true));
     const bool left=PadPressed(UI::ImGuiKey_GamepadDpadLeft,true)||PadPressed(UI::ImGuiKey_GamepadLStickLeft,true);
     const bool right=PadPressed(UI::ImGuiKey_GamepadDpadRight,true)||PadPressed(UI::ImGuiKey_GamepadLStickRight,true);
     bool tabChanged=false, shortcutToPhotos=false;
-    // Vertical navigation exits the horizontal strip and continues into the
-    // ordinary grid on the same input, without needing a separate B press.
-    if(variation.pad && navigating && !reveal && (up || down)) variation={};
-    const bool browse=navigating && !reveal && !variation.pad;
+    // A vertical press cancels only the strip; navigation resumes on a new press.
+    if(variation.click && navigating && padIntent) {variation.pad=true;variation.click=false;}
+    const bool cancelVariation=variation.pad && navigating && !reveal && (up || down);
+    if(cancelVariation) {
+        selected=variation.photo; variation={}; cancelVerticalUntilRelease=true;
+        tabsFocused=false; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false;
+    }
+    const bool browse=navigating && !reveal && !variation.pad && !cancelVariation;
     captureAllowed=browse;
     bool hasLegacy{};
     {std::scoped_lock lock(presetsMutex); hasLegacy=std::any_of(presets.begin(),presets.end(),[](const auto& p){return !p.accessories && p.slotMask && !SlotFits(p.slotMask,0x1803);});}
@@ -452,7 +498,7 @@ void RenderBrowser(bool& addMissing) {
     };
     if(browse && !cards.empty() && !tabsFocused && !enteredPhotos) {
         if(PadPressed(UI::ImGuiKey_GamepadFaceDown,false)) {
-            if(variationGroups.contains(cards[index].photo)) {variation.photo=cards[index].photo;variation.pad=true;variation.index=0;}
+            if(variationGroups.contains(cards[index].photo)) {variation.photo=cards[index].photo;variation.pad=true;variation.click=false;variation.index=0;}
             else queueApply(cards[index]);
         }
         if(PadPressed(UI::ImGuiKey_GamepadR3,false)) {contextPhoto=cards[index].photo; strcpy_s(editName,cards[index].name.c_str()); openEdit=true;}
@@ -531,7 +577,7 @@ void RenderBrowser(bool& addMissing) {
             UI::ImDrawListManager::AddRectFilled(UI::GetWindowDrawList(),{photoMax.x-bw-UiPx(5.f),photoMax.y-bh-UiPx(5.f)},{photoMax.x-UiPx(5.f),photoMax.y-UiPx(5.f)},0xEE202020,0,0);
             UI::ImDrawListManager::AddText(UI::GetWindowDrawList(),{photoMax.x-bw+UiPx(1.f),photoMax.y-bh-UiPx(3.f)},0xFFFFFFFF,badge.c_str());
             if(variation.photo==p.photo) {variation.anchorMin=photoMin;variation.anchorMax=photoMax;variationAnchorVisible=true;}
-            if(hover && variation.photo.empty() && !UI::GetDragDropPayload()) {
+            if(hoverVariations && hover && variation.photo.empty() && !UI::GetDragDropPayload()) {
                 variationHovered=true;
                 if(variation.clock.Ready(p.photo,variationNow)) {
                     variation.photo=p.photo;variation.anchorMin=photoMin;variation.anchorMax=photoMax;variationAnchorVisible=true;variation.clock.outside=0;
@@ -578,7 +624,15 @@ void RenderBrowser(bool& addMissing) {
         if(hover && !overMissing) UI::SetTooltip("%s",p.name.c_str());
         if(!photoRetakeActive && UI::IsItemClicked(1)) {contextPhoto=p.photo; strcpy_s(editName,p.name.c_str()); openEdit=true; selected=p.photo;}
         // Gamepad A is handled once above; avoid native-nav activation applying another card.
-        if(clicked && !overMissing && !UI::GetDragDropPayload() && !PadPressed(UI::ImGuiKey_GamepadFaceDown,false)) {selected=p.photo; tabsFocused=false; columnsFocused=false; layoutButtonFocused=false; missingCheckFocused=false; queueApply(p);}
+        const auto photoAction=Variations::PhotoAction(variationGroups.contains(p.photo),hoverVariations,clicked,
+            overMissing || UI::GetDragDropPayload() || PadPressed(UI::ImGuiKey_GamepadFaceDown,false));
+        if(photoAction!=Variations::PrimaryAction::None) {
+            selected=p.photo;tabsFocused=false;columnsFocused=false;layoutButtonFocused=false;missingCheckFocused=false;
+            if(photoAction==Variations::PrimaryAction::Expand) {
+                variation={};variation.photo=p.photo;variation.click=true;variation.index=0;
+                variation.anchorMin=photoMin;variation.anchorMax=photoMax;variationAnchorVisible=true;
+            } else queueApply(p);
+        }
         UI::PushStyleColor(UI::ImGuiCol_PopupBg,{.07f,.07f,.07f,1.f});
         // Only photo dragging gets extra tolerance; do not modify ImGui's global
         // threshold. A slight movement still releases as a normal ImageButton click.
@@ -673,7 +727,12 @@ void RenderBrowser(bool& addMissing) {
         const auto mouse=UI::GetIO()->MousePos;
         const auto inside=[&](UI::ImVec2 lo,UI::ImVec2 hi){return mouse.x>=lo.x-UiPx(6.f)&&mouse.x<=hi.x+UiPx(6.f)&&mouse.y>=lo.y-UiPx(6.f)&&mouse.y<=hi.y+UiPx(6.f);};
         const bool keep=inside(variation.anchorMin,variation.anchorMax)||inside({x,y},{x+stripW,y+stripH});
-        bool close=!variation.pad && !variationContext && variation.clock.Leave(keep,variationNow);
+        bool close=!variation.pad && !variation.click && !variationContext && variation.clock.Leave(keep,variationNow);
+        if(variation.click && !variationContext) {
+            const auto* io=UI::GetIO();
+            close=variation.clock.Leave(keep,variationNow,250) || UI::IsKeyPressed(UI::ImGuiKey_Escape,false) || PadPressed(UI::ImGuiKey_GamepadFaceRight,false) ||
+                (!keep && (UI::IsMouseClicked(0) || UI::IsMouseClicked(1) || io->MouseWheel!=0.f || io->MouseWheelH!=0.f));
+        }
         if(variation.pad && !variationContext) {
             if(PadPressed(UI::ImGuiKey_GamepadDpadLeft,false)) variation.index=(variation.index+static_cast<int>(choices.size())-1)%choices.size();
             if(PadPressed(UI::ImGuiKey_GamepadDpadRight,false)) variation.index=(variation.index+1)%choices.size();
@@ -828,7 +887,7 @@ void RenderBrowser(bool& addMissing) {
             {std::scoped_lock lock(editMutex);editSnapshot={};}
             {std::scoped_lock lock(presetsMutex);
                 for(const auto& p:presets) if(p.photo==contextPhoto) {scopeEditing=p; break;}
-                scopeRequest=scopeEditing; scopeReady=false; scopeMasks.clear(); scopeError.clear();
+                scopeRequest=scopeEditing; scopeReady=false; scopeMasks.clear();scopeNames.clear(); scopeError.clear();
             }
             const auto label=library.labels.find(contextPhoto);
             scopeItems=label!=library.labels.end()?label->second.outfitItems:std::nullopt;
@@ -871,8 +930,9 @@ void RenderBrowser(bool& addMissing) {
         const float scopeChoicesHeight=std::max(row*4.f,UI::GetContentRegionAvail().y-row*lowerRows-UI::GetStyle()->ItemSpacing.y*8.f);
         const bool fullOutfit=!scopeEditing.slotMask && !scopeEditing.accessories;
         UI::Spacing();BeginEquipmentSection("Scope section",fullOutfit?"Equipment to wear":"Exchange slots",false);
-        bool readyScope; std::vector<std::uint32_t> masks; std::string error;
-        {std::scoped_lock lock(presetsMutex); readyScope=scopeReady; masks=scopeMasks; error=scopeError;}
+        bool readyScope; std::vector<std::uint32_t> masks; std::vector<std::string> names; std::string error;
+        {std::scoped_lock lock(presetsMutex);readyScope=scopeReady;masks=scopeMasks;names=scopeNames;error=scopeError;}
+        const auto displayName=[&](std::size_t n)->const std::string& {return n<names.size()?names[n]:scopeEditing.items[n].name;};
         if(!readyScope) UI::TextUnformatted(Tr("Loading equipment slots..."));
         else if(!error.empty()) UI::TextWrapped("%s",StatusText(error).c_str());
         else {
@@ -899,7 +959,7 @@ void RenderBrowser(bool& addMissing) {
                         if(!slots.empty()) slots+=", ";
                         slots+=std::to_string(bit+30);
                     }
-                    const auto itemLabel="["+(slots.empty()?std::string(Tr("No biped slot")):slots)+"] "+item.name;
+                    const auto itemLabel="["+(slots.empty()?std::string(Tr("No biped slot")):slots)+"] "+displayName(n);
                     if(UI::Checkbox(itemLabel.c_str(),&checked)) {if(checked) scopeItems->push_back(key);else std::erase(*scopeItems,key);}
                     UI::PopID();
                 }
@@ -909,13 +969,13 @@ void RenderBrowser(bool& addMissing) {
                 if(UI::Checkbox(std::to_string(bit+30).c_str(),&checked)) {
                     scopeDraft=ToggleExchangeSlot(scopeDraft,1u<<bit,checked,masks);
                 }
-                for(std::size_t n=0;n<masks.size();++n) if(masks[n]&(1u<<bit)) {UI::SameLine(); UI::TextWrapped("%s",scopeEditing.items[n].name.c_str());}
+                for(std::size_t n=0;n<masks.size();++n) if(masks[n]&(1u<<bit)) {UI::SameLine(); UI::TextWrapped("%s",displayName(n).c_str());}
             }
             for(std::size_t n=0;n<masks.size();++n) if(!masks[n] && scopeEditing.items[n].kind=="armor") {
                 const auto key=ExchangeItemKey(scopeEditing.items[n]);
                 bool checked=std::find(scopeSlotless.begin(),scopeSlotless.end(),key)!=scopeSlotless.end();
                 UI::PushID(static_cast<int>(n));
-                if(UI::Checkbox(scopeEditing.items[n].name.c_str(),&checked)) {if(checked) scopeSlotless.push_back(key);else std::erase(scopeSlotless,key);}
+                if(UI::Checkbox(displayName(n).c_str(),&checked)) {if(checked) scopeSlotless.push_back(key);else std::erase(scopeSlotless,key);}
                 UI::PopID();UI::SameLine();UI::TextUnformatted(Tr("Slotless equipment"));
             }
             }

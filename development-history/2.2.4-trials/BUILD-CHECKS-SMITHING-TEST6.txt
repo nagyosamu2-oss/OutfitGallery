@@ -1,0 +1,13 @@
+Outfit Gallery 2.2.4-smithing-test6 / DLL metadata 2.2.4.6
+2026-11-17 Japan. Base: test5.
+Release MSVC/CommonLibSSE-NG 10.1.0 build succeeded.
+57/57 selected tests passed. Baseline TrashVirtualPathSafety environment fixture
+limitation excluded, NOT counted as passing. Three SKSE exports verified.
+Saved smithing quality labels prepared on game thread using temporary display data.
+Stable registration target grouping tested without mutating stored categories.
+Existing equipment code excluding the new display resolver is identical to test5.
+ManagedItems, Smithing, Presets serialization, GeneratedIdentity and Transmog unchanged.
+In-game quality labels, layout and controller navigation await user confirmation.
+Runtime/source ZIP integrity, exact DLL bytes and source members verified.
+No installed-file overwrite, GitHub sync, publishing or upload performed.
+DLL SHA256: D8D21B8549D462B7C3AA51BFE983FD8DE92B06B4054DEA6294D32E9E74DC4026

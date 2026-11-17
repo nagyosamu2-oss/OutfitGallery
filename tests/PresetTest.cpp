@@ -19,7 +19,53 @@ int main() {
         auto remembered=ReadPreset(folder/"enchanted.json");
         if(!remembered.items[0].preferred.custom || remembered.items[0].preferred.scope!=enchanted.items[0].preferred.scope || remembered.items[0].preferred.id!=65000) throw std::runtime_error("preferred identity lost");
         if(remembered.items[0].preferred.signature!="stable-effect-signature") throw std::runtime_error("preferred signature lost");
+        auto smithing=p;smithing.items.resize(1);smithing.items[0].smithing={1.3712345f,0xABCDEF1234567890ULL,123};
+        WritePreset(smithing,folder/"smithing.json");
+        const auto smithingCopy=ReadPreset(folder/"smithing.json");
+        if(smithingCopy.items[0].smithing!=smithing.items[0].smithing) throw std::runtime_error("Smithing recipe precision or original identity lost");
+        nlohmann::json smithingJson;{std::ifstream input(folder/"smithing.json");input>>smithingJson;}
+        smithingJson["items"][0]["smithing"].erase("scope");smithingJson["items"][0]["smithing"].erase("id");
+        {std::ofstream output(folder/"new-game-smithing.json");output<<smithingJson;}
+        const auto portable=ReadPreset(folder/"new-game-smithing.json");
+        if(portable.items[0].smithing.health!=smithing.items[0].smithing.health || portable.items[0].smithing.id) throw std::runtime_error("Portable smithing recipe depends on identity");
+        {std::ifstream input(folder/"valid.json");nlohmann::json ordinary;input>>ordinary;
+            if(ordinary["items"][0].contains("smithing") || ReadPreset(folder/"valid.json").items[0].smithing.health!=1.f) throw std::runtime_error("Ordinary or legacy preset acquired a recipe");}
+        for(const auto& invalid:nlohmann::json::array({0,-1,1,"invalid",nullptr})) {
+            auto broken=smithingJson;broken["items"][0]["smithing"]["health"]=invalid;
+            {std::ofstream output(folder/"invalid-smithing.json");output<<broken;}
+            bool rejected=false;try {ReadPreset(folder/"invalid-smithing.json");} catch(...) {rejected=true;}
+            if(!rejected) throw std::runtime_error("Invalid smithing recipe accepted");
+        }
+        auto unsupported=smithingJson;unsupported["items"][0]["smithing"]["version"]=999;
+        {std::ofstream output(folder/"unsupported-smithing.json");output<<unsupported;}
+        bool rejectedRecipe=false;try {ReadPreset(folder/"unsupported-smithing.json");} catch(...) {rejectedRecipe=true;}
+        if(!rejectedRecipe) throw std::runtime_error("Unknown smithing version silently downgraded");
         StudioSettings prefSettings;
+        if(prefSettings.hoverVariations) throw std::runtime_error("Click expansion must be the default");
+        prefSettings.hoverVariations=true;
+        WriteStudioSettings(prefSettings,folder/"variation-mode.json");
+        if(!ReadStudioSettings(folder/"variation-mode.json").hoverVariations) throw std::runtime_error("Hover preference was not saved");
+        prefSettings.hoverVariations=false;
+        WriteStudioSettings(prefSettings,folder/"variation-mode.json");
+        if(ReadStudioSettings(folder/"variation-mode.json").hoverVariations) throw std::runtime_error("Click preference was not saved");
+        nlohmann::json legacyVariationSettings;
+        {std::ifstream input(folder/"variation-mode.json");input>>legacyVariationSettings;}
+        legacyVariationSettings.erase("hoverVariations");
+        {std::ofstream output(folder/"legacy-variation-mode.json");output<<legacyVariationSettings;}
+        if(ReadStudioSettings(folder/"legacy-variation-mode.json").hoverVariations) throw std::runtime_error("Old settings must default to click expansion");
+        if(ReadStudioSettings(folder/"legacy-variation-mode.json").uiBackgroundOpacity!=-1.f)
+            throw std::runtime_error("Legacy background must preserve the theme");
+        for(float opacity:{0.f,.35f,1.f,-1.f}) {
+            auto background=prefSettings; background.uiBackgroundOpacity=opacity;
+            WriteStudioSettings(background,folder/"background.json");
+            const auto loadedBackground=ReadStudioSettings(folder/"background.json");
+            if(loadedBackground.uiBackgroundOpacity!=opacity || loadedBackground.hoverVariations!=prefSettings.hoverVariations)
+                throw std::runtime_error("Background persistence/reset damaged settings");
+        }
+        auto outOfRangeBackground=prefSettings; outOfRangeBackground.uiBackgroundOpacity=2.f;
+        WriteStudioSettings(outOfRangeBackground,folder/"background.json");
+        if(ReadStudioSettings(folder/"background.json").uiBackgroundOpacity!=1.f)
+            throw std::runtime_error("Background opacity not bounded");
         if(prefSettings.upscalerCompatibility)
             throw std::runtime_error("Upscaler compatibility must default OFF");
         { std::ofstream legacy(folder/"legacy-upscaler.json"); legacy << R"({"schema":1,"uiZoom":1.25,"distance":220,"height":65,"orbit":0,"pitch":0,"fov":60})"; }

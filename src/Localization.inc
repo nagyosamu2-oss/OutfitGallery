@@ -18,6 +18,11 @@ void LoadExternalTranslation() {
     }
 }
 const std::map<std::string,std::string> japanese{
+    {"Gallery variation expansion","通常画面の差分展開"},
+    {"On click","クリック"},
+    {"On hover","ホバー"},
+    {"Click is the default: click a group to expand it, then click a variation to equip it. Hover restores automatic expansion. Applies to the normal gallery.","初期値はクリックです。代表写真をクリックして差分を開き、中の写真をクリックして着替えます。ホバーを選ぶとカーソルを合わせて自動展開します。通常のギャラリー画面に適用します。"},
+
     {"Move to another tab","別のタブに移動"},
     {"No other compatible tabs.","移動できる別のタブがありません。"},
     {"%s: moved %u from the current tab. Other tabs are kept. Applied when saved.","%s：現在のタブから %u 件移動します。他のタブへの登録は維持し、保存時に反映します。"},
@@ -48,6 +53,13 @@ const std::map<std::string,std::string> japanese{
  {"Upscaler compatibility mode","アップスケール互換モード"},
  {"Enable if upscaling makes text blurry. Close and reopen the gallery to apply.","アップスケール使用時に文字がぼやける場合に有効にしてください。ギャラリーを閉じて開き直すと反映されます。"},
  {"UI size","UI倍率"},
+ {"Registered smithing item is missing; enable Add missing base items to reproduce it","登録した強化装備が見つかりません。再現するには「不足している装備を追加して復元」を有効にしてください。"},
+ {"Generated equipment could not be verified. Further generation is stopped to prevent duplicates. See OutfitGallery.log.","生成装備を確認できません。重複を防ぐため追加生成を停止しました。ログを確認してください。"},
+ {"Reset","リセット"},
+ {"UI transparency","UI透過率"},
+ {"Gallery background only. 0% is opaque; 100% is transparent. Reset restores the framework theme.","左メニューの背景だけを調整します。0％で不透明、100％で透明です。リセットするとフレームワークの既定値に戻ります。"},
+ {"Restore the framework's default background transparency.","背景の透過率をフレームワークの既定値に戻します。"},
+
  {"Reset UI size","UI倍率を初期値に戻す"},
  {"Adjust text and controls relative to the automatic WQHD layout. Applied on the next frame.","WQHD基準の自動調整に対して、文字とボタンの大きさを調整します。次のフレームから反映します。"},
 

@@ -29,6 +29,25 @@ Item Encode(RE::TESBoundObject* obj, const std::string& hand) {
     return {std::string(file->GetFilename()),id,obj->GetName() ? obj->GetName() : "",Kind(obj),hand};
 }
 }
+std::vector<std::string> ResolvePresetDisplayNames(const Preset& p) {
+    std::vector<std::string> result;result.reserve(p.items.size());
+    for(const auto& item:p.items) {
+        std::string name=item.name;
+        if(item.kind=="armor" && ValidSmithing(item.smithing.health)) {
+            auto* form=ResolveItem(item);
+            auto* object=form?form->As<RE::TESObjectARMO>():nullptr;
+            if(object) {
+                // Game-native quality names honor game localization/settings.
+                // This is temporary display data, never a live inventory list.
+                RE::ExtraTextDisplayData display;
+                const auto* text=display.GetDisplayName(object,item.smithing.health);
+                if(text && *text) name=text;
+            }
+        }
+        result.push_back(std::move(name));
+    }
+    return result;
+}
 std::vector<std::uint32_t> ResolvePresetSlots(const Preset& p) {
     auto* handler=RE::TESDataHandler::GetSingleton();
     if(!handler) throw std::runtime_error("Equipment manager unavailable");
@@ -58,10 +77,10 @@ Preset SnapshotEquipment(RE::Actor* actor, std::uint32_t slotMask, bool remember
         }
         p.items.push_back(Encode(obj,""));
         if(rememberNames && cleanupCompatibility.load()) p.items.back().registeredName=CaptureRegisteredName(obj,data.second.get());
-        if(rememberEnchanted && actor->GetFormID()==0x14 && entry->extraLists) {
+        if(rememberEnchanted && entry->extraLists) {
             RE::ExtraDataList* worn=nullptr; unsigned countWorn=0;
             for(auto* e:*entry->extraLists) if(e && (e->HasType<RE::ExtraWorn>() || e->HasType<RE::ExtraWornLeft>())) {worn=e; ++countWorn;}
-            if(countWorn==1) p.items.back().preferred=RememberEnchanted(actor,worn);
+            if(countWorn==1) {p.items.back().preferred=RememberEnchanted(actor,worn);p.items.back().smithing=RememberSmithing(actor,worn);}
         }
     }
     if (p.items.empty()) throw std::runtime_error("No equipped armor or clothing to save");
@@ -77,10 +96,10 @@ Preset SnapshotAccessories(RE::Actor* actor, bool rememberEnchanted, bool rememb
         const auto mask=armor->GetSlotMask().underlying();
         p.slotMask|=mask; p.items.push_back(Encode(obj,""));
         if(rememberNames && cleanupCompatibility.load()) p.items.back().registeredName=CaptureRegisteredName(obj,data.second.get());
-        if(rememberEnchanted && actor->GetFormID()==0x14 && data.second->extraLists) {
+        if(rememberEnchanted && data.second->extraLists) {
             RE::ExtraDataList* worn=nullptr; unsigned countWorn=0;
             for(auto* e:*data.second->extraLists) if(e && (e->HasType<RE::ExtraWorn>() || e->HasType<RE::ExtraWornLeft>())) {worn=e; ++countWorn;}
-            if(countWorn==1) p.items.back().preferred=RememberEnchanted(actor,worn);
+            if(countWorn==1) {p.items.back().preferred=RememberEnchanted(actor,worn);p.items.back().smithing=RememberSmithing(actor,worn);}
         }
     }
     if(p.items.empty()) throw std::runtime_error("No equipped accessories to save.");
@@ -273,6 +292,15 @@ std::string ApplyEquipment(RE::Actor* actor, const Preset& source, bool addMissi
     }
     if(p.accessories && resolvedMask!=p.slotMask) throw std::runtime_error("Accessory slots changed. Register this set again.");
     auto inventory = actor->GetInventory();
+    const bool hasSmithing=std::any_of(p.items.begin(),p.items.end(),[](const Item& i){return ValidSmithing(i.smithing.health);});
+    std::map<RE::TESBoundObject*,std::uint16_t> smithingIDs;
+    std::set<RE::TESBoundObject*> smithingForms;
+    if(hasSmithing) for(std::size_t n=0;n<p.items.size();++n) if(ValidSmithing(p.items[n].smithing.health)) {
+        smithingForms.insert(resolved[n].first);
+        const auto id=FindSmithingInstance(actor,resolved[n].first,p.items[n].smithing);
+        if(id) smithingIDs[resolved[n].first]=id;
+        if(!id && !addMissing) throw std::runtime_error("Registered smithing item is missing; enable Add missing base items to reproduce it");
+    }
     // The selected preset wins slot conflicts. An overlapping worn armor piece
     // is removed as a whole, even when it also occupies slots outside this scope.
     // Incoming items still must fit the saved scope (validated above).
@@ -285,7 +313,8 @@ std::string ApplyEquipment(RE::Actor* actor, const Preset& source, bool addMissi
         const auto found = inventory.find(obj);
         const auto owned = found == inventory.end() ? 0 : std::max(0,found->second.first);
         GALLERY_DIAG("OG-DIAG inventory form={:08X} owned={} needed={}",obj->GetFormID(),owned,count);
-        if(owned<count) {
+        const bool smithing=hasSmithing && smithingForms.contains(obj);
+        if(owned<count && !smithing) {
             checkDeadline();
             if(mayMutate) SKSE::log::info("OG-CRAFT generate form={:08X} count={} name={}",obj->GetFormID(),count-owned,obj->GetName());
             RegisteredName name;
@@ -295,10 +324,14 @@ std::string ApplyEquipment(RE::Actor* actor, const Preset& source, bool addMissi
             AddManagedItems(actor,obj,count-owned,owned==0,name);
         }
     }
+    if(hasSmithing) for(std::size_t n=0;n<p.items.size();++n) if(ValidSmithing(p.items[n].smithing.health)) {
+        checkDeadline();
+        if(!smithingIDs.contains(resolved[n].first)) smithingIDs[resolved[n].first]=PrepareSmithingInstance(actor,resolved[n].first,p.items[n].smithing,addMissing);
+    }
     checkDeadline();
     if(compatibility) ObserveGeneratedItems(actor);
     // Crafting can now generate items. Do not reuse pre-add extra-list pointers.
-    if(mayMutate) inventory=actor->GetInventory();
+    if(mayMutate || hasSmithing) inventory=actor->GetInventory();
     checkDeadline();
     // Use each worn instance when unequipping; never destroy inventory items.
     for (const auto& [obj,data] : inventory) {
@@ -326,12 +359,22 @@ std::string ApplyEquipment(RE::Actor* actor, const Preset& source, bool addMissi
     // Unequip may destroy/rebuild extra lists. Obtain fresh entries only AFTER
     // all unequips; never carry an ExtraDataList pointer across those mutations.
     std::string missing;
-    if(search) {
+    if(search || hasSmithing) {
         auto fresh=actor->GetInventory();
         for(std::size_t n=0;n<resolved.size();++n) {
             const auto [obj,slot]=resolved[n]; auto* selected=static_cast<RE::ExtraDataList*>(nullptr);
             const auto& pref=p.items[n].preferred;
-            if(pref.custom) {
+            if(smithingIDs.contains(obj)) {
+                // Each earlier equip may rebuild extra lists; reacquire only this form.
+                auto smithingInventory=actor->GetInventory([obj](RE::TESBoundObject& candidate){return &candidate==obj;});
+                const auto found=smithingInventory.find(obj);unsigned matches{};
+                if(found!=smithingInventory.end() && found->second.first>0 && found->second.second && found->second.second->extraLists)
+                    for(auto* extra:*found->second.second->extraLists) if(extra) {
+                        const auto* uid=extra->GetByType<RE::ExtraUniqueID>();
+                        if(uid && uid->baseID==actor->GetFormID() && uid->uniqueID==smithingIDs.at(obj)) {selected=extra;++matches;}
+                    }
+                if(matches!=1 || !selected || selected->GetCount()!=1) throw std::runtime_error("Smithing identity changed while equipping; stopped");
+            } else if(search && pref.custom) {
                 std::vector<PreferredCandidate> candidates; std::vector<RE::ExtraDataList*> lists;
                 const auto found=fresh.find(obj);
                 if(found!=fresh.end() && found->second.first>0 && found->second.second && found->second.second->extraLists) {
@@ -375,12 +418,12 @@ void RememberSelectedEnchanted(RE::Actor* actor,Preset& selected,bool remember) 
         if(found==inventory.end() || found->second.first<=0 || !found->second.second || !found->second.second->IsWorn())
             throw std::runtime_error("Worn equipment changed. Reopen the editor.");
         auto* entry=found->second.second.get();
-        item.preferred={};
-        if(actor->GetFormID()==0x14 && entry->extraLists) {
+        item.preferred={};item.smithing={};
+        if(entry->extraLists) {
             RE::ExtraDataList* worn=nullptr;unsigned count=0;
             for(auto* extra:*entry->extraLists) if(extra && (extra->HasType<RE::ExtraWorn>() || extra->HasType<RE::ExtraWornLeft>())) {worn=extra;++count;}
             if(count!=1) throw std::runtime_error("Worn equipment identity is ambiguous.");
-            if(remember) item.preferred=RememberEnchanted(actor,worn);
+            if(remember) {item.preferred=RememberEnchanted(actor,worn);item.smithing=RememberSmithing(actor,worn);}
             else if(worn->HasType<RE::ExtraEnchantment>()) {item.preferred.custom=true;item.preferred.signature=EnchantmentSignature(worn);}
         }
     }

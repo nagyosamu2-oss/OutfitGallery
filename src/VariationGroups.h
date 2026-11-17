@@ -52,14 +52,20 @@ struct HoverClock {
         if(candidate!=photo){candidate=photo;since=now;return false;}
         return now-since>=250;
     }
-    bool Leave(bool inside,std::uint64_t now) {
+    bool Leave(bool inside,std::uint64_t now,std::uint64_t delay=100) {
         if(inside){outside=0;return false;}
         if(!outside)outside=now;
-        return now-outside>=100;
+        return now-outside>=delay;
     }
 };
+enum class PrimaryAction { None, Expand, Apply };
+constexpr PrimaryAction PhotoAction(bool grouped,bool hoverExpand,bool clicked,bool blocked) {
+    if(!clicked || blocked) return PrimaryAction::None;
+    return grouped && !hoverExpand ? PrimaryAction::Expand : PrimaryAction::Apply;
+}
 struct Interaction {
     std::string photo;HoverClock clock;bool pad{},context{};int index{};
+    bool click{}; // explicit mouse-opened strip; use a longer pointer-leave grace
     template<class Groups> bool Reconcile(const Groups& groups) {
         // An empty active photo means the dwell is still accumulating.
         // Clearing that state every frame prevents any hover from opening.

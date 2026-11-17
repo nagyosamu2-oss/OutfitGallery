@@ -1,0 +1,26 @@
+Outfit Gallery 2.2.3-ui-background-test1 / DLL metadata 2.2.3.4
+2026-11-17 Japan. Release build with existing MSVC/CommonLibSSE-NG 10.1.0.
+56/56 selected automated tests passed. Known baseline TrashVirtualPathSafety
+environment limitation excluded, not counted as passing. Three SKSE exports
+verified. Built on official 2.2.2, NOT the unconfirmed tempered-item trial.
+Gallery background opacity is applied only to the main gallery root via
+SetNextWindowBgAlpha. Text, photos, preview and global style are untouched.
+Negative saved opacity preserves the framework theme default; Reset restores
+that sentinel. Legacy settings, explicit 0/1/intermediate values, reset and
+clamping are covered by persistence and UI helper tests.
+Zoom and transparency use separate aligned same-row Reset buttons.
+Click-to-expand is the default for new and legacy studio settings lacking
+hoverVariations. Explicit hover preference persists in the existing JSON.
+Action regression tests separate group expansion from application, preserve
+single-photo/legacy hover clicks, and reject drag/pad/overlay activation.
+Persistence tests cover both choices and legacy missing-key defaults.
+Click-opened strips close after 250ms outside their anchor and strip;
+reentry cancels the timer. Timing regression tests passed. Also close on outside click/scroll,
+Escape/B, invalid anchor/modal, or explicit controller navigation rules.
+Independent preview checkbox and reset button share a row; description
+is a wrapped checkbox tooltip. Reset is disabled while preview is off.
+Normal gallery only. Organizer input/drag source and equipment/transmog
+sources are byte-identical to 2.2.2. No new game-thread mutation or polling.
+Runtime/source ZIP integrity, DLL equality and complete source ZIP checked.
+No installed-file changes, GitHub update or upload. In-game UI not verified.
+DLL SHA256: 39346F85A2E3736831CC0020BE0BBC4791127F996BD976AEA6B8FC6B59705611

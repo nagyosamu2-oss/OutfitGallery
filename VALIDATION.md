@@ -1,7 +1,9 @@
-# Validation — 2.2.2
+# Validation — 2.2.4
 
-Based on 2.2.2-next-update-test3. Release preparation changes only main.cpp version metadata/footer/log labels and documentation. All other native source, tests, integration headers, translations, licenses and INI are byte-identical to that confirmed candidate.
+Release candidate based on user-confirmed smithing-test7. Only version metadata, footer/log labels and documentation differ from test7; other native sources, tests, translations, integrations and INI must match exactly.
 
-User reports confirmed the head/ear fix in the author's and reporter's environments, and later confirmed all integrated organizer transfer, sleep switching and final unassigned-only sleepwear note behavior. These reports do not establish compatibility with every runtime, head mesh or sleep mod.
+User-reported confirmation: smithing reconstruction and alternating qualities; protection/reuse after added smithing or custom enchantment; original plain-item preservation; follower application/cleanup/restart; save/restart/new-game reconstruction; no generation with missing-item addition disabled; tail cleanup; missing-item translations; saved quality display and organizer ordering; final controller cancel behavior. User also reports approximately 200 registered outfits without cleanup leftovers or noticeable slowdown.
 
-The final 2.2.2-numbered DLL still needs a short in-game smoke check after rebuilding. Build/test/ZIP results are recorded in BUILD-CHECKS-2.2.2.txt. The accepted runtime list and hook installation rules are unchanged. ApparelPreview's previously reported incompatibility remains documented; no compatibility bypass was added.
+Earlier normal-outfit timing comparison used test1, not this final release. Functional reports do not establish compatibility with all mods or runtimes. The release-numbered rebuild still needs a brief in-game smoke check. Accepted runtimes and hook rules remain unchanged.
+
+Build, automated tests, exports and archive checks are recorded in BUILD-CHECKS-2.2.4.txt. Historical trial evidence is in development-history/2.2.4-trials in the source archive. No installation, GitHub synchronization or publishing is part of packaging.

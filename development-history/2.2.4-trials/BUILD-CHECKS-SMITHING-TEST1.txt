@@ -1,0 +1,18 @@
+Outfit Gallery 2.2.4-smithing-test1 / DLL metadata 2.2.4.1
+2026-11-17 Japan. Isolated from the user-confirmed UI checkpoint.
+Release MSVC/CommonLibSSE-NG 10.1.0 build succeeded.
+57/57 selected tests passed. Baseline TrashVirtualPathSafety environment
+fixture limitation excluded, NOT counted as passing. Three SKSE exports verified.
+Added smithing policy and recipe persistence cases described in DESIGN-SMITHING-TEST1.md.
+Final self-reclaim notification audit included: only our scoped verified
+singleton deletion is filtered; manual/different transfers still cancel claims.
+Optional baseline co-save records reviewed for fixed lengths, version checks,
+duplicate rejection, resolved IDs and legacy conservative fallback.
+No new hooks, polling or engine mutation outside the existing game-thread apply.
+Transmog, gallery/organizer UI and follower maintenance sources unchanged.
+Only DLL is installed by this runtime archive. No INI, user presets, settings,
+photos or save files included. In-game allocation/equip/cleanup, save/load,
+new-game portability and performance remain UNVERIFIED.
+No installed-file overwrite, GitHub sync, publish or upload performed.
+Runtime/source ZIP integrity, exact DLL bytes and all source members verified.
+DLL SHA256: 2719C7E719E8876A617AB1A60E6221C872EE64577240960F704C380EEB9B1F23

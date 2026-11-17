@@ -10,6 +10,7 @@
 #include <optional>
 #include <stdexcept>
 #include "PreferredItem.h"
+#include "Smithing.h"
 #include "RegisteredName.h"
 namespace RE { class Actor; }
 namespace Gallery {
@@ -20,7 +21,7 @@ void WriteAutoOutfitSettings(const AutoOutfitSettings&,const std::filesystem::pa
 struct InputSettings { unsigned keyboard{66}, gamepad{32}; float holdSeconds{0.8f}; std::array<unsigned,3> captureKeys{67,68,87}; std::array<unsigned,3> capturePads{32768,16384,64}; unsigned keyboardModifiers{}; unsigned autoKeyboard{}, autoModifiers{}, autoGamepad{}; float autoHoldSeconds{.8f}; };
 InputSettings ReadInputSettings(const std::filesystem::path&);
 void WriteInputSettings(const InputSettings&,const std::filesystem::path&);
-struct StudioSettings { float distance{217.130f}, height{67.619f}, orbit{-22.831f}, pitch{0.350f}, fov{60.060f}; int columns{3}; bool showNames{true}, showCounts{false}; int language{0}; bool allowFreeCamera{true}; bool addMissing{true}; float lateral{13.929f}, elevation{0.000f}; std::uint32_t headSlots{0x1803}; std::string startupTab{}; bool detachedPreview{}; std::array<float,4> previewRect{.54f,.08f,.45f,.84f}; bool followerTargeting{true}; bool preferEnchanted{true}; bool portraitThumbnails{}; bool cleanupCompatibility{}; bool allowCombatGallery{true}; bool compactGallery{}; bool reclaimRenamedGeneratedItems{}; float uiZoom{1.f}; bool fullOutfitToggle{}; bool upscalerCompatibility{}; bool showEquipmentTools{true}; bool followerTargetingMigrationPending{}; };
+struct StudioSettings { float distance{217.130f}, height{67.619f}, orbit{-22.831f}, pitch{0.350f}, fov{60.060f}; int columns{3}; bool showNames{true}, showCounts{false}; int language{0}; bool allowFreeCamera{true}; bool addMissing{true}; float lateral{13.929f}, elevation{0.000f}; std::uint32_t headSlots{0x1803}; std::string startupTab{}; bool detachedPreview{}; std::array<float,4> previewRect{.54f,.08f,.45f,.84f}; bool followerTargeting{true}; bool preferEnchanted{true}; bool portraitThumbnails{}; bool cleanupCompatibility{}; bool allowCombatGallery{true}; bool compactGallery{}; bool reclaimRenamedGeneratedItems{}; float uiZoom{1.f}; bool fullOutfitToggle{}; bool upscalerCompatibility{}; bool showEquipmentTools{true}; bool hoverVariations{}; float uiBackgroundOpacity{-1.f}; bool followerTargetingMigrationPending{}; };
 struct CameraBank {
     std::array<std::optional<StudioSettings>,7> slots;
     std::array<std::string,7> names;
@@ -34,6 +35,13 @@ void WriteCameraBank(const CameraBank&,const std::filesystem::path&);
 struct Category { std::string id, name; bool accessories{}; };
 struct PresetLabel { std::string name; std::vector<std::string> categories; bool deleted{}; std::optional<std::uint32_t> exchangeSlots; std::vector<std::string> exchangeSlotless; std::optional<std::vector<std::string>> outfitItems; };
 struct Library { std::vector<Category> categories; std::map<std::string,PresetLabel> labels; std::vector<std::string> order; std::vector<std::vector<std::string>> variations; };
+// Stable display order, shared by organizer targets and gallery groups.
+inline std::vector<Category> RegistrationTabs(const Library& library) {
+    std::vector<Category> result;
+    for(const auto& category:library.categories) if(!category.accessories) result.push_back(category);
+    for(const auto& category:library.categories) if(category.accessories) result.push_back(category);
+    return result;
+}
 // Display order only: preserve the saved category and photo membership order.
 inline std::vector<Category> CollectionTabs(const Library& library,bool legacy=false) {
     std::vector<Category> tabs{{"","All"}};
@@ -69,7 +77,7 @@ Library ReadLibrary(const std::filesystem::path&);
 void WriteLibrary(const Library&,const std::filesystem::path&);
 StudioSettings ReadStudioSettings(const std::filesystem::path&);
 void WriteStudioSettings(const StudioSettings&, const std::filesystem::path&);
-struct Item { std::string plugin; std::uint32_t localID{}; std::string name; std::string kind; std::string hand; PreferredItem preferred; RegisteredName registeredName; };
+struct Item { std::string plugin; std::uint32_t localID{}; std::string name; std::string kind; std::string hand; PreferredItem preferred; RegisteredName registeredName; SmithingRecipe smithing; };
 struct Preset { std::string name; std::string photo; std::vector<Item> items; std::uint32_t slotMask{}; bool accessories{}; std::optional<std::uint32_t> exchangeSlots; bool equipmentEdited{}; std::vector<std::string> exchangeSlotless; std::optional<std::vector<std::string>> outfitItems; };
 inline std::string ExchangeItemKey(const Item& item) {return item.plugin+":"+std::to_string(item.localID);}
 // Old presets may contain weapons/ammo. Keep their files readable, but never
@@ -152,6 +160,7 @@ inline Preset FilterExchangeSlots(const Preset& source,const std::vector<std::ui
     if((selectedMask || !source.exchangeSlotless.empty()) && result.items.empty()) throw std::runtime_error("No saved items in the selected slots.");
     return result;
 }
+std::vector<std::string> ResolvePresetDisplayNames(const Preset&); // game thread only, temporary display data
 std::vector<std::uint32_t> ResolvePresetSlots(const Preset&); // game thread only
 bool SameEquipment(const Preset&,const Preset&);
 void WritePreset(const Preset&, const std::filesystem::path&);

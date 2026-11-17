@@ -1,0 +1,13 @@
+Outfit Gallery 2.2.4-smithing-test7 / metadata 2.2.4.7
+Base test6. Release build succeeded; 57/57 selected automated tests passed.
+Initial test run failed because the configured TEMP directory did not exist.
+Created workspace TEMP directory and reran all selected tests: 57/57 passed.
+Baseline TrashVirtualPathSafety fixture limitation excluded, not counted as passing.
+Three SKSE exports verified. ZIP contents and DLL equality verified.
+Vertical gamepad input cancels the variation strip without navigating the grid.
+Selection returns to the representative. Held vertical input blocked until release.
+Only browser input logic, version and documentation changed.
+Equipment, generation, cleanup, serialization and organizer code unchanged.
+In-game D-pad/stick behavior awaits user confirmation.
+No installation, publishing or GitHub synchronization performed.
+DLL SHA256: 6263675F59BDB8A39405B08B23A0EEC5D6B49C26907CE41DD957EAFF0D7C4F3C

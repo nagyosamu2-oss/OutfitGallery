@@ -1,0 +1,36 @@
+Outfit Gallery 2.2.4-smithing-test4 / DLL metadata 2.2.4.4
+2026-11-17 Japan. Isolated from the user-confirmed UI checkpoint.
+Release MSVC/CommonLibSSE-NG 10.1.0 build succeeded.
+Test4: adds scoped ordinary fresh singleton incoming-ID evidence. Tracking of
+proved new pre-numbered items no longer requires cleanupCompatibility ON.
+Same prior strict owner/UID/count/uniqueness/reservation checks still apply,
+now also requiring exactly one form extra-list. No existing possessions or
+untracked legacy copies are adopted. No extra inventory scans introduced.
+Runtime tail fix remains UNVERIFIED. See VALIDATION-STATUS.ja.txt for explicit
+confirmed vs outstanding smithing checks. This build does not complete them.
+57/57 selected tests passed. Baseline TrashVirtualPathSafety environment
+fixture limitation excluded, NOT counted as passing. Three SKSE exports verified.
+Added direct-generation proof and ID-transition policy cases; earlier recipe
+persistence tests retained. See DESIGN-SMITHING-TEST4.md.
+Reported superior-boots failure is diagnosed as reserved=true after a proved
+engine UID rewrite4->3, with count+1 and matching quality. Runtime fix remains
+UNVERIFIED. Test3 restores the initially allocated unused ID only for a proved
+fresh singleton, sends the real identity-change notification, reacquires data
+and repeats strict proof. Existing possessions/scopes are not rewritten.
+Repair refuses an occupied/reserved destination or any failed proof predicate.
+Replaced post-add original-priority lookup with direct singleton evidence.
+No-op ID events preserve baselines; real invalidation is independent of detail
+logging. Added focused generation diagnostics and session duplicate-generation
+suppression after an unverified addition. No arbitrary ownership adoption.
+Final self-reclaim notification audit included: only our scoped verified
+singleton deletion is filtered; manual/different transfers still cancel claims.
+Optional baseline co-save records reviewed for fixed lengths, version checks,
+duplicate rejection, resolved IDs and legacy conservative fallback.
+No new hooks, polling or engine mutation outside the existing game-thread apply.
+Transmog, gallery/organizer UI and follower maintenance sources unchanged.
+Only DLL is installed by this runtime archive. No INI, user presets, settings,
+photos or save files included. In-game allocation/equip/cleanup, save/load,
+new-game portability and performance remain UNVERIFIED.
+No installed-file overwrite, GitHub sync, publish or upload performed.
+Runtime/source ZIP integrity, exact DLL bytes and all source members verified.
+DLL SHA256: D5C57B84A8ABD027298BFBED0233AE5AE24DDF4D6FDE745054B2D3D22EF58549

@@ -1,0 +1,13 @@
+Outfit Gallery 2.2.4 / DLL metadata 2.2.4.0 / 2026-11-17
+Release MSVC build completed. 57/57 selected automated tests passed.
+TrashVirtualPathSafety excluded for baseline junction-fixture environment limitation;
+not counted as passing. Three SKSE entry-point exports verified.
+All src except main.cpp version/footer/log labels is byte-identical to confirmed test7.
+Tests, integration headers, dependency sources, translations, licenses and INI unchanged.
+Confirmed checkpoint runtime/source archives still match original UI-background-test1.
+Runtime/source ZIP CRC, member bytes, source equality and exact DLL bytes verified.
+Runtime package includes DLL, default INI, documentation, translation template and licenses.
+No photos, presets, Library.json, settings, save files, local logs or PDB included.
+User reported functional confirmation; final numbered DLL needs a brief in-game smoke check.
+No installed-file overwrite, GitHub sync, publishing or uploading performed.
+DLL SHA256: BF653F2C06262565D48EEB69D3839FB5FCB2F1CCEC44FCE5ED78B3568F9BF7C6

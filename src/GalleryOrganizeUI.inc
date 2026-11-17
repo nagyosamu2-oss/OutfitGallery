@@ -90,7 +90,8 @@ void RenderOrganizer() {
     bool close=!open,save=false;
     const bool conflict=organizer.revision!=libraryRevision || organizer.presetsRevision!=presetRevision.load();
     if(conflict) UI::TextWrapped("%s",Tr("Gallery changed while organizing. Cancel and reopen before saving."));
-    const auto tabs=CollectionTabs(library,true);
+    const auto tabs=CollectionTabs(organizer.draft,true);
+    const auto registrationTabs=RegistrationTabs(organizer.draft);
     auto tabIt=std::find_if(tabs.begin(),tabs.end(),[&](const auto& c){return c.id==organizer.category;});
     int tab=tabIt==tabs.end()?0:static_cast<int>(tabIt-tabs.begin());
     UI::SetNextItemWidth(UI::GetContentRegionAvail().x*.20f);
@@ -141,7 +142,7 @@ void RenderOrganizer() {
         if(left||right)organizer.action=(organizer.action+(right?1:9))%10;
         if(down){organizer.toolbar=false;organizer.targetBar=true;}
     } else if(organizer.targetBar) {
-        const auto count=static_cast<int>(organizer.draft.categories.size());
+        const auto count=static_cast<int>(registrationTabs.size());
         if(count && (left||right))organizer.targetFocus=(organizer.targetFocus+(right?1:count-1))%count;
         if(up){organizer.targetBar=false;organizer.toolbar=true;}
         if(down){organizer.targetBar=false;scrolled=true;}
@@ -248,16 +249,16 @@ void RenderOrganizer() {
     const auto* stripStyle=UI::GetStyle();
     const auto targetWidth=[&](const Category& c){return std::max(UiPx(60.f),UI::CalcTextSize(CategoryTitle(c).c_str()).x+stripStyle->FramePadding.x*2);};
     float targetTotal=0;
-    for(const auto& c:organizer.draft.categories)targetTotal+=targetWidth(c)+stripStyle->ItemSpacing.x;
+    for(const auto& c:registrationTabs)targetTotal+=targetWidth(c)+stripStyle->ItemSpacing.x;
     const bool targetOverflow=targetTotal>UI::GetContentRegionAvail().x-stripStyle->WindowPadding.x*2;
     const float targetHeight=UI::GetFrameHeight()+stripStyle->WindowPadding.y*2+(targetOverflow?stripStyle->ScrollbarSize:0);
     const auto* drag=UI::GetDragDropPayload();
     const bool dragging=drag && std::strcmp(drag->DataType,"OUTFIT_ORGANIZE")==0;
     UI::BeginChild("Organizer registration tabs",{0,targetHeight},0,UI::ImGuiWindowFlags_HorizontalScrollbar|UI::ImGuiWindowFlags_NoNavInputs);
-    organizer.targetFocus=std::clamp(organizer.targetFocus,0,std::max(0,static_cast<int>(organizer.draft.categories.size())-1));
-    for(std::size_t n=0;n<organizer.draft.categories.size();++n) {
+    organizer.targetFocus=std::clamp(organizer.targetFocus,0,std::max(0,static_cast<int>(registrationTabs.size())-1));
+    for(std::size_t n=0;n<registrationTabs.size();++n) {
         if(n)UI::SameLine();
-        const auto& c=organizer.draft.categories[n];
+        const auto& c=registrationTabs[n];
         const auto& registrationTargets=c.accessories?accessoryTargets:outfitTargets;
         const bool canRegister=!conflict && libraryWritable && !registrationTargets.empty();
         const auto title=CategoryTitle(c);
@@ -367,7 +368,7 @@ void RenderOrganizer() {
             const auto source=std::find_if(organizer.draft.categories.begin(),organizer.draft.categories.end(),[&](const auto& c){return c.id==organizer.category;});
             if(UI::BeginMenu(Tr("Move to another tab"),canTrash && !targets.empty())) {
                 bool any=false;
-                for(const auto& dest:organizer.draft.categories) {
+                for(const auto& dest:registrationTabs) {
                     if(dest.id==organizer.category || dest.accessories!=source->accessories) continue;
                     any=true;
                     if(UI::MenuItem((CategoryTitle(dest)+"##move-"+dest.id).c_str())) {

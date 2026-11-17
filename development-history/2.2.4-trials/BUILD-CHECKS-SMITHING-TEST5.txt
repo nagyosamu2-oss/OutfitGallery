@@ -1,0 +1,15 @@
+Outfit Gallery 2.2.4-smithing-test5 / DLL metadata 2.2.4.5
+2026-11-17 Japan. Base: functional trial test4.
+Release MSVC/CommonLibSSE-NG 10.1.0 build succeeded.
+57/57 selected automated tests passed. Baseline TrashVirtualPathSafety environment
+fixture limitation excluded, NOT counted as passing. Three SKSE exports verified.
+Added missing-smithing Japanese notice and external template key; status tests
+cover Japanese, unchanged English, external override and external fallback.
+All equipment/generation/reclaim/preset/identity sources byte-identical to test4.
+Only version strings, localization, status tests and documentation changed.
+Planned basic functional checks are user-reported complete; see validation status.
+This build's in-game Japanese display remains awaiting user confirmation.
+Runtime/source ZIP integrity, exact DLL bytes and source members verified.
+Only DLL is installed. No user presets, settings, photos, INI or saves included.
+No installed-file overwrite, GitHub sync, publishing or upload performed.
+DLL SHA256: 29A3E70C52F679655269E2BDC3F63DD0495825CFD1C604BC7C77993E6905C57B

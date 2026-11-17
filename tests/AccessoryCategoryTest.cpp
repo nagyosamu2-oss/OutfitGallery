@@ -23,6 +23,11 @@ int main(){try {
     Check(!CollectionFits(8,"",true,library),"full All view stays unchanged");
     Check(ResolveStartupTab("gloves",library)=="gloves","accessory tab supports startup selection");
     library.categories.push_back({"later-full","Later full outfit tab"});
+    const auto registration=RegistrationTabs(library);
+    std::vector<std::string> registrationIDs;for(const auto& c:registration)registrationIDs.push_back(c.id);
+    Check(registrationIDs==std::vector<std::string>({"daily","later-full","gloves","shoes"}),"organizer registration puts normal tabs before accessories, stably");
+    Check(library.categories[1].id=="gloves" && library.categories.back().id=="later-full","registration display does not reorder stored categories");
+    Check(RegistrationTabs(Library{}).empty(),"empty organizer target list remains empty");
     const auto tabs=CollectionTabs(library);
     std::vector<std::string> tabIDs;for(const auto& c:tabs)tabIDs.push_back(c.id);
     Check(tabIDs==std::vector<std::string>({"","daily","later-full","#head","#accessories","gloves","shoes","#trash"}),"custom accessories appear immediately after default accessories");

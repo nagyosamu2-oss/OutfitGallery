@@ -1,4 +1,4 @@
-# Building Outfit Gallery 2.2.2
+# Building Outfit Gallery 2.2.4
 
 Use Windows x64, Visual Studio 2022 C++ tools (tested MSVC 19.44), CMake 3.24+, Ninja and C++23 support.
 
@@ -31,3 +31,7 @@ The normal release archive contains the DLL, INI, user documentation and license
 The release uses the existing CommonLib 10.1.0 static bundle used for the verified 2.0 feature builds. The dependency source archive is included under dependencies in the source ZIP. Use COMMONLIB_SOURCE to build it with your toolchain. Set VSLANG=1033 so Ninja can track MSVC include dependencies correctly.
 
 2.1.0 also exercises shared-name, CamelCase, numbered/color variants, slot replacement and equipment-tools visibility persistence. These software tests do not simulate actual Skyrim equipment or preview rendering.
+
+## Release validation environment (2.2.4)
+
+The selected release check runs 57 tests. TrashVirtualPathSafety is excluded because its junction fixture is not supported in the current workspace environment; this is an exclusion, not a passing result. Create a writable TEMP directory before running persistence tests. The exact native code is the confirmed test7 candidate, apart from version/footer/log labels.

@@ -4,6 +4,12 @@
     "Upscaler compatibility mode": "Upscaler compatibility mode",
     "Enable if upscaling makes text blurry. Close and reopen the gallery to apply.": "Enable if upscaling makes text blurry. Close and reopen the gallery to apply.",
     "UI size": "UI size",
+    "Registered smithing item is missing; enable Add missing base items to reproduce it": "Registered smithing item is missing; enable Add missing base items to reproduce it",
+    "Generated equipment could not be verified. Further generation is stopped to prevent duplicates. See OutfitGallery.log.": "Generated equipment could not be verified. Further generation is stopped to prevent duplicates. See OutfitGallery.log.",
+    "Reset": "Reset",
+    "UI transparency": "UI transparency",
+    "Gallery background only. 0% is opaque; 100% is transparent. Reset restores the framework theme.": "Gallery background only. 0% is opaque; 100% is transparent. Reset restores the framework theme.",
+    "Restore the framework's default background transparency.": "Restore the framework's default background transparency.",
     "Reset UI size": "Reset UI size",
     "Adjust text and controls relative to the automatic WQHD layout. Applied on the next frame.": "Adjust text and controls relative to the automatic WQHD layout. Applied on the next frame.",
     "%s": "%s",
@@ -682,6 +688,10 @@
     "Move to another tab (Alt)": "Move to another tab (Alt)",
     "Add to tab; hold Alt to move.": "Add to tab; hold Alt to move.",
     "Sleeping": "Sleeping",
-    "Avoid using other sleepwear features at the same time.": "Avoid using other sleepwear features at the same time."
+    "Avoid using other sleepwear features at the same time.": "Avoid using other sleepwear features at the same time.",
+    "Gallery variation expansion": "Gallery variation expansion",
+    "On click": "On click",
+    "On hover": "On hover",
+    "Click is the default: click a group to expand it, then click a variation to equip it. Hover restores automatic expansion. Applies to the normal gallery.": "Click is the default: click a group to expand it, then click a variation to equip it. Hover restores automatic expansion. Applies to the normal gallery."
   }
 }
