@@ -1,3 +1,40 @@
+# Outfit Gallery 2.2.5
+
+## Changes in 2.2.5
+
+- Save custom armor enchantments with outfits and reproduce them together with smithing improvements when the original items are not in inventory. Supports the player and followers, including reproduction in a new game.
+- Support copied enchantments with multiple effects, within the supported format and a maximum of 32 effects.
+- Show [Enchanted] beside enchanted equipment in equipment management.
+- Add Reproduce smithing and enchantments. OFF generates missing items with base properties while preserving owned-item properties and saved recipes. Transmog is unaffected.
+- Offer a reproduction choice when first opening the gallery in a save without a recorded choice. Add Skip first-use confirmation to both that screen and Options.
+- Allow reproduction when the engine changes an enchantment's gold-value override but its effects, smithing and other required properties still match. The original and reproduced items may have different prices.
+
+### Saving and reproducing equipment
+
+Wear the improved/custom-enchanted armor and register an outfit, or update an existing outfit through equipment management's add/replace-from-current-equipment action. Existing outfits do not acquire enchantment recipes automatically. Supported recipes already saved by the enchantment trials carry over.
+
+To reproduce missing equipment with its saved properties, enable Add missing base items, Reproduce smithing and enchantments, and Prefer registered enchanted items. Identified originals and tracked or protected items associated with that recipe are reused when available; otherwise, a new item is generated. This does not retrieve the original item from a chest.
+
+Turning reproduction OFF only changes missing-item generation. Built-in enchantments on the base armor remain. Owned originals and identified protected items retain their smithing and enchantments. Saved recipes remain intact and can be used again by turning reproduction ON, without re-registration.
+
+The first-use answer and later reproduction changes are recorded for the active save when you save the game. Skip first-use confirmation is global: unanswered saves use the last configured reproduction default when skipping is enabled. Saves with an existing answer retain their own choice. Loading an older unanswered save may show the prompt again.
+
+### Modified items and supported scope
+
+Items further improved or enchanted after generation are protected from cleanup and reused with their originating outfit while identifiable. Their new properties do not automatically update the outfit recipe. To reproduce those properties in a new game, wear the modified item and update the outfit. Cleanup only claims tracked generated instances, never all items sharing the same base type.
+
+Supports compatible constant-effect/self-target enchantments on armor, clothing and jewelry, up to 32 effects, subject to reference, numeric and format validation. Per-effect conditions and temporary enchantments are unsupported. The original armor/effect-providing mods are still required. Single/dual effects, copied multi-effect enchantments, and smithing combinations were tested in game. Nonzero effect area/duration remain unverified in game.
+
+Custom display names and arbitrary item data supplied by other mods are not fully preserved or reproduced. Mods that only rename an item differ from mods that replace its instance; compatibility needs individual verification.
+
+### Updating
+
+Exit Skyrim and install with priority over older/trial DLLs. No new game is required. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up before updating: editing/saving an outfit in an older version may discard the new enchantment data. Requirements and the supported runtime list are unchanged.
+
+---
+
+Previous release history and existing feature documentation follow.
+
 # Changelog
 
 ## Changes in 2.2.4
@@ -18,7 +55,7 @@ Applying a recipe prefers its identified original item, then a tracked or retain
 
 Saved smithing values can carry across a new game. Further improvements to an owned item do not automatically update the saved recipe; equipment management displays the saved value. Legacy outfits without smithing metadata keep the previous behavior.
 
-Custom enchantments, custom names and poison are not recreated. The existing enchantment-preference option uses owned enchanted items. Items further improved or custom-enchanted after generation are protected from cleanup. Unidentified items are never mass-deleted by base type, and previously untracked leftovers are not retroactively adopted for cleanup.
+In 2.2.4, custom enchantments, custom names and poison were not recreated. See the 2.2.5 section above for current enchantment support. The existing enchantment-preference option uses owned enchanted items. Items further improved or custom-enchanted after generation are protected from cleanup. Unidentified items are never mass-deleted by base type, and previously untracked leftovers are not retroactively adopted for cleanup.
 
 ### Updating to 2.2.4
 
@@ -42,7 +79,7 @@ Exit Skyrim and install this release with priority over earlier trial DLLs. Keep
 
 保存した鍛冶強化度はニューゲームでも再現できます。後から現物をさらに強化しても、セットの保存値は自動更新しません。装備管理の段階表示も保存値を示します。強化情報のないセットは従来の表示・処理を使います。
 
-自作付呪・独自名称・毒は新しい品へ複製しません。自作付呪品を所持している場合の優先使用は従来の付呪優先機能です。生成後に追加強化・自作付呪した品は回収から保護します。識別できない品を同名という理由だけで一括削除することはありません。以前の版で回収対象として記録されなかった残留品を、一律に削除する変更でもありません。
+2.2.4時点では自作付呪・独自名称・毒の複製は対象外でした。2.2.5の付呪対応は上記を参照してください。自作付呪品を所持している場合の優先使用は従来の付呪優先機能です。生成後に追加強化・自作付呪した品は回収から保護します。識別できない品を同名という理由だけで一括削除することはありません。以前の版で回収対象として記録されなかった残留品を、一律に削除する変更でもありません。
 
 ### 更新方法
 

@@ -44,7 +44,7 @@ int main() {
     SmithingCreation many{100,0x14,1,1};
     for(std::uint16_t i=1;i<=5;++i) many.Change(100,0x14,i,0x14,i+1);
     check(many.invalid);
-    for(float quality:{1.1f,1.2f,1.3712345f}) {
+    for(float quality:{1.f,1.1f,1.2f,1.3712345f}) {
         SmithingGenerationEvidence good;
         good.before=2;good.after=3;good.instanceCount=1;good.matches=1;
         good.actor=0x14;good.owner=0x14;good.expected=14;good.actual=14;
@@ -59,7 +59,7 @@ int main() {
         auto old=reserved;old.wasPresent=true;check(!CanRetagSmithingGeneration(old,15,false,false));
         old=reserved;old.invalid=true;check(!CanRetagSmithingGeneration(old,15,false,false));
         old=reserved;old.matches=2;check(!CanRetagSmithingGeneration(old,15,false,false));
-        old=reserved;old.actualHealth=1.f;check(!CanRetagSmithingGeneration(old,15,false,false));
+        old=reserved;old.actualHealth=quality+.5f;check(!CanRetagSmithingGeneration(old,15,false,false));
         old=reserved;old.after=good.before+2;check(!CanRetagSmithingGeneration(old,15,false,false));
         auto bad=good;bad.after=4;check(!VerifiedSmithingGeneration(bad));
         bad=good;bad.after=2;check(!VerifiedSmithingGeneration(bad));
@@ -69,7 +69,7 @@ int main() {
         bad=good;bad.invalid=true;check(!VerifiedSmithingGeneration(bad));
         bad=good;bad.actual=15;check(!VerifiedSmithingGeneration(bad));
         bad=good;bad.owner=123;check(!VerifiedSmithingGeneration(bad));
-        bad=good;bad.actualHealth=1.f;check(!VerifiedSmithingGeneration(bad));
+        bad=good;bad.actualHealth=quality+.5f;check(!VerifiedSmithingGeneration(bad));
         bad=good;bad.matches=2;check(!VerifiedSmithingGeneration(bad));
         bad=good;bad.instanceCount=2;check(!VerifiedSmithingGeneration(bad));
     }

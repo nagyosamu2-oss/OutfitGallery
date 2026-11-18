@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <vector>
+#include <string>
 #include <stdexcept>
 namespace Gallery {
 // Portable recipe: no actor skill, pointer, runtime FormID or dynamic enchantment.
@@ -52,7 +53,7 @@ inline bool VerifiedSmithingGeneration(const SmithingGenerationEvidence& e) {
     return !e.invalid && !e.wasPresent && !e.reserved && !e.customEnchanted && e.before>=0 &&
         static_cast<long long>(e.after)==static_cast<long long>(e.before)+1 && e.matches==1 && e.instanceCount==1 &&
         e.actor && e.owner==e.actor && e.expected && e.actual==e.expected &&
-        ValidSmithing(e.requested) && e.requested==e.actualHealth;
+        (std::isfinite(e.requested) && e.requested>=1.f) && e.requested==e.actualHealth;
 }
 inline bool CanRetagSmithingGeneration(SmithingGenerationEvidence evidence,std::uint16_t allocated,
     bool allocatedWasReserved,bool allocatedIsOccupied) {
@@ -63,6 +64,7 @@ inline bool CanRetagSmithingGeneration(SmithingGenerationEvidence evidence,std::
 struct GeneratedPerformance {
     float health{1.f};
     bool reproduction{}, retained{};
+    std::string enchantment;
 };
 // Ignore only the notification of our own exact singleton deletion. A manual
 // transfer, another identity, another destination or a different count is not it.

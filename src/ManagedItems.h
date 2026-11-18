@@ -5,8 +5,8 @@
 namespace Gallery {
 float ReadSmithingQuality(RE::ExtraDataList*);
 SmithingRecipe RememberSmithing(RE::Actor*,RE::ExtraDataList*);
-std::uint16_t FindSmithingInstance(RE::Actor*,RE::TESBoundObject*,const SmithingRecipe&);
-std::uint16_t PrepareSmithingInstance(RE::Actor*,RE::TESBoundObject*,const SmithingRecipe&,bool allowGeneration);
+std::uint16_t FindSmithingInstance(RE::Actor*,RE::TESBoundObject*,const SmithingRecipe&,const std::string& enchantment={});
+std::uint16_t PrepareSmithingInstance(RE::Actor*,RE::TESBoundObject*,const SmithingRecipe&,bool allowGeneration,const std::string& enchantment={});
 PreferredItem RememberEnchanted(RE::Actor*, RE::ExtraDataList*);
 std::uint64_t PreferredScope(std::uint16_t id);
 void InitializeManagedItems();

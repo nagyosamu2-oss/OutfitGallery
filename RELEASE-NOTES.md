@@ -1,49 +1,63 @@
-# Outfit Gallery 2.2.4
+# Outfit Gallery 2.2.5
 
-## 2.2.4 更新内容
+## 2.2.5 更新内容
 
-- 鍛冶で強化した防具の強化度をセットに保存し、対象品を持っていない場合にも再現できるようにしました。プレイヤーとフォロワーに対応します。
-- 生成した装備の識別・回収を改善しました。生成時点ですでに個体番号の付いた装備にも対応し、後から追加強化・自作付呪した生成品は保護して元のセットで再利用します。
-- 装備管理の装備名に、保存した強化度に対応する「優良」などの段階を表示します。
-- 通常画面の差分展開をクリック方式に変更しました。オプションで従来のマウスオーバー方式も選べます。クリック展開後、元写真と展開枠から約0.25秒離れると閉じます。
-- パッドで差分展開中に上下を入力すると、移動せず展開だけ閉じ、元のセットへ戻ります。一度離して再入力すると通常移動します。
-- 左側ギャラリー背景のUI透過率スライダーとリセットを追加しました。UI倍率・リセットを横並びにし、独立プレビューの説明をツールチップへ整理しました。
-- 整理画面の登録先タブを通常→小物の順にまとめました。表示切替はメイン画面と同じ通常→頭装備→小物の順です。同じ分類内の順序と各タブへの登録内容は維持します。
+- 防具に付けた自作付呪をセットへ保存し、対象品を所持していない場合にも鍛冶強化と合わせて再現できるようにしました。プレイヤー・フォロワーに対応し、保存した内容はニューゲームでも利用できます。
+- 複数効果のコピー付呪にも対応します（対応条件内・最大32効果）。
+- 装備管理の付呪付き装備に「[付呪]」を表示します。
+- 「強化・付呪を再現する」を追加しました。OFFでは、不足装備を基本性能で生成します。所持品の性能や登録済みの強化・付呪情報は維持します。重ね着には影響しません。
+- 未選択のセーブで初めてギャラリーを開いた時に、再現方法を選べるようにしました。初回画面とオプションに「初回確認を省略」を追加しました。
+- 再生成時にゲームが付呪の価格指定を変更した場合でも、効果・強化度などが一致していれば再現できるようにしました。元の品と価格が異なる場合があります。
 
-### 鍛冶強化の保存と再現
+### 登録・再現の使い方
 
-強化した防具を実際に装備してセットを登録してください。既存セットに後から強化度を保存する場合は再登録が必要です。試験版で強化度を保存済みのセットは引き継げます。通常の既存セットはそのまま使用できます。
+強化・自作付呪した防具を実際に装備してセットを登録してください。既存セットでは、装備管理の「現在の装備から追加・交換」で登録内容を更新する方法も使えます。以前のセットへ付呪情報は自動追加しません。今回の試験版で保存した対応情報は引き継げます。
 
-適用時は識別できる登録元の現物を優先し、続いて同じ登録強化度に紐付く生成品・保護済みの生成品を再利用します。見つからない場合は「不足している装備を追加して復元」が有効なら新しく生成して保存した強化度を設定します。無効なら生成せず案内します。同名の未強化所持品を強化したり削除したりする機能ではありません。
+保存した性能を不足品へ再現する場合は、「不足している装備を追加して復元」「強化・付呪を再現する」「登録した付呪付き装備を優先する」をONにしてください。識別できる登録元の現物や、元セットに紐付く生成品・保護品を所持していれば再利用します。見つからない場合に保存情報から生成します。宝箱の元の品を移動する保管機能ではありません。
 
-保存した鍛冶強化度はニューゲームでも再現できます。後から現物をさらに強化しても、セットの保存値は自動更新しません。装備管理の段階表示も保存値を示します。強化情報のないセットは従来の表示・処理を使います。
+再現OFFは不足品の生成方法だけを切り替えます。元のMODの防具データに最初から付いている付呪は残ります。識別できる所持品や保護品の強化・付呪も取り除きません。ONに戻せば保存情報を再び利用でき、再登録は不要です。
 
-自作付呪・独自名称・毒は新しい品へ複製しません。自作付呪品を所持している場合の優先使用は従来の付呪優先機能です。生成後に追加強化・自作付呪した品は回収から保護します。識別できない品を同名という理由だけで一括削除することはありません。以前の版で回収対象として記録されなかった残留品を、一律に削除する変更でもありません。
+初回の選択と後からの再現ON／OFFは、ゲームをセーブするとそのセーブに記録されます。「初回確認を省略」は全体設定です。ONなら、未選択のセーブは最後に設定した再現方法を使います。選択済みのセーブはその回答を維持します。未選択の古いセーブへ戻ると、再度確認される場合があります。
+
+### 加工品の扱いと対応範囲
+
+生成後に追加強化・付呪した品は回収から保護し、識別できる間は元セットで再利用します。加工内容はセットへ自動反映しません。新しい性能をニューゲームでも再現したい場合は、加工品を装備して登録内容を更新してください。このMODが追跡する生成品だけを回収し、同名という理由で元の所有品を一括削除することはありません。
+
+対象は防具・衣服・装飾品の常時発動／自己対象の対応付呪です。最大32効果で、効果参照・数値・形式等に検証条件があります。個別条件付きの効果、一時的な付呪などは対応外です。必ず元の装備・効果を追加したMODも必要です。通常の1～2効果、複数効果のコピー付呪、鍛冶強化との組み合わせを確認しています。効果の範囲／持続時間が0以外の種類は実機未確認です。
+
+独自名称そのものや他MOD独自の個体情報の完全な保存・復元は対象外です。名前だけを変更するMODと、品を別個体へ交換するMODでは挙動が異なり、互換性は個別確認が必要です。
 
 ### 更新方法
 
-Skyrimを終了し、旧版や試験版のDLLよりこの公開版が優先されるよう導入してください。写真・プリセット・Library.json・設定・カスタムINI、対になった.ess/.skseを保持してください。通常利用にニューゲームは不要です。更新前のデータを保管してください。旧版では新しい強化情報を保持できない場合があります。対応ランタイムと必須環境は従来どおりです。
+Skyrimを終了し、旧版・試験版より公開版DLLが優先されるよう導入してください。通常利用にニューゲームは不要です。写真・プリセット・Library.json・設定・カスタムINIと、対になった.ess/.skseを保持してください。旧版へ戻してセットを編集・保存すると新しい付呪情報が失われる場合があるため、更新前のデータを保管してください。必須環境・対応ランタイムは従来どおりです。
 
-## Changes in 2.2.4
+## Changes in 2.2.5
 
-- Save and reproduce smithing improvements on armor for the player and followers, including when the registered item is no longer owned.
-- Improve generated-item tracking and cleanup, including items that already receive an instance ID during creation. Preserve items further improved or custom-enchanted after generation and reuse them with their original outfit.
-- Show the saved smithing quality, such as Fine, in equipment management using the game's localized naming.
-- Make click-to-expand the default for outfit variations in the normal gallery. Hover expansion remains optional. Click-opened strips close after the pointer leaves both the source and strip for about 0.25 seconds.
-- Up/down while a controller variation strip is open now only closes it and returns focus to the original group. Release and press again to navigate normally.
-- Add a gallery background transparency slider and reset. Place UI scale/reset and independent-preview controls on compact rows, with preview help in tooltips.
-- Group organizer registration targets by normal outfits then accessories, preserving order within each type and existing memberships. The view selector follows the main gallery's normal/head/accessories ordering.
+- Save custom armor enchantments with outfits and reproduce them together with smithing improvements when the original items are not in inventory. Supports the player and followers, including reproduction in a new game.
+- Support copied enchantments with multiple effects, within the supported format and a maximum of 32 effects.
+- Show [Enchanted] beside enchanted equipment in equipment management.
+- Add Reproduce smithing and enchantments. OFF generates missing items with base properties while preserving owned-item properties and saved recipes. Transmog is unaffected.
+- Offer a reproduction choice when first opening the gallery in a save without a recorded choice. Add Skip first-use confirmation to both that screen and Options.
+- Allow reproduction when the engine changes an enchantment's gold-value override but its effects, smithing and other required properties still match. The original and reproduced items may have different prices.
 
-### Smithing: what is saved
+### Saving and reproducing equipment
 
-Wear the improved armor and register the outfit. Re-register an older outfit if you want to add its smithing recipe; existing ordinary outfits still work unchanged. Recipes saved by the smithing trials carry over.
+Wear the improved/custom-enchanted armor and register an outfit, or update an existing outfit through equipment management's add/replace-from-current-equipment action. Existing outfits do not acquire enchantment recipes automatically. Supported recipes already saved by the enchantment trials carry over.
 
-Applying a recipe prefers its identified original item, then a tracked or retained reproduction associated with that saved recipe. If neither is available, enabling Add missing base items permits a new item with the saved smithing value. With generation disabled, application stops with a notice. Existing ordinary items of the same base type are not modified or deleted to reproduce a recipe.
+To reproduce missing equipment with its saved properties, enable Add missing base items, Reproduce smithing and enchantments, and Prefer registered enchanted items. Identified originals and tracked or protected items associated with that recipe are reused when available; otherwise, a new item is generated. This does not retrieve the original item from a chest.
 
-Saved smithing values can carry across a new game. Further improvements to an owned item do not automatically update the saved recipe; equipment management displays the saved value. Legacy outfits without smithing metadata keep the previous behavior.
+Turning reproduction OFF only changes missing-item generation. Built-in enchantments on the base armor remain. Owned originals and identified protected items retain their smithing and enchantments. Saved recipes remain intact and can be used again by turning reproduction ON, without re-registration.
 
-Custom enchantments, custom names and poison are not recreated. The existing enchantment-preference option uses owned enchanted items. Items further improved or custom-enchanted after generation are protected from cleanup. Unidentified items are never mass-deleted by base type, and previously untracked leftovers are not retroactively adopted for cleanup.
+The first-use answer and later reproduction changes are recorded for the active save when you save the game. Skip first-use confirmation is global: unanswered saves use the last configured reproduction default when skipping is enabled. Saves with an existing answer retain their own choice. Loading an older unanswered save may show the prompt again.
 
-### Updating to 2.2.4
+### Modified items and supported scope
 
-Exit Skyrim and install this release with priority over earlier trial DLLs. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up the existing data before updating. No new game is required. Older versions may not retain the new smithing metadata. Runtime requirements and the supported executable list are unchanged.
+Items further improved or enchanted after generation are protected from cleanup and reused with their originating outfit while identifiable. Their new properties do not automatically update the outfit recipe. To reproduce those properties in a new game, wear the modified item and update the outfit. Cleanup only claims tracked generated instances, never all items sharing the same base type.
+
+Supports compatible constant-effect/self-target enchantments on armor, clothing and jewelry, up to 32 effects, subject to reference, numeric and format validation. Per-effect conditions and temporary enchantments are unsupported. The original armor/effect-providing mods are still required. Single/dual effects, copied multi-effect enchantments, and smithing combinations were tested in game. Nonzero effect area/duration remain unverified in game.
+
+Custom display names and arbitrary item data supplied by other mods are not fully preserved or reproduced. Mods that only rename an item differ from mods that replace its instance; compatibility needs individual verification.
+
+### Updating
+
+Exit Skyrim and install with priority over older/trial DLLs. No new game is required. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up before updating: editing/saving an outfit in an older version may discard the new enchantment data. Requirements and the supported runtime list are unchanged.

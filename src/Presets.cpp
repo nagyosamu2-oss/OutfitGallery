@@ -1,5 +1,6 @@
 #include "Presets.h"
 #include "UiScale.h"
+#include "EnchantmentRecipe.h"
 #include "PresetEditing.h"
 #include <chrono>
 #include <atomic>
@@ -150,6 +151,7 @@ StudioSettings ReadStudioSettings(const std::filesystem::path& path) {
     s.upscalerCompatibility=j.value("upscalerCompatibility",false);
     s.showEquipmentTools=j.value("showEquipmentTools",true);
     s.hoverVariations=j.value("hoverVariations",false);
+    s.reproduceUpgrades=j.value("reproduceUpgrades",true);s.skipUpgradePrompt=j.value("skipUpgradePrompt",false);
     s.headSlots=j.value("headSlots",0x1803u);
     s.startupTab=j.value("startupTab",std::string{});
     s.followerTargetingMigrationPending=j.value("followerTargetingDefaultVersion",0)<1;
@@ -160,7 +162,7 @@ StudioSettings ReadStudioSettings(const std::filesystem::path& path) {
 }
 void WriteStudioSettings(const StudioSettings& s,const std::filesystem::path& path) {
     ValidateSettings(s);
-    Json j={{"schema",1},{"uiZoom",NormalizeUiZoom(s.uiZoom)},{"uiBackgroundOpacity",NormalizeUiBackgroundOpacity(s.uiBackgroundOpacity)},{"distance",s.distance},{"height",s.height},{"orbit",s.orbit},{"pitch",s.pitch},{"fov",s.fov},{"columns",s.columns},{"showNames",s.showNames},{"showCounts",s.showCounts},{"language",s.language},{"allowFreeCamera",s.allowFreeCamera},{"addMissing",s.addMissing},{"preferEnchanted",s.preferEnchanted},{"portraitThumbnails",s.portraitThumbnails},{"cleanupCompatibility",s.cleanupCompatibility},{"allowCombatGallery",s.allowCombatGallery},{"compactGallery",s.compactGallery},{"reclaimRenamedGeneratedItems",s.reclaimRenamedGeneratedItems},{"lateral",s.lateral},{"elevation",s.elevation},{"headSlots",s.headSlots},{"startupTab",s.startupTab},{"detachedPreview",s.detachedPreview},{"previewRect",s.previewRect},{"followerTargeting",s.followerTargeting},{"followerTargetingDefaultVersion",1},{"fullOutfitToggle",s.fullOutfitToggle},{"upscalerCompatibility",s.upscalerCompatibility},{"showEquipmentTools",s.showEquipmentTools},{"hoverVariations",s.hoverVariations}};
+    Json j={{"schema",1},{"uiZoom",NormalizeUiZoom(s.uiZoom)},{"uiBackgroundOpacity",NormalizeUiBackgroundOpacity(s.uiBackgroundOpacity)},{"distance",s.distance},{"height",s.height},{"orbit",s.orbit},{"pitch",s.pitch},{"fov",s.fov},{"columns",s.columns},{"showNames",s.showNames},{"showCounts",s.showCounts},{"language",s.language},{"allowFreeCamera",s.allowFreeCamera},{"addMissing",s.addMissing},{"reproduceUpgrades",s.reproduceUpgrades},{"skipUpgradePrompt",s.skipUpgradePrompt},{"preferEnchanted",s.preferEnchanted},{"portraitThumbnails",s.portraitThumbnails},{"cleanupCompatibility",s.cleanupCompatibility},{"allowCombatGallery",s.allowCombatGallery},{"compactGallery",s.compactGallery},{"reclaimRenamedGeneratedItems",s.reclaimRenamedGeneratedItems},{"lateral",s.lateral},{"elevation",s.elevation},{"headSlots",s.headSlots},{"startupTab",s.startupTab},{"detachedPreview",s.detachedPreview},{"previewRect",s.previewRect},{"followerTargeting",s.followerTargeting},{"followerTargetingDefaultVersion",1},{"fullOutfitToggle",s.fullOutfitToggle},{"upscalerCompatibility",s.upscalerCompatibility},{"showEquipmentTools",s.showEquipmentTools},{"hoverVariations",s.hoverVariations}};
     std::filesystem::create_directories(path.parent_path());
     auto tmp=path; tmp+=".tmp";
     {std::ofstream out(tmp,std::ios::binary|std::ios::trunc); out.exceptions(std::ios::badbit|std::ios::failbit); out<<j.dump(2); out.close();}
@@ -422,6 +424,10 @@ void Validate(const Preset& p) {
             throw std::runtime_error("Invalid plugin or local FormID");
         if ((i.kind != "armor" && i.kind != "weapon" && i.kind != "ammo") || (i.hand != "" && i.hand != "left" && i.hand != "right") || (i.kind != "weapon" && !i.hand.empty()))
             throw std::runtime_error("Unsupported item kind or hand");
+        if(!i.enchantment.empty()) {
+            const auto recipe=EnchantProbe::ParseSignature(i.enchantment);
+            if(i.kind!="armor" || EnchantProbe::FloatBits(recipe[13])!=i.smithing.health)throw std::runtime_error("Enchantment/smithing recipe mismatch");
+        }
         if(i.smithing.health!=1.f && (i.kind!="armor" || !ValidSmithing(i.smithing.health))) throw std::runtime_error("Invalid smithing recipe");
         if (!seen.insert(i.plugin + ":" + std::to_string(i.localID) + ":" + i.hand).second)
             throw std::runtime_error("Duplicate preset item");
@@ -440,7 +446,8 @@ void WritePreset(const Preset& p, const std::filesystem::path& path) {
             item["preferredEnchanted"]["signatureVersion"]=1;
             item["preferredEnchanted"]["signature"]=i.preferred.signature;
         }
-        if(ValidSmithing(i.smithing.health)) item["smithing"]={{"version",1},{"health",i.smithing.health},{"scope",i.smithing.scope},{"id",i.smithing.id}};
+        if(ValidSmithing(i.smithing.health) || !i.enchantment.empty()) item["smithing"]={{"version",1},{"health",i.smithing.health},{"scope",i.smithing.scope},{"id",i.smithing.id}};
+        if(!i.enchantment.empty())item["enchantmentRecipe"]={{"version",1},{"signature",i.enchantment}};
         j["items"].push_back(std::move(item));
     }
     std::filesystem::create_directories(path.parent_path());
@@ -465,13 +472,18 @@ Preset ReadPreset(const std::filesystem::path& path) {
         const auto id = i.at("localID").get<std::int64_t>();
         if (id <= 0 || id > 0xFFFFFF) throw std::runtime_error("Invalid FormID");
         p.items.push_back({i.at("plugin"),static_cast<std::uint32_t>(id),i.at("name"),i.at("kind"),i.at("hand")});
+        if(i.contains("enchantmentRecipe")) {
+            const auto& e=i.at("enchantmentRecipe");
+            if(e.at("version")!=1)throw std::runtime_error("Unsupported enchantment recipe version");
+            p.items.back().enchantment=EnchantProbe::ParseSignature(e.at("signature").get<std::string>()).dump();
+        }
         if(i.contains("smithing")) {
             const auto& m=i.at("smithing");
             if(m.at("version")!=1) throw std::runtime_error("Unsupported smithing recipe version");
             auto& recipe=p.items.back().smithing;
             recipe.health=m.at("health").get<float>();
             const auto uid=m.value("id",std::uint64_t{});
-            if(uid>65535 || !ValidSmithing(recipe.health)) throw std::runtime_error("Invalid smithing recipe");
+            if(uid>65535 || (!ValidSmithing(recipe.health) && !(recipe.health==1.f && !p.items.back().enchantment.empty()))) throw std::runtime_error("Invalid smithing recipe");
             recipe.id=static_cast<std::uint16_t>(uid);recipe.scope=m.value("scope",std::uint64_t{});
         }
         // Invalid/unknown optional metadata never grants a cleanup exception.
@@ -559,7 +571,7 @@ bool SameEditedContents(const Preset& a,const Preset& b) {
     if(a.items.size()!=b.items.size())return false;
     for(const auto& i:a.items) {
         auto it=std::find_if(b.items.begin(),b.items.end(),[&](const auto& j){return SameBaseItem(i,j) && i.hand==j.hand;});
-        if(it==b.items.end() || i.preferred.custom!=it->preferred.custom || i.preferred.id!=it->preferred.id || i.preferred.scope!=it->preferred.scope || i.preferred.signature!=it->preferred.signature || i.registeredName!=it->registeredName || i.smithing!=it->smithing)return false;
+        if(it==b.items.end() || i.preferred.custom!=it->preferred.custom || i.preferred.id!=it->preferred.id || i.preferred.scope!=it->preferred.scope || i.preferred.signature!=it->preferred.signature || i.registeredName!=it->registeredName || i.smithing!=it->smithing || i.enchantment!=it->enchantment)return false;
     }
     return true;
 }

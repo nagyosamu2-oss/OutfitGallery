@@ -1,6 +1,9 @@
 #include "ManagedItems.h"
+#include "UpgradeReproduction.h"
 #include <RE/T/TESUniqueIDChangeEvent.h>
 #include "EnchantmentSignature.h"
+#include "PortableEnchantment.h"
+#include "EnchantmentRecipe.h"
 #include "ManagedLedger.h"
 #include "UniqueItemID.h"
 #include "GeneratedIdentity.h"
@@ -130,12 +133,17 @@ std::uint16_t AllocateItemID(RE::InventoryChanges* changes, std::set<std::uint16
 
 void Forget(const Identity& key,bool retain=false) {std::scoped_lock lock(ledgerMutex); ledger.items.erase(key); registeredNames.erase(key); transferChain.Retire(key); if(retain && generatedPerformance.contains(key) && generatedPerformance[key].reproduction) generatedPerformance[key].retained=true; else generatedPerformance.erase(key);}
 void Revert(SKSE::SerializationInterface*) {
+    ResetUpgradeChoice();
     ResetTransmogPersistence();
     {std::scoped_lock lock(ledgerMutex); ledger.Clear(); pendingNames.clear(); registeredNames.clear(); generatedPerformance.clear(); smithingCreation.reset(); ordinaryAddition.reset(); unverifiedSmithing.clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); preferredScopes.clear(); reservedPreferredIDs.clear(); smithingScopes.clear();}
     ClearFollowerOutfits();
     ClearFollowerAutoOutfits();
 }
 void Save(SKSE::SerializationInterface* s) {
+    const auto choice=static_cast<std::uint8_t>(ResolveUpgradeChoice());
+    if(choice && (!s->OpenRecord(0x55504752,1) || !s->WriteRecordData(choice))) {
+        SKSE::log::error("Upgrade reproduction choice save failed");return;
+    }
     SaveTransmog(s);
     SaveFollowerOutfits(s);
     SaveFollowerAutoOutfits(s);
@@ -161,6 +169,14 @@ void Save(SKSE::SerializationInterface* s) {
     {std::scoped_lock lock(ledgerMutex);performance=generatedPerformance;}
     for(const auto& [k,p]:performance) if(copy.contains(k) || (p.reproduction && p.retained)) {
         const std::uint8_t flags=(p.reproduction?1:0)|(p.retained?2:0);
+        if(!p.enchantment.empty()) {
+            const auto size=static_cast<std::uint32_t>(p.enchantment.size());
+            if(!s->OpenRecord(0x45505246,1) || !s->WriteRecordData(k.form) || !s->WriteRecordData(k.owner) || !s->WriteRecordData(k.id) ||
+               !s->WriteRecordData(p.health) || !s->WriteRecordData(flags) || !s->WriteRecordData(size) || !s->WriteRecordData(p.enchantment.data(),size)) {
+                SKSE::log::error("Enchantment reproduction evidence save failed");return;
+            }
+            continue;
+        }
         if(!s->OpenRecord(0x50455246,1) || !s->WriteRecordData(k.form) || !s->WriteRecordData(k.owner) || !s->WriteRecordData(k.id) || !s->WriteRecordData(p.health) || !s->WriteRecordData(flags)) {
             SKSE::log::error("Generated performance evidence save failed");return;
         }
@@ -175,6 +191,7 @@ void Save(SKSE::SerializationInterface* s) {
     }
 }
 void Load(SKSE::SerializationInterface* s) {
+    ResetUpgradeChoice();unsigned choiceRecords{};std::uint8_t loadedChoice{};
     ResetTransmogPersistence();
     ClearFollowerOutfits();
     ClearFollowerAutoOutfits();
@@ -186,12 +203,33 @@ void Load(SKSE::SerializationInterface* s) {
     std::set<Identity> duplicatePerformance;
     std::uint32_t type{},version{},length{};
     while(s->GetNextRecordInfo(type,version,length)) {
+        if(type==0x55504752) {
+            ++choiceRecords;std::uint8_t value{};
+            if(choiceRecords!=1 || version!=1 || length!=1 || s->ReadRecordData(value)!=1 || !ValidUpgradeChoice(value))loadedChoice=0;
+            else loadedChoice=value;
+            continue;
+        }
         if(type==0x534D4944) {
             RE::FormID old{},owner{};std::uint16_t id{};std::uint64_t scope{};
             if(version!=1 || length!=14 || smithingScopes.size()>=10000) continue;
             if(s->ReadRecordData(old)!=4 || s->ReadRecordData(id)!=2 || s->ReadRecordData(scope)!=8 || !id || !scope || !s->ResolveFormID(old,owner) || !owner) continue;
             const auto key=std::make_pair(owner,id);
             const auto [it,inserted]=smithingScopes.emplace(key,scope);if(!inserted) it->second=0; // conflicting scope never authorizes a match
+            continue;
+        }
+        if(type==0x45505246) {
+            Identity old{},key{};GeneratedPerformance p;std::uint8_t flags{};std::uint32_t size{};
+            if(version!=1 || length<20 || length>16403 || performance.size()>=10000)continue;
+            if(s->ReadRecordData(old.form)!=4 || s->ReadRecordData(old.owner)!=4 || s->ReadRecordData(old.id)!=2 || s->ReadRecordData(p.health)!=4 ||
+               s->ReadRecordData(flags)!=1 || s->ReadRecordData(size)!=4 || !size || size>16384 || length!=19+size)continue;
+            p.enchantment.resize(size);
+            if(s->ReadRecordData(p.enchantment.data(),size)!=size)continue;
+            try {const auto recipe=EnchantProbe::ParseSignature(p.enchantment);
+                if(EnchantProbe::FloatBits(recipe[13])!=p.health)continue;
+            }catch(const std::exception&){continue;}
+            if(!old.id || (flags!=1 && flags!=3) || !s->ResolveFormID(old.form,key.form) || !s->ResolveFormID(old.owner,key.owner) || !key.form || !key.owner)continue;
+            key.id=old.id;p.reproduction=true;p.retained=flags&2;
+            if(!performance.emplace(key,std::move(p)).second)duplicatePerformance.insert(key);
             continue;
         }
         if(type==0x50455246) {
@@ -235,6 +273,7 @@ void Load(SKSE::SerializationInterface* s) {
         current.id=old.id;
         if(current.owner && (version==2 || current.owner==0x14) && next.size()<10000) next.insert(current);
     }
+    if(loadedChoice)ChooseUpgradeMode(loadedChoice==2);
     std::scoped_lock lock(ledgerMutex); ledger.Clear(); pendingNames.clear(); registeredNames.clear(); generatedPerformance.clear(); smithingCreation.reset(); ordinaryAddition.reset(); unverifiedSmithing.clear(); transferObservation.Clear(); transferChain.Clear(); transferEventSequence=0; generatedEvidence.clear(); ledger.items=std::move(next);
     for(auto& [key,n]:names) if(ledger.items.contains(key) && !duplicateNames.contains(key)) registeredNames.emplace(key,std::move(n));
     for(const auto& [key,p]:performance) if(!duplicatePerformance.contains(key) && (ledger.items.contains(key) || (p.reproduction && p.retained))) generatedPerformance.emplace(key,p);
@@ -376,7 +415,7 @@ PreferredItem RememberEnchanted(RE::Actor* actor,RE::ExtraDataList* extra) {
 }
 SmithingRecipe RememberSmithing(RE::Actor* actor,RE::ExtraDataList* extra) {
     const float health=ReadSmithingQuality(extra);
-    if(!ValidSmithing(health) || !extra || extra->GetCount()!=1) return {};
+    if((!ValidSmithing(health) && !(extra && extra->HasType<RE::ExtraEnchantment>())) || !extra || extra->GetCount()!=1) return {};
     if(!actor) return {health};
     if(actor->GetFormID()==0x14) {
         const auto original=RememberOwnedInstance(actor,extra);
@@ -397,8 +436,8 @@ SmithingRecipe RememberSmithing(RE::Actor* actor,RE::ExtraDataList* extra) {
     if(!scope) {std::random_device random;do {scope=(static_cast<std::uint64_t>(random())<<32)^random();} while(!scope);}
     return {health,scope,uid->uniqueID};
 }
-std::uint16_t FindSmithingInstance(RE::Actor* actor,RE::TESBoundObject* obj,const SmithingRecipe& recipe) {
-    if(!actor || !obj || !ValidSmithing(recipe.health)) return 0;
+std::uint16_t FindSmithingInstance(RE::Actor* actor,RE::TESBoundObject* obj,const SmithingRecipe& recipe,const std::string& enchantment) {
+    if(!actor || !obj || (!ValidSmithing(recipe.health) && !(recipe.health==1.f && !enchantment.empty()))) return 0;
     const auto inventory=actor->GetInventory([obj](RE::TESBoundObject& candidate){return &candidate==obj;});
     const auto found=inventory.find(obj);
     if(found==inventory.end() || found->second.first<=0 || !found->second.second || !found->second.second->extraLists) return 0;
@@ -414,17 +453,17 @@ std::uint16_t FindSmithingInstance(RE::Actor* actor,RE::TESBoundObject* obj,cons
         const Identity key{obj->GetFormID(),uid->baseID,uid->uniqueID};
         bool reproduction=false;
         {std::scoped_lock lock(ledgerMutex);const auto profile=generatedPerformance.find(key);
-            reproduction=profile!=generatedPerformance.end() && profile->second.reproduction && profile->second.health==recipe.health;}
+            reproduction=profile!=generatedPerformance.end() && profile->second.reproduction && profile->second.health==recipe.health && profile->second.enchantment==enchantment;}
         candidates.push_back({uid->uniqueID,extra->GetCount(),original && uid->uniqueID==recipe.id,reproduction});
     }
     const auto selected=SelectSmithingCandidate(candidates);
     GALLERY_DIAG("OG-SMITHING select actor={:08X} form={:08X} uid={} originalScope={} health={}",actor->GetFormID(),obj->GetFormID(),selected,original,recipe.health);
     return selected;
 }
-std::uint16_t PrepareSmithingInstance(RE::Actor* actor,RE::TESBoundObject* obj,const SmithingRecipe& recipe,bool allowGeneration) {
-    if(const auto existing=FindSmithingInstance(actor,obj,recipe)) return existing;
-    if(!allowGeneration) throw std::runtime_error("Registered smithing item is missing; enable Add missing base items to reproduce it");
-    if(!actor || !obj || !obj->As<RE::TESObjectARMO>() || !ValidSmithing(recipe.health)) throw std::runtime_error("Invalid smithing reproduction request");
+std::uint16_t PrepareSmithingInstance(RE::Actor* actor,RE::TESBoundObject* obj,const SmithingRecipe& recipe,bool allowGeneration,const std::string& enchantment) {
+    if(const auto existing=FindSmithingInstance(actor,obj,recipe,enchantment)) return existing;
+    if(!allowGeneration) throw std::runtime_error(enchantment.empty()?"Registered smithing item is missing; enable Add missing base items to reproduce it":"Registered enchanted item is missing; enable Add missing base items to reproduce it");
+    if(!actor || !obj || !obj->As<RE::TESObjectARMO>() || (!ValidSmithing(recipe.health) && !(recipe.health==1.f && !enchantment.empty()))) throw std::runtime_error("Invalid smithing reproduction request");
     const auto beforeInventory=actor->GetInventory([obj](RE::TESBoundObject& candidate){return &candidate==obj;});
     const auto beforeEntry=beforeInventory.find(obj);
     const int beforeCount=beforeEntry==beforeInventory.end()?0:std::max(0,beforeEntry->second.first);
@@ -462,10 +501,14 @@ std::uint16_t PrepareSmithingInstance(RE::Actor* actor,RE::TESBoundObject* obj,c
     auto* list=static_cast<RE::ExtraDataList*>(storage);construct(list);
     std::unique_ptr<RE::ExtraDataList,decltype(destroy)> extra(list,destroy);
     extra->Add(new RE::ExtraUniqueID(actor->GetFormID(),id));
-    extra->Add(new RE::ExtraHealth(recipe.health));
+    if(recipe.health!=1.f)extra->Add(new RE::ExtraHealth(recipe.health));
+    if(!enchantment.empty()) {
+        AttachPortableEnchantment(extra.get(),enchantment);
+        if(!EnchantProbe::FactoryEquivalent(enchantment,EnchantmentSignature(extra.get())))throw std::runtime_error("Fresh enchantment recipe mismatch");
+    }
     const Identity key{obj->GetFormID(),actor->GetFormID(),id};
     // Claim before the engine call. An outgoing transfer can cancel the claim.
-    {std::scoped_lock lock(ledgerMutex);ledger.items.insert(key);generatedPerformance[key]={recipe.health,true,false};smithingCreation=SmithingCreation{key.form,key.owner,id,id};}
+    {std::scoped_lock lock(ledgerMutex);ledger.items.insert(key);generatedPerformance[key]={recipe.health,true,false,enchantment};smithingCreation=SmithingCreation{key.form,key.owner,id,id};}
     struct CreationScope {~CreationScope(){std::scoped_lock lock(ledgerMutex);smithingCreation.reset();}} creationScope;
     SKSE::log::info("OG-SMITHING2 begin actor={:08X} form={:08X} allocatedID={} before={} health={}",key.owner,key.form,id,beforeCount,recipe.health);
     actor->AddObjectToContainer(obj,extra.release(),1,nullptr); // engine takes ownership of the runtime-sized list
@@ -488,7 +531,7 @@ std::uint16_t PrepareSmithingInstance(RE::Actor* actor,RE::TESBoundObject* obj,c
                     stage,key.form,uid?uid->baseID:0,uid?uid->uniqueID:0,e->GetCount(),ReadSmithingQuality(e),e->HasType<RE::ExtraEnchantment>(),uid && beforeIDs.contains({uid->baseID,uid->uniqueID}));
                 if(!uid || uid->baseID!=key.owner || uid->uniqueID!=current.current) continue;
                 candidate=e;++evidence.matches;evidence.owner=uid->baseID;evidence.actual=uid->uniqueID;evidence.instanceCount=e->GetCount();
-                evidence.actualHealth=ReadSmithingQuality(e);evidence.customEnchanted=e->HasType<RE::ExtraEnchantment>();
+                evidence.actualHealth=ReadSmithingQuality(e);evidence.customEnchanted=enchantment.empty()?e->HasType<RE::ExtraEnchantment>():!EnchantProbe::FactoryEquivalent(enchantment,EnchantmentSignature(e));
                 evidence.wasPresent=beforeIDs.contains({uid->baseID,uid->uniqueID});evidence.reserved=used.contains(uid->uniqueID);
             }
         }
@@ -532,7 +575,7 @@ std::uint16_t PrepareSmithingInstance(RE::Actor* actor,RE::TESBoundObject* obj,c
     {std::scoped_lock lock(ledgerMutex);
         if(actual!=key) {ledger.items.erase(key);generatedPerformance.erase(key);transferChain.Retire(key);}
         transferChain.Retire(actual);
-        ledger.items.insert(actual);generatedPerformance[actual]={recipe.health,true,false};unverifiedSmithing.erase(blockedKey);
+        ledger.items.insert(actual);generatedPerformance[actual]={recipe.health,true,false,enchantment};unverifiedSmithing.erase(blockedKey);
     }
     SKSE::log::info("OG-SMITHING generated actor={:08X} form={:08X} uid={} health={}",actual.owner,actual.form,actual.id,recipe.health);
     return actual.id;
@@ -719,8 +762,10 @@ void ReclaimManagedItems(RE::Actor* actor) {
         // still checked above and claimed below; all other protections remain.
         if(knownPerformance) GALLERY_DIAG("OG-PERFORMANCE reclaim actor={:08X} form={:08X} uid={} initial={} current={} reproduction={} customEnchant={} named={}",
             key.owner,key.form,key.id,baseline.health,ReadSmithingQuality(instance),baseline.reproduction,instance->HasType<RE::ExtraEnchantment>(),hasName);
+        const bool changedEnchantment=knownPerformance && !baseline.enchantment.empty()?
+            !EnchantProbe::SameEnchant(baseline.enchantment,EnchantmentSignature(instance)):instance->HasType<RE::ExtraEnchantment>();
         if(ProtectGeneratedItem(ignoreName,protectedItem,
-            knownPerformance?ProtectPerformance(baseline.health,ReadSmithingQuality(instance),false):instance->HasType<RE::ExtraHealth>(),instance->HasType<RE::ExtraEnchantment>(),
+            knownPerformance?ProtectPerformance(baseline.health,ReadSmithingQuality(instance),false):instance->HasType<RE::ExtraHealth>(),changedEnchantment,
             hasName,instance->HasType<RE::ExtraHotkey>(),instance->HasType<RE::ExtraPoison>())) {
             SKSE::log::info("Preserving customized gallery item {:08X}, instance {}: quest={}, health={}, enchant={}, name={}, favorite={}, poison={}",key.form,key.id,protectedItem,instance->HasType<RE::ExtraHealth>(),instance->HasType<RE::ExtraEnchantment>(),instance->HasType<RE::ExtraTextDisplayData>(),instance->HasType<RE::ExtraHotkey>(),instance->HasType<RE::ExtraPoison>());
             Forget(key,knownPerformance && baseline.reproduction); continue;

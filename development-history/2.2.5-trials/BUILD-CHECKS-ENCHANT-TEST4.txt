@@ -1,0 +1,13 @@
+OutfitGallery 2.2.5-enchant-test4 / metadata 2.2.5.13 / 2026-11-18
+MSVC Release build succeeded. 58/58 selected tests passed.
+Known TrashVirtualPathSafety environment fixture excluded, NOT passing.
+Three SKSE exports and ZIP/member/DLL integrity verified.
+Add localized equipment-management enchanted marker, prepared on game thread.
+Relax zero area/duration to uint32 bounds; other recipe restrictions unchanged.
+Test nonzero/max values, negative/overflow, field mismatch and preset persistence.
+ManagedItems, PortableEnchantment factory, Presets serialization unchanged from test3.
+No new equip-time scans, hooks, ownership or name-reproduction behavior.
+Label layout and nonzero area/duration gameplay await user confirmation.
+Previous user-confirmed multi-effect and restart behavior recorded in design notes.
+Public2.2.4 retained. No install, GitHub sync, publishing or upload performed.
+DLL SHA256: 9C944ACD422B581553744D1425D7E2735859959DC2399D743A4FF9E2C51607C7

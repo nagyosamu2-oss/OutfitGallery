@@ -1,0 +1,12 @@
+OutfitGallery 2.2.5-enchant-test2 / metadata 2.2.5.11 / 2026-11-18
+MSVC Release build completed. 58/58 selected tests passed.
+TrashVirtualPathSafety baseline junction-fixture limitation excluded, NOT passing.
+Three SKSE exports, ZIP member bytes and exact DLL verified.
+Replay real metadata mismatch: cost438/442 flags1 vs auto-cost -1 flags0.
+Normalize only the cost override field and bit0, no other performance bypass.
+Same policy at factory, fresh-item proof and cleanup. Shared ENCH never rewritten.
+Price equality is not guaranteed. Effects and smithing still require validation.
+Presets, EPRF persistence, original selection and UID ownership logic unchanged.
+Restart/new-game integration runtime verification pending. No deployment/publishing.
+Published 2.2.4 remains intact.
+DLL SHA256: BE3288E6C3A86521B7A0A3C3186C15418E4A6039B589C9546AED4817A90BE452

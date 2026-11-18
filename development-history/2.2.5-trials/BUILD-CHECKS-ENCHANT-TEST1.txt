@@ -1,0 +1,16 @@
+OutfitGallery 2.2.5-enchant-test1 / metadata 2.2.5.10 / 2026-11-18
+MSVC Release configure/build completed; final rebuild and 58/58 selected tests passed.
+Baseline TrashVirtualPathSafety junction fixture excluded, NOT counted as passing.
+Three SKSE exports verified. JSON translation template parsed.
+Tests: recipe preset roundtrips, unknown version/health mismatch rejection,
+actual 2-effect health1.5 probe fixture, modified-enchant comparison, health1
+singleton proof and existing 57 tests. Native EPRF callbacks require game verification.
+Transmog, follower maintenance, organizer, transfer/identity policy unchanged.
+Runtime/source ZIP member bytes and exact DLL verified. Public 2.2.4 retained.
+Only explicit newly registered/updated supported recipes use enchantment reproduction.
+Existing default behavior is gated by the existing prefer-enchanted option.
+NOT confirmed in this build: repeated apply/reclaim, modified-item retention/reuse,
+co-save roundtrip, new-game integration, follower use and timing impact.
+Prior isolated probe success is separate evidence, not integrated-runtime validation.
+No installed-file overwrite, GitHub sync, publishing or upload performed.
+DLL SHA256: DCE948716E9C5EA3D7EAE337E02D65329E88BD84880C5BD6BF80E0E3649ACEE2

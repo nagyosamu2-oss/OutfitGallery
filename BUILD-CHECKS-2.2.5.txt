@@ -1,0 +1,14 @@
+Outfit Gallery 2.2.5 / DLL metadata 2.2.5.0 / 2026-11-18
+Release MSVC build completed. 59/59 selected automated tests passed.
+TrashVirtualPathSafety excluded for baseline junction-fixture environment limitation;
+not counted as passing. Three SKSE entry-point exports verified.
+All src except main.cpp version/footer/log labels is byte-identical to confirmed test6.
+Tests, integration headers, dependency sources, translations, licenses and INI unchanged.
+Runtime/source ZIP CRC, member bytes, source equality and exact DLL bytes verified.
+Runtime package includes DLL, default INI, documentation, translation template and licenses.
+No photos, presets, Library.json, settings, save files, local logs or PDB included.
+User-reported test6 confirmation is detailed in VALIDATION.md; final DLL needs smoke check.
+Nonzero effect area/duration and arbitrary instance-replacement compatibility unverified.
+Public 2.2.4 and previous checkpoint retained unchanged.
+No installed-file overwrite, GitHub sync, publishing or uploading performed.
+DLL SHA256: 5AE2D2850795BA9D6DF0D1E712A922CE07F51836CD3CD46099447DFE15365BC2

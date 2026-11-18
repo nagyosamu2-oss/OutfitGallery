@@ -160,10 +160,19 @@ void RenderBrowser(bool& addMissing) {
         }
         if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("OFF by default. Enabling allows a repeat click to remove the entire registered outfit and may leave the character in underwear or naked. Applies to player and followers in both outfit modes. Head and accessory toggles remain available."));
         if(UI::Checkbox(Label("Add missing base items (new game)"),&addMissing)) { SaveSettingsIfDue(true); }
-        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Generated items use base properties; custom enchantments are not recreated."));
+
+
+        if(UI::IsItemHovered())UI::SetTooltip("%s",Tr("Missing equipment is generated according to the saved-upgrade reproduction setting. Existing items are kept."));
+        bool reproduce=RestoreSavedUpgrades();
+        if(UI::Checkbox(Label("Reproduce smithing and enchantments"),&reproduce)) {ChooseUpgradeMode(reproduce);defaultUpgradeReproduction=reproduce;SaveSettingsIfDue(true);}
+        if(UI::IsItemHovered())UI::SetTooltip("%s",Tr("Applies to missing-item generation. OFF uses base properties; owned items and saved recipes are kept."));
+        UI::SameLine(0.f,UI::GetStyle()->ItemSpacing.x*2.f);
+        bool skip=skipUpgradePrompt.load();
+        if(UI::Checkbox(Label("Skip first-use confirmation"),&skip)) {skipUpgradePrompt=skip;SaveSettingsIfDue(true);}
+        if(UI::IsItemHovered())UI::SetTooltip("%s",Tr("For new saves without a choice, use the configured default without asking. Existing saves keep their choice."));
         bool prefer=preferEnchanted.load();
         if(UI::Checkbox(Label("Prefer registered enchanted items"),&prefer)) {preferEnchanted=prefer; SaveSettingsIfDue(true);}
-        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Player only. Uses owned registered enchanted items; otherwise uses normal equipment and notifies you. Applies on the next outfit change. Re-register older sets to record enchantments."));
+        if(UI::IsItemHovered()) UI::SetTooltip("%s",Tr("Uses registered owned enchantments first. Newly saved supported recipes can be reproduced when missing-item generation is enabled. Legacy sets keep the original preference behavior. Update the outfit to save a recipe."));
         UI::Separator();
         if(UI::SliderInt(Label("Normal-view columns"),&gridColumns,2,6)) settingsChangedAt=GetTickCount64();
         const auto openingTabs=CollectionTabs(library);
@@ -887,7 +896,7 @@ void RenderBrowser(bool& addMissing) {
             {std::scoped_lock lock(editMutex);editSnapshot={};}
             {std::scoped_lock lock(presetsMutex);
                 for(const auto& p:presets) if(p.photo==contextPhoto) {scopeEditing=p; break;}
-                scopeRequest=scopeEditing; scopeReady=false; scopeMasks.clear();scopeNames.clear(); scopeError.clear();
+                scopeRequest=scopeEditing; scopeReady=false; scopeMasks.clear();scopeNames.clear();scopeEnchanted.clear(); scopeError.clear();
             }
             const auto label=library.labels.find(contextPhoto);
             scopeItems=label!=library.labels.end()?label->second.outfitItems:std::nullopt;
@@ -930,9 +939,13 @@ void RenderBrowser(bool& addMissing) {
         const float scopeChoicesHeight=std::max(row*4.f,UI::GetContentRegionAvail().y-row*lowerRows-UI::GetStyle()->ItemSpacing.y*8.f);
         const bool fullOutfit=!scopeEditing.slotMask && !scopeEditing.accessories;
         UI::Spacing();BeginEquipmentSection("Scope section",fullOutfit?"Equipment to wear":"Exchange slots",false);
-        bool readyScope; std::vector<std::uint32_t> masks; std::vector<std::string> names; std::string error;
-        {std::scoped_lock lock(presetsMutex);readyScope=scopeReady;masks=scopeMasks;names=scopeNames;error=scopeError;}
-        const auto displayName=[&](std::size_t n)->const std::string& {return n<names.size()?names[n]:scopeEditing.items[n].name;};
+        bool readyScope; std::vector<std::uint32_t> masks; std::vector<std::string> names;std::vector<bool> enchanted; std::string error;
+        {std::scoped_lock lock(presetsMutex);readyScope=scopeReady;masks=scopeMasks;names=scopeNames;enchanted=scopeEnchanted;error=scopeError;}
+        const auto displayName=[&](std::size_t n) {
+            auto name=n<names.size()?names[n]:scopeEditing.items[n].name;
+            if(n<enchanted.size() && enchanted[n])name+=" ["+std::string(Tr("Enchanted"))+"]";
+            return name;
+        };
         if(!readyScope) UI::TextUnformatted(Tr("Loading equipment slots..."));
         else if(!error.empty()) UI::TextWrapped("%s",StatusText(error).c_str());
         else {

@@ -1,0 +1,12 @@
+OutfitGallery 2.2.5-enchant-test6 / metadata 2.2.5.15 / 2026-11-18
+MSVC Release build succeeded. 59/59 selected tests passed.
+Known TrashVirtualPathSafety environment fixture excluded, NOT passing.
+Three SKSE exports and ZIP/member/DLL integrity verified.
+Per-save first-use choice; global default and skip prompt; inline Options controls.
+OFF uses local basic generation while preserving owned items and saved recipes.
+UPGR v1 stores one-byte choice in SKSE co-save; game save required.
+PortableEnchantment, EnchantmentRecipe and identity/transfer helpers unchanged.
+First-use skip checkbox is staged until explicit mode selection; gamepad navigable.
+UI layout, gamepad use and SKSE persistence await runtime confirmation.
+Public 2.2.4 retained. No install, GitHub sync, publishing or upload performed.
+DLL SHA256: 5BD8BC8164335694FB19D0BFF31622D34DCBB4A5DCEBCC5A9807EE30813A22DD

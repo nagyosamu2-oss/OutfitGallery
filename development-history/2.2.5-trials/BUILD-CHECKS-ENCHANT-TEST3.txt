@@ -1,0 +1,12 @@
+OutfitGallery 2.2.5-enchant-test3 / metadata 2.2.5.12 / 2026-11-18
+MSVC Release build succeeded; 58/58 selected tests passed.
+Baseline TrashVirtualPathSafety fixture limitation excluded, NOT passing.
+Three SKSE exports and ZIP/member/DLL integrity verified.
+Extend saved/factory-output effect limit from2 to32, matching existing capture limit.
+Test 3/32-effect roundtrips,33 rejection, invalid last effect, changed last effect,
+ordering and full 32-effect preset persistence. Existing1/2-effect tests retained.
+All numeric/reference/condition/size protections unchanged. No truncation.
+Equipment, ManagedItems and Presets.cpp byte-identical to test2.
+Multi-effect engine application, cleanup, persistence and speed await runtime checks.
+Published2.2.4 retained; no install, upload or GitHub synchronization.
+DLL SHA256: A9291B90D9298EE717CC22BF09FE93EF651AF1A1A5957E0FFFD0D8F5DAC04CAF

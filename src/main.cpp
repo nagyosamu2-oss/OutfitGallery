@@ -28,6 +28,7 @@
 #include "PresetEditing.h"
 #include "ManagedItems.h"
 #include "Diagnostics.h"
+#include "UpgradeReproduction.h"
 #include "FollowerOutfits.h"
 #include "FollowerAutoOutfits.h"
 #include "FollowerAutoState.h"
@@ -54,7 +55,7 @@
 
 using namespace REL::literals;
 SKSEPluginInfo(
-    .Version = "2.2.4.0"_v,
+    .Version = "2.2.5.0"_v,
     .Name = "OutfitGallery",
     .Author = "Outfit Gallery contributors",
     // SKSE's final component is the store identifier: GOG is 1, not 0.
@@ -116,7 +117,7 @@ ULONGLONG settingsChangedAt{};
 const std::filesystem::path settingsFile="Data/SKSE/Plugins/OutfitGallery/StudioSettings.json";
 void SaveSettingsIfDue(bool force=false) {
     if (!force && (!settingsChangedAt || GetTickCount64()-settingsChangedAt<600)) return;
-    try { WriteStudioSettings({distance.load(),height.load(),orbit.load(),pitch.load(),fov.load(),gridColumns,showNames,showCounts,language,allowFreeCamera.load(),addMissing,lateral.load(),elevation.load(),partialSlots.load(),startupTab,detachedPreview.load(),previewRect,followerTargeting.load(),preferEnchanted.load(),portraitThumbnails,cleanupCompatibility.load(),allowCombatGallery.load(),compactGallery,reclaimRenamedGeneratedItems.load(),uiZoom,fullOutfitToggle.load(),upscalerCompatibility.load(),showEquipmentTools,hoverVariations,uiBackgroundOpacity},settingsFile); }
+    try { WriteStudioSettings({distance.load(),height.load(),orbit.load(),pitch.load(),fov.load(),gridColumns,showNames,showCounts,language,allowFreeCamera.load(),addMissing,lateral.load(),elevation.load(),partialSlots.load(),startupTab,detachedPreview.load(),previewRect,followerTargeting.load(),preferEnchanted.load(),portraitThumbnails,cleanupCompatibility.load(),allowCombatGallery.load(),compactGallery,reclaimRenamedGeneratedItems.load(),uiZoom,fullOutfitToggle.load(),upscalerCompatibility.load(),showEquipmentTools,hoverVariations,uiBackgroundOpacity,false,defaultUpgradeReproduction.load(),skipUpgradePrompt.load()},settingsFile); }
     catch(const std::exception& e) { SKSE::log::error("Settings save: {}",e.what()); }
     settingsChangedAt=0;
 }
@@ -165,6 +166,7 @@ Preset stagedPreset, requestedPreset;
 Preset scopeRequest;
 std::vector<std::uint32_t> scopeMasks;
 std::vector<std::string> scopeNames;
+std::vector<bool> scopeEnchanted;
 std::string scopeError;
 bool scopeReady{}; // guarded by presetsMutex
 
@@ -636,6 +638,7 @@ void Tick() {
         SKSE::log::info("OG-FOLLOWER studio closed: {}",targetReason);
         Close(); SetStatus(targetReason); return;
     }
+    if(NeedsUpgradePrompt())return; // wait for first-use choice before gallery actions
     if (!follower && randomPluginListRequested.exchange(false)) RefreshRandomTryOnPlugins(player);
     if ((requested == kRandomTryOn || requested == kRerollTryOn) && !follower && !saveBusy && !verificationTicks && !photoRetakeActive)
         RunRandomTryOn(player, requested == kRerollTryOn);
@@ -705,9 +708,9 @@ void Tick() {
     ProcessPresetEdit(requested,subject.get());
     if(requested==10) {
         Preset p; {std::scoped_lock lock(presetsMutex); p=scopeRequest;}
-        std::vector<std::uint32_t> masks; std::vector<std::string> names; std::string error;
-        try {masks=ResolvePresetSlots(p);names=ResolvePresetDisplayNames(p);} catch(const std::exception& e) {error=e.what();}
-        {std::scoped_lock lock(presetsMutex); if(scopeRequest.photo==p.photo) {scopeMasks=std::move(masks);scopeNames=std::move(names);scopeError=std::move(error);scopeReady=true;}}
+        std::vector<std::uint32_t> masks; std::vector<std::string> names;std::vector<bool> enchanted; std::string error;
+        try {masks=ResolvePresetSlots(p);names=ResolvePresetDisplayNames(p,&enchanted);} catch(const std::exception& e) {error=e.what();}
+        {std::scoped_lock lock(presetsMutex); if(scopeRequest.photo==p.photo) {scopeMasks=std::move(masks);scopeNames=std::move(names);scopeEnchanted=std::move(enchanted);scopeError=std::move(error);scopeReady=true;}}
     }
     if (requested == 4 && !saveBusy) {
         verificationTicks=0;
@@ -1050,6 +1053,33 @@ void RenderPhotoRetakeControls() {
 #include "GalleryBrowser.inc"
 #include "AutoOutfitUI.inc"
 
+bool RenderUpgradeChoice() {
+    if(!NeedsUpgradePrompt())return false;
+    static unsigned serial{};static int selected{};static bool pendingSkip{};
+    if(serial!=studioOpenSerial.load()){serial=studioOpenSerial.load();selected=defaultUpgradeReproduction.load()?0:1;pendingSkip=skipUpgradePrompt.load();}
+    if(PadPressed(UI::ImGuiKey_GamepadDpadUp,false) || PadPressed(UI::ImGuiKey_GamepadLStickUp,false))selected=(selected+2)%3;
+    if(PadPressed(UI::ImGuiKey_GamepadDpadDown,false) || PadPressed(UI::ImGuiKey_GamepadLStickDown,false))selected=(selected+1)%3;
+    UI::Spacing();UI::TextUnformatted(Tr("Choose outfit reproduction"));UI::Separator();
+    UI::TextWrapped("%s",Tr("When generating missing equipment, reproduce the saved smithing improvements and custom enchantments?"));
+    UI::TextWrapped("%s",Tr("Owned items keep their existing properties. You can change this later in Options. Save your game to remember this choice."));
+    UI::Spacing();
+    UI::Checkbox(Tr("Skip first-use confirmation"),&pendingSkip);
+    if(UI::IsItemHovered())UI::SetTooltip("%s",Tr("For new saves without a choice, use the configured default without asking. Existing saves keep their choice."));
+    if(galleryPadPointer && selected==2)UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,UiPx(3.f));
+    if(selected==2 && PadPressed(UI::ImGuiKey_GamepadFaceDown,false))pendingSkip=!pendingSkip;
+    // Commit skip together with the explicit answer; enabling it here must not
+    // auto-resolve the pending choice from the game thread before confirmation.
+    UI::Spacing();bool answered=false;
+    for(int n=0;n<2;++n) {
+        const bool clicked=UI::Button(Tr(n==0?"Reproduce saved upgrades":"Reproduce outfits only"));
+        if(galleryPadPointer && selected==n)UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF30C8FF,0,0,UiPx(3.f));
+        if(clicked || (selected==n && PadPressed(UI::ImGuiKey_GamepadFaceDown,false))) {
+            const bool enabled=n==0;ChooseUpgradeMode(enabled);defaultUpgradeReproduction=enabled;skipUpgradePrompt=pendingSkip;SaveSettingsIfDue(true);answered=true;break;
+        }
+    }
+    if(answered) {framePadEdges=framePadRepeat=0;UI::ClearActiveID();}
+    return true; // consume the answer frame; never apply an outfit on the same input
+}
 void __stdcall RenderStudio() {
     if(photoRetakeActive && (!active || photoRetakeSerial!=studioOpenSerial.load())) CancelPhotoRetake();
     DrainOrganizerTextures();
@@ -1101,6 +1131,7 @@ void __stdcall RenderStudio() {
             if(UI::Button("X##closePhotoRetake",{closeSide,closeSide})) opened=false;
             UI::Separator();
         } else RenderGalleryTitle(opened);
+        if(RenderUpgradeChoice()) {UI::End();if(!opened)command=2;return;}
         if(diagnosticNow) {
             ++diagnosticSample; diagnosticDue=GetTickCount64()+1500;
             const auto size=UI::GetWindowSize(), pos=UI::GetWindowPos();
@@ -1335,7 +1366,7 @@ void __stdcall RenderStudio() {
 void __stdcall RenderSettings() {
     ProcessCapturedHotkey();
     RenderHotkeys();
-    UI::TextUnformatted("Outfit Gallery 2.2.4");
+    UI::TextUnformatted("Outfit Gallery 2.2.5");
     UI::TextWrapped(Tr("Close this menu and press the configured hotkey (default F8) while standing in a safe open area."));
     UI::TextUnformatted(Tr("F9 in the studio saves a photo and equipment. Click a preset photo to apply."));
     UI::Text(Tr("SmoothCam API: %s / TDM API: %s"), smooth ? "ready" : "not available", tdm ? "ready" : "not available");
@@ -1443,7 +1474,7 @@ void Message(SKSE::MessagingInterface::Message* message) {
         try {
             if(std::filesystem::exists(settingsFile)) {
                 const auto s=ReadStudioSettings(settingsFile);
-                distance=s.distance; height=s.height; orbit=s.orbit; pitch=s.pitch; fov=s.fov; lateral=s.lateral; elevation=s.elevation; gridColumns=s.columns; showNames=s.showNames; showCounts=s.showCounts; language=s.language; allowFreeCamera=s.allowFreeCamera; addMissing=s.addMissing; partialSlots=s.headSlots; startupTab=s.startupTab; detachedPreview=s.detachedPreview; previewRect=s.previewRect; followerTargeting=s.followerTargeting; preferEnchanted=s.preferEnchanted; portraitThumbnails=s.portraitThumbnails; cleanupCompatibility=s.cleanupCompatibility; allowCombatGallery=s.allowCombatGallery; compactGallery=s.compactGallery; reclaimRenamedGeneratedItems=s.reclaimRenamedGeneratedItems; uiZoom=s.uiZoom; fullOutfitToggle=s.fullOutfitToggle; upscalerCompatibility=s.upscalerCompatibility; showEquipmentTools=s.showEquipmentTools; hoverVariations=s.hoverVariations; uiBackgroundOpacity=s.uiBackgroundOpacity;
+                distance=s.distance; height=s.height; orbit=s.orbit; pitch=s.pitch; fov=s.fov; lateral=s.lateral; elevation=s.elevation; gridColumns=s.columns; showNames=s.showNames; showCounts=s.showCounts; language=s.language; allowFreeCamera=s.allowFreeCamera; addMissing=s.addMissing; partialSlots=s.headSlots; startupTab=s.startupTab; detachedPreview=s.detachedPreview; previewRect=s.previewRect; followerTargeting=s.followerTargeting; preferEnchanted=s.preferEnchanted;defaultUpgradeReproduction=s.reproduceUpgrades;skipUpgradePrompt=s.skipUpgradePrompt; portraitThumbnails=s.portraitThumbnails; cleanupCompatibility=s.cleanupCompatibility; allowCombatGallery=s.allowCombatGallery; compactGallery=s.compactGallery; reclaimRenamedGeneratedItems=s.reclaimRenamedGeneratedItems; uiZoom=s.uiZoom; fullOutfitToggle=s.fullOutfitToggle; upscalerCompatibility=s.upscalerCompatibility; showEquipmentTools=s.showEquipmentTools; hoverVariations=s.hoverVariations; uiBackgroundOpacity=s.uiBackgroundOpacity;
                 SKSE::log::info("Loaded persistent studio settings");
                 if(s.followerTargetingMigrationPending) {
                     try {
@@ -1507,7 +1538,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     spdlog::set_default_logger(logger);
     spdlog::set_level(spdlog::level::info);
     spdlog::flush_on(spdlog::level::info);
-    SKSE::log::info("OutfitGallery release=2.2.4; equipment acquisition, random try-on, customization and reroll; 2.0.1 compatibility fixes retained");
+    SKSE::log::info("OutfitGallery release=2.2.5; equipment acquisition, random try-on, customization and reroll; 2.0.1 compatibility fixes retained");
     const auto runtime=skse->RuntimeVersion();
     const auto supported=SKSEPlugin_Version.GetRuntimeCompatibility().GetCompatibleRuntimeVersions();
     if(std::none_of(supported.begin(),supported.end(),[&](const auto& version){return static_cast<REL::Version>(version)==runtime;})) {
@@ -1522,8 +1553,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     Gallery::saveHotkey = GetPrivateProfileIntW(L"Input", L"SaveHotkey", 67, ini.c_str());
     Gallery::captureKeys[0]=Gallery::saveHotkey;
     Gallery::gamepadHotkey = GetPrivateProfileIntW(L"Input", L"GamepadHotkey", 32, ini.c_str());
-    SKSE::log::info("OutfitGallery 2.2.4");
-    SKSE::log::info("OutfitGallery 2.2.4 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
+    SKSE::log::info("OutfitGallery 2.2.5");
+    SKSE::log::info("OutfitGallery 2.2.5 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
     return SKSE::GetMessagingInterface()->RegisterListener(Gallery::Message);
 }
 

@@ -1,5 +1,6 @@
 #include "Presets.h"
 #include "HoldButton.h"
+#include "EnchantmentRecipe.h"
 #include "DiagnosticSettings.h"
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -19,6 +20,26 @@ int main() {
         auto remembered=ReadPreset(folder/"enchanted.json");
         if(!remembered.items[0].preferred.custom || remembered.items[0].preferred.scope!=enchanted.items[0].preferred.scope || remembered.items[0].preferred.id!=65000) throw std::runtime_error("preferred identity lost");
         if(remembered.items[0].preferred.signature!="stable-effect-signature") throw std::runtime_error("preferred signature lost");
+        auto bits=[](float f){return std::bit_cast<std::uint32_t>(f);};
+        nlohmann::json signature={1,nlohmann::json::array({nlohmann::json::array({nlohmann::json::array({"Skyrim.esm",0x1234}),bits(5.f),0,0,bits(10.f)})}),-1,0,0,-1,0,6,bits(0.f),nullptr,nullptr,0,false,bits(1.f)};
+        auto recipe=p;recipe.items.resize(1);recipe.items[0].enchantment=signature.dump();recipe.items[0].smithing={1.f,12345,123};
+        WritePreset(recipe,folder/"reproduction.json");auto reread=ReadPreset(folder/"reproduction.json");
+        if(reread.items[0].enchantment!=recipe.items[0].enchantment || reread.items[0].smithing!=recipe.items[0].smithing)throw std::runtime_error("Enchantment recipe/identity roundtrip failed");
+        auto multi=recipe;auto multiSignature=signature;multiSignature[1].clear();
+        for(unsigned n=0;n<32;++n){auto effect=signature[1][0];effect[1]=bits(float(n+1));multiSignature[1].push_back(effect);}
+        multi.items[0].enchantment=multiSignature.dump();WritePreset(multi,folder/"multi-enchantment.json");
+        if(ReadPreset(folder/"multi-enchantment.json").items[0].enchantment!=multi.items[0].enchantment)throw std::runtime_error("32-effect recipe lost or truncated");
+        auto timed=recipe;auto timedSignature=signature;timedSignature[1][0][2]=25;timedSignature[1][0][3]=60;
+        timed.items[0].enchantment=timedSignature.dump();WritePreset(timed,folder/"timed-enchantment.json");
+        if(ReadPreset(folder/"timed-enchantment.json").items[0].enchantment!=timed.items[0].enchantment)throw std::runtime_error("Area/duration lost");
+        auto improved=recipe;improved.items[0].smithing.health=1.4f;auto improvedSignature=signature;improvedSignature[13]=bits(1.4f);improved.items[0].enchantment=improvedSignature.dump();
+        WritePreset(improved,folder/"improved-enchantment.json");
+        if(ReadPreset(folder/"improved-enchantment.json").items[0].enchantment!=improved.items[0].enchantment)throw std::runtime_error("Combined recipe lost");
+        bool invalidRecipe=false;try{auto bad=recipe;bad.items[0].smithing.health=1.4f;WritePreset(bad,folder/"bad-enchantment.json");}catch(const std::exception&){invalidRecipe=true;}
+        if(!invalidRecipe)throw std::runtime_error("Mismatched recipe health accepted");
+        {std::ifstream input(folder/"reproduction.json");nlohmann::json j;input>>j;j["items"][0]["enchantmentRecipe"]["version"]=2;std::ofstream output(folder/"future-enchantment.json");output<<j;}
+        invalidRecipe=false;try{ReadPreset(folder/"future-enchantment.json");}catch(const std::exception&){invalidRecipe=true;}
+        if(!invalidRecipe)throw std::runtime_error("Unknown recipe version accepted");
         auto smithing=p;smithing.items.resize(1);smithing.items[0].smithing={1.3712345f,0xABCDEF1234567890ULL,123};
         WritePreset(smithing,folder/"smithing.json");
         const auto smithingCopy=ReadPreset(folder/"smithing.json");
@@ -41,6 +62,12 @@ int main() {
         bool rejectedRecipe=false;try {ReadPreset(folder/"unsupported-smithing.json");} catch(...) {rejectedRecipe=true;}
         if(!rejectedRecipe) throw std::runtime_error("Unknown smithing version silently downgraded");
         StudioSettings prefSettings;
+        if(!prefSettings.reproduceUpgrades || prefSettings.skipUpgradePrompt)throw std::runtime_error("Upgrade policy defaults changed");
+        auto initialPolicy=prefSettings;initialPolicy.reproduceUpgrades=false;initialPolicy.skipUpgradePrompt=true;
+        WriteStudioSettings(initialPolicy,folder/"upgrade-policy.json");
+        const auto loadedPolicy=ReadStudioSettings(folder/"upgrade-policy.json");
+        if(loadedPolicy.reproduceUpgrades || !loadedPolicy.skipUpgradePrompt)throw std::runtime_error("Upgrade defaults roundtrip failed");
+
         if(prefSettings.hoverVariations) throw std::runtime_error("Click expansion must be the default");
         prefSettings.hoverVariations=true;
         WriteStudioSettings(prefSettings,folder/"variation-mode.json");
