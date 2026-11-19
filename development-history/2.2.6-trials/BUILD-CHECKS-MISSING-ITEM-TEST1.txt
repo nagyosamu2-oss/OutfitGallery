@@ -1,0 +1,11 @@
+OutfitGallery 2.2.6-missing-item-test1 / metadata 2.2.6.1 / 2026-11-19
+MSVC Release build succeeded. 60/60 selected tests passed.
+Known TrashVirtualPathSafety environment fixture excluded, NOT passing.
+Three SKSE exports and ZIP/member/DLL integrity verified.
+Skip absent base armor in normal outfit working copies; never rewrite saved presets.
+Verification uses surviving subset; existing cleanup protections remain unchanged.
+All-missing sets stop before inventory mutation. Wrong type/slot validation retained.
+Portable factory, recipe schema, persistence and identity/transfer helpers unchanged.
+Normal manual/automatic/follower/crafting paths connected; runtime validation pending.
+Public 2.2.5 retained. No install, GitHub sync, publishing or upload performed.
+DLL SHA256: 550B1A495E5151AACAB835E229AC4B2487CB1E5A1CA93B7BD38BACDF137567AB

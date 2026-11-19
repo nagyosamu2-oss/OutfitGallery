@@ -1,0 +1,9 @@
+OutfitGallery 2.2.6-ui-test3 / metadata 2.2.6.4 / 2026-11-19
+MSVC Release build succeeded. 60/60 selected tests passed.
+Known TrashVirtualPathSafety environment fixture excluded, NOT passing.
+Three SKSE exports and ZIP/member/DLL integrity verified.
+Organizer-only original circular badge background and 8px inward offset.
+Main favorite appearance unchanged; organizer popup and missing-marker offset retained.
+Equipment/membership/persistence/input unchanged. Runtime visual validation pending.
+Public 2.2.5 retained. No install, GitHub sync, publishing or upload performed.
+DLL SHA256: 36CED8DD95EF6C69EC2939E752730034E2B59B0768B1216E39BD725B036A23F8

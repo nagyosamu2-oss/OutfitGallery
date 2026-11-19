@@ -20,6 +20,15 @@ struct OrganizerState {
     std::optional<std::string> disk;
 };
 OrganizerState organizer;
+// Use the organizer draft so unsaved category edits are reflected immediately.
+void DrawOrganizerFavorite(const Preset& p,UI::ImVec2 a,UI::ImVec2 b,float width,bool avoidMissing=false) {
+    const auto it=organizer.draft.labels.find(p.photo);
+    if(p.slotMask || p.accessories || it==organizer.draft.labels.end() ||
+       std::find(it->second.categories.begin(),it->second.categories.end(),"favorites")==it->second.categories.end())return;
+    if(avoidMissing)b.x-=28.f;
+    b.x-=8.f; // Keep the badge fully inside the photo, away from the right frame.
+    DrawFavoriteMark(a,b,width,true);
+}
 bool organizerFrame{};
 std::vector<std::string> organizerRetiredTextures;
 void DrainOrganizerTextures() {
@@ -446,6 +455,7 @@ void RenderOrganizer() {
                 if(organizer.variation.clock.Ready(p.photo,now)) {organizer.variation.photo=p.photo;organizer.variationMin=a;organizer.variationMax=b;variationAnchor=true;openVariation=true;}
             }
         }
+        DrawOrganizerFavorite(p,a,b,w,missingCheckMode && PresetHasMissingData(missingResults,p.photo));
         if(selected) {UI::ImDrawListManager::AddRect(draw,a,b,0xFF70E8FF,0,0,3.f);UI::ImDrawListManager::AddRectFilled(draw,{a.x+5,a.y+5},{a.x+21,a.y+21},0xFF70E8FF,0,0);}
         if(n==organizer.focus && !organizer.toolbar && !organizer.targetBar)UI::ImDrawListManager::AddRect(draw,{a.x+3,a.y+3},{b.x-3,b.y-3},0xFFE0E0E0,0,0,1.f);
         if(missingCheckMode && PresetHasMissingData(missingResults,p.photo)) {UI::ImDrawListManager::AddLine(draw,{b.x-22,a.y+7},{b.x-7,a.y+22},0xFF6060FF,3.f);UI::ImDrawListManager::AddLine(draw,{b.x-7,a.y+7},{b.x-22,a.y+22},0xFF6060FF,3.f);}
@@ -599,6 +609,7 @@ void RenderOrganizer() {
                     }
                 }
                 const bool clicked=texture?UI::ImageButton(id.c_str(),texture,{tw,th},uv0,uv1):UI::Button(id.c_str(),{strip.cardWidth,strip.cardHeight});
+                DrawOrganizerFavorite(p,UI::GetItemRectMin(),UI::GetItemRectMax(),tw);
                 if(organizer.selection.contains(p.photo))UI::ImDrawListManager::AddRect(UI::GetWindowDrawList(),UI::GetItemRectMin(),UI::GetItemRectMax(),0xFF70E8FF,0,0,3.f);
                 if(UI::IsItemHovered())UI::SetTooltip("%s",p.name.c_str());
                 if(clicked){if(!organizer.selection.erase(p.photo))organizer.selection.insert(p.photo);}

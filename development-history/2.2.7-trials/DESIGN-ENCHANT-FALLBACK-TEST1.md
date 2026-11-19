@@ -1,0 +1,7 @@
+# Missing enchantment fallback trial
+
+Base enchant-message-test1, metadata 2.2.6.9. Introduce typed MissingEnchantmentReference for absent provider or unresolved stable reference only. ValidatePortableEnchantmentReferences parses/validates recipe and resolves references without factory/inventory changes. Other failures retain existing exceptions.
+
+WithoutMissingEnchantments filters a working copy only: catch typed reference failure, clear saved custom enchantment/preferred identity fields, preserve smithing and base item. Do not truncate effects or rewrite user recipes. Native AvailableEnchantmentPreset acts only when reproduction and preference enabled; known owned original/retained/generated full recipe bypasses reference reproduction checks. Apply preflights before item generation. Verification applies identical normalization and displays omitted item/reference, preventing false preferred-item warnings while retaining verified cleanup. Underlying base-form skipping remains separate. No changes to ledger, cleanup ownership, smithing factory, co-save or settings.
+
+Tests cover source immutability, smithing/other items retained, unavailable references, restored provider/owned bypass validation success, unrelated error propagation, no work for ordinary items, combined JP/EN omission warnings. 62 selected checks. Engine state/cleanup/restart behavior needs runtime confirmation. Historical earlier successful trial is not attributed to a specific cause; recipe/owned-state differences can choose different paths.

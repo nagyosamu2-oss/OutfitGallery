@@ -60,7 +60,7 @@ bool MaintainCraft(RE::PlayerCharacter* player,RE::UI* ui,ULONGLONG now) {
                 if(it!=labels.labels.end()) p.outfitItems=it->second.outfitItems;
             }
             if(p.outfitItems) p=FilterExchangeSlots(p,{});
-            (void)ResolvePresetSlots(p);
+            (void)ResolvePresetSlots(AvailableEquipmentPreset(p));
             if(ClothingPreset(p).items.empty()) throw std::runtime_error("Assigned outfit has no armor");
             // Recheck after disk work. A menu that opened and closed also invalidates the attempt.
             if(ui->IsMenuOpen(RE::CraftingMenu::MENU_NAME) || craftMenuSerial.load()!=craft.menuSerial || OStimBlocksAutomatic(player))

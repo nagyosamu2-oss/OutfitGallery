@@ -1,0 +1,11 @@
+OutfitGallery 2.2.6-ui-test1 / metadata 2.2.6.2 / 2026-11-19
+MSVC Release build succeeded. 60/60 selected tests passed.
+Known TrashVirtualPathSafety environment fixture excluded, NOT passing.
+Three SKSE exports and ZIP/member/DLL integrity verified.
+Close Options once per gallery opening; preserve settings and same-open interaction.
+Replace favorite badge filled background with star-only semi-transparent outline shadow.
+Equipment/missing-item/cleanup/serialization code unchanged from missing-item-test1.
+User confirmed previous trial can equip despite absent base items.
+New UI appearance and reopen behavior await runtime validation.
+Public 2.2.5 retained. No install, GitHub sync, publishing or upload performed.
+DLL SHA256: 355868DE52EC32FB9601743B3CABA344411BBDE87A72E3C40F5A8B62E727214C

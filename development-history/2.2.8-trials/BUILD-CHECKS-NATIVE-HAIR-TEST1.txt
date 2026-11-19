@@ -1,0 +1,19 @@
+Outfit Gallery2.2.7-native-hair-test1 / metadata2.2.7.3 / 2026-11-19
+Final MSVC Release build succeeded. 64/64 selected automated tests passed.
+Known TrashVirtualPathSafety junction fixture excluded; not counted passing.
+New policy test also EXECUTED the exact x64 entry/continuation scheme against
+a synthetic function in the test process, verifying both trailing arguments,
+return value and scoped flag restoration. No real-game success claimed.
+Three SKSE exports and trial version string verified.
+Private FSMP bridge is EXPERIMENTAL: game1.6.1170, exact installed FSMP4.1.1
+AE AVX image, measured code hash, player only. Unknown images/modified target
+decline the bridge. Existing FSMP original function and its activity gates run.
+No FSMP settings, actual equipment, inventory, actor stats or PDB files modified.
+No FSMP DLL/PDB/user files included. Runtime ZIP carries only our DLL/docs/licenses.
+Hair staging fixes, equipment, managed cleanup and enchantment source unchanged.
+Confirmed checkpoint runtime/source bytes and DLL hash verified unchanged.
+Runtime/source ZIP CRC/member-byte/DLL equality verified by packaging script.
+In-game physics outcome and lifecycle checks remain for the user's test with
+FSMP wig-disables-native-hair setting ON; OFF is not a validating comparison.
+No deployment, GitHub sync or publishing performed.
+DLL SHA256: AA593E57299005A8715383CF7692D61B402CD42990F4EDE33297D01FDA7ADC94

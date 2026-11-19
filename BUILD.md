@@ -1,4 +1,4 @@
-# Building Outfit Gallery 2.2.5
+# Building Outfit Gallery 2.2.7
 
 Use Windows x64, Visual Studio 2022 C++ tools (tested MSVC 19.44), CMake 3.24+, Ninja and C++23 support.
 
@@ -32,6 +32,6 @@ The release uses the existing CommonLib 10.1.0 static bundle used for the verifi
 
 2.1.0 also exercises shared-name, CamelCase, numbered/color variants, slot replacement and equipment-tools visibility persistence. These software tests do not simulate actual Skyrim equipment or preview rendering.
 
-## Release validation environment (2.2.5)
+## Release validation environment (2.2.7)
 
-The selected release check runs 59 tests. TrashVirtualPathSafety is excluded because its junction fixture is not supported in the current workspace environment; this is an exclusion, not a passing result. Create a writable TEMP directory before running persistence tests. The exact native code is the confirmed enchant-test6 candidate, apart from version/footer/log labels.
+The selected release check runs 62 tests. TrashVirtualPathSafety is excluded because its junction fixture is not supported in the current workspace environment; this is an exclusion, not a passing result. Create a writable TEMP directory before running persistence tests. The exact native code is the enchant-fallback-test1 candidate, apart from version/footer/log labels.

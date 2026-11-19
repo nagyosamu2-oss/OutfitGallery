@@ -1,0 +1,11 @@
+OutfitGallery 2.2.6-enchant-fallback-test1 / metadata 2.2.6.9 / 2026-11-19
+MSVC Release build succeeded. 62/62 selected tests passed.
+Known TrashVirtualPathSafety environment fixture excluded, NOT passing.
+Three SKSE exports and ZIP/member/DLL integrity verified.
+Only typed missing enchantment references permit a local unenchanted fallback.
+Smithing/source recipes remain intact; owned-instance path unchanged.
+Normalize verification consistently; preserve ordinary verified cleanup and identity rules.
+No changes to co-save, settings, ledger, ownership or installed data.
+New fallback engine behavior awaits runtime confirmation. Public 2.2.6 retained.
+No install, GitHub sync, publishing or upload performed.
+DLL SHA256: D45349CD6D395239295FD10C95A76DDB447DC2A929FC6DA7FE93222F134D7B8C

@@ -32,5 +32,16 @@ int main() {
     externalTranslation=Translation::Parse(R"({"schema":1,"strings":{"Registered smithing item is missing; enable Add missing base items to reproduce it":"TEST MISSING SMITHING"}})",Translation::Keys());
     if(StatusText(missingSmithing)!="TEST MISSING SMITHING") return 8;
     externalTranslation={};if(StatusText(missingSmithing)!=missingSmithing) return 9;
+    const std::string enchantMissing="Cannot reproduce saved enchantment; required plugin is not active: SCBarrels.esp";
+    language=0;if(StatusText(enchantMissing)!=enchantMissing)return 10;
+    language=1;if(StatusText(enchantMissing)!="付呪を再現できません。必要なプラグインが有効ではありません：SCBarrels.esp")return 11;
+    if(StatusText("Saved enchantment reference is missing or changed: Armor.esp / 000800")!="保存した付呪の参照先が見つからないか変更されています：Armor.esp / 000800")return 12;
+    if(StatusText("Sample requires a plugin that is not active")!="保存した付呪に必要なプラグインが有効ではありません。")return 13;
+    language=2;externalTranslation=Translation::Parse(R"({"schema":1,"strings":{"Cannot reproduce saved enchantment; required plugin is not active: ":"MISSING: "}})",Translation::Keys());
+    if(StatusText(enchantMissing)!="MISSING: SCBarrels.esp")return 14;
+    externalTranslation={};if(StatusText(enchantMissing)!=enchantMissing)return 15;
+    const std::string omitted="Outfit restored: A Skipped unavailable equipment: Ring Saved enchantment omitted: Boots [SCBarrels.esp]";
+    language=0;if(StatusText(omitted)!=omitted)return 16;
+    language=1;if(StatusText(omitted)!="装備の復元を確認しました：A 見つからない装備を除外しました：Ring 保存した付呪を省いて装備しました：Boots [SCBarrels.esp]")return 17;
     std::cout<<"Enchantment notices: English, Japanese, external and fallback passed\n";
 }

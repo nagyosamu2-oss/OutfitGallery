@@ -1,0 +1,10 @@
+OutfitGallery 2.2.6-enchant-message-test1 / metadata 2.2.6.8 / 2026-11-19
+MSVC Release build succeeded. 61/61 selected tests passed.
+Known TrashVirtualPathSafety environment fixture excluded, NOT passing.
+Three SKSE exports and ZIP/member/DLL integrity verified.
+Name missing enchantment provider and translate reference errors.
+No recipe, factory, cleanup, load-order or saved-data change.
+Source preset and log inspected read-only; SCBarrels effects explain the failure.
+Native UI display awaits confirmation. Public 2.2.6 retained.
+No install, GitHub sync, publishing or upload performed.
+DLL SHA256: B3060697B65E5CAE695165EB09BD87CE9178A1AFDE69FE43472E3B692DF85ED2

@@ -6,6 +6,8 @@
 #include "ManagedItems.h"
 #include "UpgradeReproduction.h"
 #include "MissingUpgradePolicy.h"
+#include "AvailableEquipment.h"
+#include "MissingEnchantmentPolicy.h"
 #include "FollowerOutfits.h"
 #include "EnchantmentSignature.h"
 #include "PortableEnchantment.h"
@@ -49,6 +51,38 @@ std::vector<std::string> ResolvePresetDisplayNames(const Preset& p,std::vector<b
         result.push_back(std::move(name));
     }
     return result;
+}
+Preset AvailableEnchantmentPreset(RE::Actor* actor,const Preset& source,bool prefer,std::string* omitted) {
+    if(!prefer || !RestoreSavedUpgrades())return source;
+    if(!actor || !RE::TESDataHandler::GetSingleton())throw std::runtime_error("Equipment manager unavailable");
+    return WithoutMissingEnchantments(source,[&](const Item& item) {
+        auto* form=ResolveItem(item);auto* object=form?form->As<RE::TESBoundObject>():nullptr;
+        // A usable identified original/retained reproduction needs no factory.
+        if(object && FindSmithingInstance(actor,object,item.smithing,item.enchantment))return;
+        try{ValidatePortableEnchantmentReferences(item.enchantment);}
+        catch(const MissingEnchantmentReference& e) {
+            SKSE::log::warn("OG-ENCHANT fallback without saved enchantment item={} plugin={} reason={}",item.name,item.plugin,e.what());throw;
+        }
+    },omitted);
+}
+Preset AvailableEquipmentPreset(const Preset& source,std::string* skipped) {
+    if(!RE::TESDataHandler::GetSingleton())throw std::runtime_error("Equipment manager unavailable");
+    return FilterUnavailableEquipment(source,[&](const Item& item)->std::optional<std::uint32_t> {
+        auto* form=ResolveItem(item);
+        if(!form) {
+            // ResolveItem also rejects changed record types; do not silently
+            // classify an existing incompatible record as a removed item.
+            if(RE::TESDataHandler::GetSingleton()->LookupForm(item.localID,item.plugin))
+                throw std::runtime_error("Missing or changed mod item: "+item.plugin+" / "+item.name);
+            SKSE::log::info("OG-MISSING skip plugin={} localID={:06X} name={}",item.plugin,item.localID,item.name);return std::nullopt;
+        }
+        auto* armor=form->As<RE::TESObjectARMO>();
+        if(!armor)throw std::runtime_error("Missing or changed mod item: "+item.plugin+" / "+item.name);
+        const auto mask=armor->GetSlotMask().underlying();
+        if((source.slotMask || source.accessories) && !(source.accessories && !mask) && !SlotFits(mask,source.slotMask))
+            throw std::runtime_error("Item uses unselected slots: "+item.name);
+        return mask;
+    },skipped);
 }
 std::vector<std::uint32_t> ResolvePresetSlots(const Preset& p) {
     auto* handler=RE::TESDataHandler::GetSingleton();
@@ -144,7 +178,7 @@ std::vector<std::uint32_t> WornArmorIDs(RE::Actor* actor) {
 }
 }
 bool AccessoriesRemoved(RE::Actor* actor,const Preset& p) {
-    const auto wanted=AccessoryIDs(ClothingPreset(p)), worn=WornArmorIDs(actor);
+    const auto wanted=AccessoryIDs(AvailableEquipmentPreset(p)), worn=WornArmorIDs(actor);
     return std::none_of(wanted.begin(),wanted.end(),[&](auto id){return std::find(worn.begin(),worn.end(),id)!=worn.end();});
 }
 std::vector<RemovalItem> SnapshotRemovalEquipment(RE::Actor* actor) {
@@ -207,7 +241,7 @@ bool EquipmentIDsRemoved(RE::Actor* actor,const std::vector<std::uint32_t>& ids)
     return std::none_of(ids.begin(),ids.end(),[&](auto id){return std::find(worn.begin(),worn.end(),id)!=worn.end();});
 }
 bool RemoveEquippedAccessories(RE::Actor* actor,const Preset& p) {
-    return RemoveEquipmentIDs(actor,AccessoryIDs(ClothingPreset(p)));
+    return RemoveEquipmentIDs(actor,AccessoryIDs(AvailableEquipmentPreset(p)));
 }
 bool RemoveEquipmentIDs(RE::Actor* actor,const std::vector<std::uint32_t>& wanted) {
 
@@ -279,13 +313,16 @@ std::string ApplyEquipment(RE::Actor* actor, const Preset& source, bool addMissi
     CleanupTiming timing{"apply"};
     GALLERY_DIAG("OG-DIAG apply preset={} photo={} actor={:08X} compatibility={} addMissing={} preferEnchanted={}",source.name,source.photo,actor?actor->GetFormID():0,compatibility,addMissing,preferEnchanted);
     if(source.exchangeSlots && !*source.exchangeSlots && source.exchangeSlotless.empty()) return "No exchange slots selected. Equipment unchanged.";
-    auto p=ClothingPreset(source);
+    std::string skipped;
+    auto p=AvailableEquipmentPreset(source,&skipped);
     const bool reproduce=RestoreSavedUpgrades();
     if(p.items.empty()) throw std::runtime_error("No equipped armor or clothing to save");
     BeginManagedAddition(actor);
     auto* manager = RE::ActorEquipManager::GetSingleton();
     auto* handler = RE::TESDataHandler::GetSingleton();
     if (!actor || !manager || !handler) throw std::runtime_error("Equipment manager unavailable");
+    std::string omitted;
+    p=AvailableEnchantmentPreset(actor,p,preferEnchanted,&omitted);
     if(!reproduce)for(auto& item:p.items)if(ValidSmithing(item.smithing.health) || !item.enchantment.empty()) {
         auto* form=ResolveItem(item);auto* object=form?form->As<RE::TESBoundObject>():nullptr;
         // Preserve a known owned original or retained/generated copy. Only a
@@ -426,7 +463,7 @@ std::string ApplyEquipment(RE::Actor* actor, const Preset& source, bool addMissi
     actor->Update3DModel();
     if(actor->GetFormID()!=0x14)
         GALLERY_DIAG("OG-ARRIVAL-DIAG og-apply-return tick={} actor={:08X}",GetTickCount64(),actor->GetFormID());
-    return "Equip requests sent: " + p.name + ". Check the preview."+(missing.empty()?std::string{}:" Registered enchantment not restored: "+missing);
+    return "Equip requests sent: " + p.name + ". Check the preview."+(missing.empty()?std::string{}:" Registered enchantment not restored: "+missing)+(skipped.empty()?std::string{}:" Skipped unavailable equipment: "+skipped)+(omitted.empty()?std::string{}:" Saved enchantment omitted: "+omitted);
 }
 }
 

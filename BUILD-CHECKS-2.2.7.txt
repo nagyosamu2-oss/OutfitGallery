@@ -1,0 +1,14 @@
+Outfit Gallery 2.2.7 / DLL metadata 2.2.7.0 / 2026-11-19
+Release MSVC build completed. 62/62 selected automated tests passed.
+TrashVirtualPathSafety excluded due to known junction-fixture environment limitation;
+not counted as passing. Three SKSE exports verified.
+Native code equals confirmed enchant-fallback-test1 except main version labels.
+CMake project version only changed. Tests/translations/dependencies/INI unchanged.
+Runtime/source ZIP CRC, member bytes, complete source equality and exact DLL verified.
+Runtime includes DLL, default INI, documentation, translation template and licenses.
+No user presets/photos/settings/saves/local logs/PDB included.
+User and log verification evidence recorded in VALIDATION.md; final DLL needs smoke check.
+Unlogged external generated-item retention report is not claimed fixed.
+Previous 2.2.6/2.2.5/2.2.4 and checkpoint retained unchanged.
+No installed-file overwrite, GitHub sync, publishing or upload performed.
+DLL SHA256: 8BE820F87C9DDBE20E4AF4802B0EAFBAFC4D4D5084D2BB9DA1A8515A8D9914DB

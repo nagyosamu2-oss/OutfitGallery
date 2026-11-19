@@ -250,7 +250,7 @@ void MaintainAutoOutfits(bool beforeFollowers=false) {
         }
         // All records are resolved before ApplyEquipment can change the actor.
         if(p.outfitItems) p=FilterExchangeSlots(p,{});
-            if(!autoAppearanceOnly) (void)ResolvePresetSlots(p);
+            if(!autoAppearanceOnly) (void)ResolvePresetSlots(AvailableEquipmentPreset(p));
         if(ClothingPreset(p).items.empty()) throw std::runtime_error("Assigned outfit has no armor");
         if(autoAppearanceOnly) {
             if(OStimBlocksAutomatic(player)) {autoPolicy.Block();autoStyle.Block();return;}

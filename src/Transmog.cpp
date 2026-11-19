@@ -8,6 +8,9 @@
 #include "TransmogHookChain.h"
 #include "TransmogIdentity.h"
 #include "TransmogHead.h"
+#include "TransmogHairStaging.h"
+#include "FsmpNativeHair.h"
+#include "NativeHairPhysicsPolicy.h"
 #include "TransmogSave.h"
 #include "TransmogRuntime.h"
 #include <mutex>
@@ -32,6 +35,7 @@ struct Look {
     RE::TESRace* race{};
     bool female{};
     bool tryOn{};
+    bool nativeHairVisible{};
     std::shared_ptr<const Look> beforeTryOn;
 };
 struct ActorLook {
@@ -122,6 +126,18 @@ std::uint32_t HeadArmorCoverage(RE::TESObjectARMO* armor,const Look& look) {
     }
     return result;
 }
+std::shared_ptr<const Look> WithNativeHairDecision(std::shared_ptr<Look> look) {
+    std::uint32_t headCoverage{};
+    for(auto* armor:look->armor) headCoverage|=HeadArmorCoverage(armor,*look);
+    look->nativeHairVisible=NativeHairPhysicsVisible(look->scope,headCoverage);
+    return look;
+}
+bool WantsNativeHairPhysics(std::uint32_t id) {
+    if(id!=0x14) return false; // first experimental scope: player only
+    const auto state=FindActorLook(id);
+    const auto look=state?state->look.load():nullptr;
+    return look && look->nativeHairVisible;
+}
 HeadCoverage ReadHeadCoverage(RE::InventoryChanges* changes,const Look& look) {
     HeadCoverage result;
     for(auto* armor:look.armor) result.appearance|=HeadArmorCoverage(armor,look);
@@ -133,6 +149,30 @@ HeadCoverage ReadHeadCoverage(RE::InventoryChanges* changes,const Look& look) {
         result.hidden|=HiddenHeadCoverage(slots,HeadArmorCoverage(armor,look),look.scope);
     }
     return result;
+}
+RE::TESObjectARMO* SecondaryHairOwner(unsigned slot,RE::BIPOBJECT& object,RE::TESObjectARMO* appearance,
+    const Look& look,const std::array<RE::TESObjectARMO*,32>& realItems) {
+    if(slot!=1 && slot!=11) return nullptr;
+    const auto slotBit=1u<<slot;
+    if(!(appearance->GetSlotMask().underlying()&slotBit) || !(look.scope&slotBit) ||
+       !object.item || !object.addon || !object.part || object.item!=object.addon ||
+       object.item->GetFormType()!=RE::FormType::Armature || HasAddon(appearance,object.addon)) return nullptr;
+    bool incomingFits=false;
+    for(auto* addon:appearance->armorAddons) {
+        if(!addon || !(addon->GetSlotMask().underlying()&slotBit) || !addon->IsValidRace(look.race)) continue;
+        const auto* male=addon->bipedModels[0].GetModel();
+        const auto* female=addon->bipedModels[1].GetModel();
+        incomingFits|=HasAppearanceModel(look.female,male && *male,female && *female);
+    }
+    if(!incomingFits) return nullptr;
+    RE::TESObjectARMO* owner=nullptr;
+    for(auto* worn:realItems) if(HasAddon(worn,object.addon)) {
+        if(owner && owner!=worn) return nullptr; // shared addon, ownership ambiguous
+        owner=worn;
+    }
+    if(!owner || !MayBindSecondaryHairOwner(slot,appearance->GetSlotMask().underlying(),look.scope,
+        owner->GetSlotMask().underlying(),HeadArmorCoverage(owner,look),true,true,incomingFits,false,true)) return nullptr;
+    return owner;
 }
 bool HeadPartitionRoutineAvailable() {
     // An absent ID must never resolve to the next database entry. Reuse the
@@ -405,7 +445,28 @@ void Visit(RE::InventoryChanges* changes,RE::InventoryChanges::IItemChangeVisito
     }
     for(auto* armor:current->armor) {
         if(firstPersonPass && !FirstPersonAppearanceSlots(ArmorCoverage(armor))) continue;
+        auto& hairObject=biped->objects[1];
+        auto* hairOwner=firstPersonPass?nullptr:SecondaryHairOwner(1,hairObject,armor,*current,realItems);
+        auto& longHairObject=biped->objects[11];
+        auto* longHairOwner=firstPersonPass?nullptr:SecondaryHairOwner(11,longHairObject,armor,*current,realItems);
+        const auto previousHairAddon=hairObject.addon;
+        const auto previousLongHairAddon=longHairObject.addon;
+        // The engine otherwise keeps a tied ARMA marker, even though its real
+        // owner is hidden by this look. Lending the positively identified worn
+        // ARMO lets the engine detach its shared model and stage the new hair.
+        // This guard restores an untouched marker on rejection, and never
+        // edits ARMA priorities, model pointers, clones or inventory entries.
+        SecondaryHairOwnerBinding<RE::BIPOBJECT,RE::TESForm> hairBinding(hairObject,hairOwner);
+        SecondaryHairOwnerBinding<RE::BIPOBJECT,RE::TESForm> longHairBinding(longHairObject,longHairOwner);
         const bool accepted=stageArmor(armor,race,holder,base->IsFemale());
+        if(hairOwner && (traceStages || traceFollower)) SKSE::log::info(
+            "HAIR-STAGE2 actor={:08X} slot=31 owner={:08X} previousAddon={:08X} appearance={:08X} finalAddon={:08X}",
+            state->id,hairOwner->GetFormID(),previousHairAddon?previousHairAddon->GetFormID():0,
+            armor->GetFormID(),hairObject.addon?hairObject.addon->GetFormID():0);
+        if(longHairOwner && (traceStages || traceFollower)) SKSE::log::info(
+            "HAIR-STAGE2 actor={:08X} slot=41 owner={:08X} previousAddon={:08X} appearance={:08X} finalAddon={:08X}",
+            state->id,longHairOwner->GetFormID(),previousLongHairAddon?previousLongHairAddon->GetFormID():0,
+            armor->GetFormID(),longHairObject.addon?longHairObject.addon->GetFormID():0);
         if(traceFirst) {
             SKSE::log::info("FIRSTPERSON1 actor={:08X} stage armor={:08X} accepted={}; inspect final parts, not return alone",state->id,armor->GetFormID(),accepted);
             TraceFollowerModels(*state,armor,race,base->IsFemale(),"firstperson-appearance");
@@ -502,6 +563,7 @@ bool InstallTransmog() {
     originalVisit=reinterpret_cast<VisitFn>(SKSE::GetTrampoline().write_call<5>(runtime->visitSite,Visit));
     originalMask=reinterpret_cast<MaskFn>(SKSE::GetTrampoline().write_call<5>(runtime->maskSite,HairMask));
     installed=true;
+    InstallFsmpNativeHair(WantsNativeHairPhysics);
     SKSE::log::info("RUNTIME4 transmog hooks installed on {}; hair={} renderer={}; original visitor and previous callees preserved",
         REL::Module::get().version().string(),runtime->maskModule,runtime->visitModule);
     return true;
@@ -669,7 +731,7 @@ void ApplyTransmog(const Preset& preset,RE::Actor* player,bool tryOn) {
         TraceFollowerModels(*state,skin,next->race,next->female,"skin");
         for(auto* armor:next->armor) TraceFollowerModels(*state,armor,next->race,next->female,"appearance");
     }
-    state->look.store(next); renderCoverage=0; logNextPass=true; logNextFirstPerson=true; logNextHairMask=true; Refresh(player);
+    state->look.store(WithNativeHairDecision(next)); renderCoverage=0; logNextPass=true; logNextFirstPerson=true; logNextHairMask=true; Refresh(player);
     SKSE::log::info("Transmog applied: {} armor items; inventory unchanged",next->armor.size());
 }
 bool TransmogTryOnActive(std::uint32_t actorID) {
@@ -750,7 +812,7 @@ bool RestoreRemovalAppearance(RE::Actor* actor,std::uint32_t id) {
         }
     // A foreign/new appearance is not part of this dialog session.
     for(auto* armor:current->armor) if(std::find(original->armor.begin(),original->armor.end(),armor)==original->armor.end()) return false;
-    RestoreHiddenNodes(*state);state->look.store(next);state->autoOwned=false;
+    RestoreHiddenNodes(*state);state->look.store(WithNativeHairDecision(next));state->autoOwned=false;
     state->firstPersonTraces=2;state->firstPersonStyled=false;
     renderCoverage=0;logNextPass=true;logNextFirstPerson=true;logNextHairMask=true;Refresh(actor);return true;
 }
@@ -771,7 +833,7 @@ bool RemoveAppearanceIDs(RE::Actor* actor,const std::vector<std::uint32_t>& want
     }
     // Preserve controlled scope, including an empty look: do not reveal real armor.
     RestoreHiddenNodes(*state);
-    state->look.store(next);state->autoOwned=false;
+    state->look.store(WithNativeHairDecision(next));state->autoOwned=false;
     state->firstPersonTraces=2;state->firstPersonStyled=false;
     renderCoverage=0;logNextPass=true;logNextFirstPerson=true;logNextHairMask=true;
     Refresh(actor);
@@ -880,7 +942,7 @@ static void RestorePendingTransmog() {
             }
             // Publish the exact accumulated look, not a preset-file reference.
             // Unloaded 3D will consume this state on the actor's next worn pass.
-            state->look.store(next);state->autoOwned=id!=0x14 && saved.autoOwned;
+            state->look.store(WithNativeHairDecision(next));state->autoOwned=id!=0x14 && saved.autoOwned;
             if(id==0x14) {RestorePlayerTransmogMode(saved.mode,saved.autoOwned);state->firstPersonTraces=2;}
             SKSE::log::info("TRANSMOG-SAVE1 restored actor={:08X} mode={} armor={} scope={:08X} loaded3D={}",id,saved.mode,next->armor.size(),next->scope,actor->Get3D()!=nullptr);
             Refresh(actor);

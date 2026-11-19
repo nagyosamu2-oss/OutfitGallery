@@ -1,63 +1,80 @@
-# Outfit Gallery 2.2.5
+# Outfit Gallery 2.2.8
 
-## 2.2.5 更新内容
+## 2.2.8 更新内容（2.2.5から）
 
-- 防具に付けた自作付呪をセットへ保存し、対象品を所持していない場合にも鍛冶強化と合わせて再現できるようにしました。プレイヤー・フォロワーに対応し、保存した内容はニューゲームでも利用できます。
-- 複数効果のコピー付呪にも対応します（対応条件内・最大32効果）。
-- 装備管理の付呪付き装備に「[付呪]」を表示します。
-- 「強化・付呪を再現する」を追加しました。OFFでは、不足装備を基本性能で生成します。所持品の性能や登録済みの強化・付呪情報は維持します。重ね着には影響しません。
-- 未選択のセーブで初めてギャラリーを開いた時に、再現方法を選べるようにしました。初回画面とオプションに「初回確認を省略」を追加しました。
-- 再生成時にゲームが付呪の価格指定を変更した場合でも、効果・強化度などが一致していれば再現できるようにしました。元の品と価格が異なる場合があります。
+- 通常着替えで、元のMOD・装備本体が見つからない項目を除外し、残りの装備を適用できるようにしました。除外した装備名を表示し、登録内容は維持します。全項目が見つからない場合は、現在の実際の装備を変更せず停止します。
+- 保存した自作付呪の参照先MOD・レコードが見つからない場合、その品は保存した鍛冶強化を維持し、自作付呪を省いて装備します。セットの残りも適用し、省いた品と参照先を日本語で案内します。
+- 付呪再現の参照エラーに、不足プラグイン名や参照IDを表示するようにしました。
+- オプションを開いたままギャラリーを閉じても、次に開いた時はオプションを折り畳んだメイン画面を表示します。設定値は維持します。
+- メイン画面のお気に入りマークの丸背景を外し、星の輪郭と薄い影に変更しました。
+- 整理画面の一覧・差分展開内にもお気に入りマークを追加しました。整理画面では見分けやすい丸背景付きの星を使い、右端から少し内側へ配置しています。登録・解除は保存前にも表示へ反映します。
+- 右側の表示領域をダブルクリックして、撮影用の一時停止／再開を切り替えられるようにしました。独立プレビューON／OFFの両方に対応します。左側の既存ボタンも引き続き利用できます。
 
-### 登録・再現の使い方
+- 一部のウィッグを実装備にしたまま重ね着すると、重ね着先の髪が消える問題を修正しました。31番・41番にまたがる描画情報を扱い、Painter HairとYunaの双方向の切り替えで確認しています。
+- 対応するFSMP環境では、実装備のウィッグを維持したまま、自毛を表示する重ね着でもSMPが動くように連携します。装備の付呪・防御力を維持し、FSMPの全体設定は変更しません。追加連携の対応範囲は下記を参照してください。
 
-強化・自作付呪した防具を実際に装備してセットを登録してください。既存セットでは、装備管理の「現在の装備から追加・交換」で登録内容を更新する方法も使えます。以前のセットへ付呪情報は自動追加しません。今回の試験版で保存した対応情報は引き継げます。
+### 欠落装備の除外について
 
-保存した性能を不足品へ再現する場合は、「不足している装備を追加して復元」「強化・付呪を再現する」「登録した付呪付き装備を優先する」をONにしてください。識別できる登録元の現物や、元セットに紐付く生成品・保護品を所持していれば再利用します。見つからない場合に保存情報から生成します。宝箱の元の品を移動する保管機能ではありません。
+セットの保存内容は書き換えません。元のMODを戻すと、その装備も再登録なしで再び利用できます。残る装備は、保存した強化・付呪の再現設定に従って適用します。装備確認は利用可能な項目を対象に行い、確認後は従来の条件で生成品を回収します。
 
-再現OFFは不足品の生成方法だけを切り替えます。元のMODの防具データに最初から付いている付呪は残ります。識別できる所持品や保護品の強化・付呪も取り除きません。ONに戻せば保存情報を再び利用でき、再登録は不要です。
+対象は通常着替えです。重ね着や装備管理の編集は従来の参照確認を維持します。装備本体が存在し、保存した自作付呪の参照先だけが欠ける場合は、自作付呪全体を省いて適用します。一部の効果だけを切り捨てて再構成する方式ではありません。元の登録データは維持し、提供MODを戻せば再登録なしで再現できます。識別できる所持品や元の防具データの付呪を削除することはありません。装備の種類や対象スロットの変更、付呪データの形式不正、個体識別の曖昧さなど、欠落した参照先以外のエラーは従来どおり停止します。不足品の生成には「不足している装備を追加して復元」が必要です。
 
-初回の選択と後からの再現ON／OFFは、ゲームをセーブするとそのセーブに記録されます。「初回確認を省略」は全体設定です。ONなら、未選択のセーブは最後に設定した再現方法を使います。選択済みのセーブはその回答を維持します。未選択の古いセーブへ戻ると、再度確認される場合があります。
+### ダブルクリック操作について
 
-### 加工品の扱いと対応範囲
+キャラクターが表示されている右側の領域を、動かさず左ダブルクリックしてください。2回目を離した時に切り替えます。ドラッグした場合・領域の外で離した場合・右ボタン併用時は切り替えません。左ドラッグの位置調整、右ドラッグの回転・角度調整、ホイールの距離調整は従来どおりです。
 
-生成後に追加強化・付呪した品は回収から保護し、識別できる間は元セットで再利用します。加工内容はセットへ自動反映しません。新しい性能をニューゲームでも再現したい場合は、加工品を装備して登録内容を更新してください。このMODが追跡する生成品だけを回収し、同名という理由で元の所有品を一括削除することはありません。
+このMODが停止した時間はギャラリーを閉じると再開します。他の機能が既に停止させていた時間は解除しません。今回、右側に新しい常設ボタンは追加していません。
 
-対象は防具・衣服・装飾品の常時発動／自己対象の対応付呪です。最大32効果で、効果参照・数値・形式等に検証条件があります。個別条件付きの効果、一時的な付呪などは対応外です。必ず元の装備・効果を追加したMODも必要です。通常の1～2効果、複数効果のコピー付呪、鍛冶強化との組み合わせを確認しています。効果の範囲／持続時間が0以外の種類は実機未確認です。
+### 重ね着の髪・FSMP連携について
 
-独自名称そのものや他MOD独自の個体情報の完全な保存・復元は対象外です。名前だけを変更するMODと、品を別個体へ交換するMODでは挙動が異なり、互換性は個別確認が必要です。
+ウィッグ同士の置き換えは、装備名や特定MOD名ではなく、実装備と描画パーツの対応を確認して処理します。髪以外も含む複合装備、所有関係が曖昧なもの、すべてのウィッグの互換性を保証するものではありません。
+
+自毛SMPの追加連携は、現時点では**Skyrim1.6.1170＋解析済みのFSMP4.1.1 AE AVX版、プレイヤーのみ**が対象です。FSMPの同じ4.1.1でも、SSE2・AVX2・AVX-512版は今回の連携対象に含みません。DLLの識別情報と対象処理の一致を確認できた場合に自動で有効になり、対象外や対象処理が変更された環境では、この追加連携だけを無効にします。通常の着替え・重ね着の従来の対応環境は変わりません。FSMPの導入は必須ではありません。
+
+対応環境では「ウィッグ着用時に髪の物理を無効化」がONでも、自毛を表示する重ね着中はその物理演算を維持します。ウィッグへの重ね着、解除、セーブしてゲーム再起動後のロードを確認しています。FSMPの設定ファイルや全体のON/OFF設定は書き換えません。対象外の環境で同じ停止が起きる場合は、このFSMP設定をOFFにする回避方法がありますが、隠れている自毛の演算も残る場合があります。
+
+頭装備を実際に外す処理は追加していません。自毛の髪型を別のウィッグとして生成する方式でもありません。全身の物理リセットや追加の装備切り替えを行わず、対応する物理更新中の頭部パーツ判定だけを補います。
 
 ### 更新方法
 
-Skyrimを終了し、旧版・試験版より公開版DLLが優先されるよう導入してください。通常利用にニューゲームは不要です。写真・プリセット・Library.json・設定・カスタムINIと、対になった.ess/.skseを保持してください。旧版へ戻してセットを編集・保存すると新しい付呪情報が失われる場合があるため、更新前のデータを保管してください。必須環境・対応ランタイムは従来どおりです。
+Skyrimを終了し、旧版・試験版より公開版DLLが優先されるよう導入してください。写真・プリセット・Library.json・設定・カスタムINIと、対になった.ess/.skseを保持してください。ニューゲーム・セットの再登録は不要です。必須環境・対応ランタイムは従来どおりです。
 
-## Changes in 2.2.5
 
-- Save custom armor enchantments with outfits and reproduce them together with smithing improvements when the original items are not in inventory. Supports the player and followers, including reproduction in a new game.
-- Support copied enchantments with multiple effects, within the supported format and a maximum of 32 effects.
-- Show [Enchanted] beside enchanted equipment in equipment management.
-- Add Reproduce smithing and enchantments. OFF generates missing items with base properties while preserving owned-item properties and saved recipes. Transmog is unaffected.
-- Offer a reproduction choice when first opening the gallery in a save without a recorded choice. Add Skip first-use confirmation to both that screen and Options.
-- Allow reproduction when the engine changes an enchantment's gold-value override but its effects, smithing and other required properties still match. The original and reproduced items may have different prices.
+## Changes in 2.2.8 (since 2.2.5)
 
-### Saving and reproducing equipment
+- Normal outfit changes can now skip entries whose source mod/base equipment is missing and apply the remaining equipment. Skipped items are listed, and saved outfit data is kept. If no equipment is available, the current actual equipment is left unchanged.
+- If a saved custom enchantment requires an unavailable mod or record, equip the item without that saved custom enchantment while retaining its saved smithing improvement. Apply the rest of the outfit and report the affected item/reference.
+- Include missing plugin names or reference IDs in enchantment errors, with localized notices.
+- Reopening the gallery now starts with Options collapsed, even if it was open when the gallery was closed. Setting values are preserved.
+- Replace the main gallery's circular favorite badge background with a star outline and subtle shadow.
+- Add favorite badges to organizer cards and expanded variations. The organizer uses a circular background for visibility and positions badges slightly inward from the right edge. Unsaved membership changes are reflected immediately.
+- Double-click the right-hand viewing area to pause or resume time for photos, with independent preview either ON or OFF. The existing left-hand playback button remains available.
 
-Wear the improved/custom-enchanted armor and register an outfit, or update an existing outfit through equipment management's add/replace-from-current-equipment action. Existing outfits do not acquire enchantment recipes automatically. Supported recipes already saved by the enchantment trials carry over.
+- Fix a transmog hair-disappearance case caused by secondary rendering markers spanning slots31/41. Confirmed in both directions between actual Painter Hair and Yuna appearances.
+- On the specifically supported FSMP build, keep native-hair physics active while a transmog look shows native hair over an actually equipped wig. Actual equipment, enchantments, armor rating and global FSMP settings are preserved. See the additional integration scope below.
 
-To reproduce missing equipment with its saved properties, enable Add missing base items, Reproduce smithing and enchantments, and Prefer registered enchanted items. Identified originals and tracked or protected items associated with that recipe are reused when available; otherwise, a new item is generated. This does not retrieve the original item from a chest.
+### Missing equipment
 
-Turning reproduction OFF only changes missing-item generation. Built-in enchantments on the base armor remain. Owned originals and identified protected items retain their smithing and enchantments. Saved recipes remain intact and can be used again by turning reproduction ON, without re-registration.
+Filtering only affects the current outfit application; saved presets are not rewritten. Restoring the source mod makes its equipment available again without re-registration. Remaining equipment follows the saved smithing/enchantment reproduction settings. Verification uses available entries, allowing the existing generated-item cleanup checks to proceed after a successful match.
 
-The first-use answer and later reproduction changes are recorded for the active save when you save the game. Skip first-use confirmation is global: unanswered saves use the last configured reproduction default when skipping is enabled. Saves with an existing answer retain their own choice. Loading an older unanswered save may show the prompt again.
+This applies to normal equipment changes. Transmog and equipment-editing reference checks remain unchanged. If base equipment still exists but a saved custom enchantment reference is unavailable, omit that entire saved custom enchantment for the current application. Individual effects are not selectively discarded. Keep the saved recipe so restoring the provider mod allows reproduction without re-registration. Identified owned items and enchantments built into base armor are not stripped. Changed record types, incompatible slot layouts, malformed recipes and ambiguous instance identity continue to stop application. Missing-item generation still requires Add missing base items.
 
-### Modified items and supported scope
+### Double-click controls
 
-Items further improved or enchanted after generation are protected from cleanup and reused with their originating outfit while identifiable. Their new properties do not automatically update the outfit recipe. To reproduce those properties in a new game, wear the modified item and update the outfit. Cleanup only claims tracked generated instances, never all items sharing the same base type.
+Left-double-click without dragging inside the right-hand character viewing area. The action is confirmed on the second release. Dragging, releasing outside the area, or using the right button cancels the gesture. Existing left-drag positioning, right-drag orbit/angle and mouse-wheel distance controls remain available.
 
-Supports compatible constant-effect/self-target enchantments on armor, clothing and jewelry, up to 32 effects, subject to reference, numeric and format validation. Per-effect conditions and temporary enchantments are unsupported. The original armor/effect-providing mods are still required. Single/dual effects, copied multi-effect enchantments, and smithing combinations were tested in game. Nonzero effect area/duration remain unverified in game.
+Time paused by Outfit Gallery resumes when the gallery closes. Time already paused by another feature is not released. No new permanent right-hand playback button is included in this release.
 
-Custom display names and arbitrary item data supplied by other mods are not fully preserved or reproduced. Mods that only rename an item differ from mods that replace its instance; compatibility needs individual verification.
+### Transmog hair and FSMP integration scope
+
+Wig replacement uses confirmed worn-item/addon ownership, not equipment or mod names. This does not promise compatibility with every wig, mixed body/head pieces or ambiguous shared ownership.
+
+The additional native-hair physics bridge currently supports **Skyrim1.6.1170 with the measured FSMP4.1.1 AE AVX binary, player only**. Other4.1.1 CPU variants (SSE2, AVX2 and AVX-512) are not included. It activates automatically only when the image identity and measured function code match. Unknown or modified builds disable only this additional bridge. Existing normal-equipment/transmog runtime support is unchanged, and FSMP remains optional.
+
+On that supported build, native hair can continue simulating with FSMP's Disable hair physics when there's a wig option ON while the transmog appearance shows native hair. Wig appearances, clearing transmog and a full game restart/save reload were confirmed by the user. No global FSMP configuration is rewritten. Outside the bridge's scope, turning that FSMP option OFF is an available workaround, at the possible cost of continuing physics on native hair hidden by wigs.
+
+Actual head equipment is retained with its stats. Native hair is not generated as a separate wig. No global physics reset or extra equip/unequip cycle is added; the bridge scopes its headpart activity adjustment to the existing supported physics update.
 
 ### Updating
 
-Exit Skyrim and install with priority over older/trial DLLs. No new game is required. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. Back up before updating: editing/saving an outfit in an older version may discard the new enchantment data. Requirements and the supported runtime list are unchanged.
+Exit Skyrim and install with priority over older/trial DLLs. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. No new game or outfit re-registration is required. Requirements and the supported runtime list are unchanged.

@@ -1,0 +1,16 @@
+Outfit Gallery 2.2.7-hair-test1 / DLL metadata 2.2.7.1 / 2026-11-19
+MSVC Release build completed. 63/63 selected automated tests passed.
+Known TrashVirtualPathSafety junction-fixture environment limitation excluded;
+not counted as passing. Three SKSE exports verified.
+Changes limited to secondary hair owner staging, its policy/lifecycle regression
+test, version labels, CMake test registration and trial documentation.
+Read-only live 1.6.1170 code inspection confirms tied ARMA marker priority branch.
+No new hooks or engine calls. No global ARMA priority/slot edits. No inventory
+or actual equipment modifications. No manual addon/model/clone/refcount changes.
+Normal equipment, enchantment reconstruction, generated cleanup, runtime hook
+resolver, head partition restoration and first-person styling source unchanged.
+Runtime ZIP includes DLL and trial docs/licenses; no INI/settings/presets/photos.
+Source/runtime member bytes, DLL equality and ZIP CRC verified by packaging script.
+Visual behavior, SMP, followers and other runtimes await in-game verification.
+Public 2.2.7 DLL hash checked unchanged. No deployment, GitHub sync or publishing.
+DLL SHA256: 029864D070C2EF5761FDE7A9D86DD993D392ABED69B7C1FBD76646422E8F279C

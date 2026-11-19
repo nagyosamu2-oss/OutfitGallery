@@ -1,9 +1,48 @@
-# Validation — 2.2.5
+# Validation — 2.2.8
 
-Based on user-confirmed enchant-test6. Native source differs only in main.cpp version metadata, footer and log labels. Tests, translations, integrations, recipes, identity/cleanup behavior and default INI are unchanged.
+Based on user-confirmed2.2.7-native-hair-test1 (metadata2.2.7.3). Source changes
+for this release are main.cpp version labels, CMake project version, one
+FSMP diagnostic word (trial -> build), and release documentation only.
+All functional code, tests, translations, dependencies and default INI match
+the confirmed trial. 64 selected automated checks are required by packaging.
+TrashVirtualPathSafety remains excluded for its known junction-fixture
+environment limitation and is not counted as passing.
 
-User-reported in-game confirmation across trials: single/dual and copied multi-effect custom enchantments; smithing combinations; original item reuse; missing-item reproduction; alternating outfits without observed duplicates; generated-item cleanup; modified-item protection/reuse; save/restart and new-game reproduction; equipment-management enchanted marker. Final test6 reports: skip confirmation survives restart, reproduction OFF survives save/restart, OFF generates default properties, ON restores stored recipes, protected newly enchanted items are reused in OFF, transmog unaffected, follower effects active and generated items reclaimed.
+User runtime confirmations2026-11-19:
+- Actual Painter Hair -> Yuna appearance, clear and reapply: works.
+- Actual Yuna -> Painter Hair appearance: works in hair-test2.
+- With FSMP native-hair-on-wig suppression OFF, native hair moves (workaround).
+- With that FSMP option ON, native-hair-test1 restores native-hair SMP while
+  keeping the real wig equipped; wig appearance and clear also work.
+- User explicitly confirmed save in a native-hair appearance, full game exit,
+  restart/load, native hair moving, then clear restoring the real wig.
+- Native trial log independently confirms FSMP bridge installation and
+  alternating scoped override=true/false during appearance changes.
 
-The last OFF-owned-item test specifically covered a generated item enchanted afterward and retained, rather than independently proving every original-owned-item path. The original-owned path was confirmed earlier with reproduction ON. Nonzero area/duration, every external instance-replacement mod and every runtime are not established by these tests. Gold values may differ. Final numbered DLL needs a brief load/equip/cleanup smoke check; functional changes were not introduced during release packaging.
+The FSMP bridge is limited to the measured4.1.1 AE AVX image and game1.6.1170,
+player only. Matching image metadata AND target function SHA256 are required.
+Unknown CPU variants/runtimes, altered targets or unavailable near memory
+decline only the optional bridge. The ordinary mod runtime list is unchanged.
+No claim of universal SMP or every-wig compatibility. Native continuation tests
+execute the bridge against a synthetic function, checking both trailing
+arguments, return value and scoped flag restoration; they are not game tests.
 
-59 selected automated tests; known TrashVirtualPathSafety junction-fixture limitation excluded, not counted as passing. Build/export/archive results are recorded in BUILD-CHECKS-2.2.5.txt. Trial docs are preserved in development-history/2.2.5-trials. No install, GitHub sync, publishing or upload is performed by packaging.
+Prior cumulative checks retained: missing-base equipment filtering, preserving
+saved preset data, missing-enchantment fallback preserving smithing, clear
+localized warnings and generated-item reclaim. Earlier comparison showed12/12
+equipment verifications,100 verified reclaims and three27-effect recreations
+with performanceEquivalent=true, without errors or ambiguous matches.
+
+Earlier timing samples showed no evident broad slowdown; they are manual
+override-to-restoration log intervals, not click-to-visible measurements and
+do not prove a speedup. The FSMP bridge's runtime overhead has not been timed.
+The outside generated-item retention report without a diagnostic log remains
+unresolved and is not claimed fixed. Identity/reclaim ownership rules unchanged.
+
+UI confirmations retained: Options reopening collapsed, main favorite star,
+organizer badges and double-click photo pause without extra right-side buttons.
+Some automatic/follower/crafting fallback combinations, all-missing runtime
+cases and every supported runtime/mod combination remain unverified.
+
+Packaging does not install, sync GitHub or publish/upload. Previous releases,
+both hair checkpoints and experimental archives are retained unchanged.

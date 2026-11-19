@@ -204,7 +204,7 @@ void MaintainFollowerAutoOutfits() {
                 if(p.outfitItems) p=FilterExchangeSlots(p,{});
                 p=ClothingPreset(p); // follower automation never changes weapons/spells
                 const bool appearance=FollowerTransmogMode(id);
-                if(!appearance) (void)ResolvePresetSlots(p);
+                if(!appearance) (void)ResolvePresetSlots(AvailableEquipmentPreset(p));
                 if(p.items.empty()) throw std::runtime_error("Assigned outfit has no armor");
                 if(appearance) {
                     ApplyTransmog(p,actor);SetTransmogAutoOwned(actor,true);

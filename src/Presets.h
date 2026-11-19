@@ -168,6 +168,8 @@ Preset ReadPreset(const std::filesystem::path&);
 Preset SnapshotForVerification(RE::Actor*,const Preset&);
 Preset SnapshotEquipment(RE::Actor* actor, std::uint32_t slotMask=0, bool rememberEnchanted=false, bool rememberNames=false); // game thread only; zero = full outfit
 Preset SnapshotAccessories(RE::Actor* actor, bool rememberEnchanted=false, bool rememberNames=false); // equipped armor only, union of occupied slots
+Preset AvailableEnchantmentPreset(RE::Actor*,const Preset&,bool prefer,std::string* omitted=nullptr);
+Preset AvailableEquipmentPreset(const Preset&,std::string* skipped=nullptr); // game-thread working copy only
 std::string ApplyEquipment(RE::Actor* actor, const Preset&, bool addMissing, bool preferEnchanted=false,
     const std::function<bool()>& mayMutate={}); // game thread only; optional crafting deadline
 bool RemoveEquippedAccessories(RE::Actor*,const Preset&); // game-thread manual toggle only

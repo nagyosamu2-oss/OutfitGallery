@@ -1,0 +1,11 @@
+OutfitGallery 2.2.6-preview-test1 / metadata 2.2.6.5 / 2026-11-19
+MSVC Release build succeeded. 61/61 selected tests passed.
+Known TrashVirtualPathSafety environment fixture excluded, NOT passing.
+Three SKSE exports and ZIP/member/DLL integrity verified.
+Shared playback button in toolbar and preview image top-left child, both preview modes.
+Double-click gesture commits on release and cancels on drag/outside/right/disabled.
+Existing camera gestures and game-thread PhotoPause ownership unchanged.
+New gesture tests and existing freeze ownership tests passed; native runtime check pending.
+Equipment, cleanup, settings and serialization unchanged from ui-test3.
+Public 2.2.5 retained. No install, GitHub sync, publishing or upload performed.
+DLL SHA256: 4B211D4385A8C0374239D02CEA6FB03F176598B9ABD7EB669C0707760D20B81F

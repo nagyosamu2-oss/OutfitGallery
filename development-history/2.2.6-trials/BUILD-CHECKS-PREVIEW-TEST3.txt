@@ -1,0 +1,10 @@
+OutfitGallery 2.2.6-preview-test3 / metadata 2.2.6.7 / 2026-11-19
+MSVC Release build succeeded. 61/61 selected tests passed.
+Known TrashVirtualPathSafety environment fixture excluded, NOT passing.
+Three SKSE exports and ZIP/member/DLL integrity verified.
+Remove right playback widgets and reserved band; restore original image layout.
+Keep verified double-click gesture and original left toolbar button unchanged.
+61 selected tests retained. User confirmed prior double-click usability.
+Current numbered layout rebuild awaits runtime smoke check.
+Public 2.2.5 retained. No install, GitHub sync, publishing or upload performed.
+DLL SHA256: 92D8637213EA161795DAFBD10C3D579021906D939343862DFEF9845B36392AB9

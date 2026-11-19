@@ -39,6 +39,7 @@
 #include "ActivePluginLookup.h"
 #include "StudioSafety.h"
 #include "PhotoPause.h"
+#include "PreviewPauseGesture.h"
 #include "StudioMovement.h"
 #include "HoldButton.h"
 #include "HotkeyChord.h"
@@ -55,7 +56,7 @@
 
 using namespace REL::literals;
 SKSEPluginInfo(
-    .Version = "2.2.5.0"_v,
+    .Version = "2.2.8.0"_v,
     .Name = "OutfitGallery",
     .Author = "Outfit Gallery contributors",
     // SKSE's final component is the store identifier: GOG is 1, not 0.
@@ -529,14 +530,17 @@ void VerifyEquipment(bool immediate=false) {
             }
             return;
         }
-        const auto actual=SnapshotForVerification(actor.get(),verificationTarget);
-        if(SameEquipment(verificationTarget,actual)) {
+        std::string skipped;
+        std::string omitted;
+        const auto available=AvailableEnchantmentPreset(actor.get(),AvailableEquipmentPreset(verificationTarget,&skipped),verificationPrefer,&omitted);
+        const auto actual=SnapshotForVerification(actor.get(),available);
+        if(SameEquipment(available,actual)) {
             verificationTicks=0;
             GALLERY_DIAG("OG-DIAG verify matched preset={} actor={:08X}; cleanup allowed",verificationTarget.name,actor->GetFormID());
             ReclaimManagedItems(actor.get());
             RefreshFollowerOutfit(actor.get());
-            if(verificationPrefer) enchantNotice=VerifyPreferredEquipment(actor.get(),verificationTarget);
-            SetStatus("Outfit restored: "+verificationTarget.name+enchantNotice);
+            if(verificationPrefer) enchantNotice=VerifyPreferredEquipment(actor.get(),available);
+            SetStatus("Outfit restored: "+verificationTarget.name+enchantNotice+(skipped.empty()?std::string{}:" Skipped unavailable equipment: "+skipped)+(omitted.empty()?std::string{}:" Saved enchantment omitted: "+omitted));
             AutoVerificationDone(true);
         } else if(due) {
             verificationTicks=0;
@@ -723,6 +727,7 @@ void Tick() {
                 if(p.items.empty()) {SetStatus("No equipment selected. Equipment unchanged."); return;}
             } else if(p.exchangeSlots) {
                 if(!*p.exchangeSlots && p.exchangeSlotless.empty()) {SetStatus("No exchange slots selected. Equipment unchanged."); return;}
+                p=AvailableEquipmentPreset(p);
                 p=FilterExchangeSlots(p,ResolvePresetSlots(p));
             }
             ClearActorTransmog(subject.get());
@@ -894,6 +899,26 @@ void RenderCameraSettings() {
 
 }
 void DrawColumnCountIcon(float buttonHeight);
+void RenderPhotoPauseButton(const char* id,float side) {
+    auto* draw=UI::GetWindowDrawList();
+    const auto color=UI::GetColorU32(UI::ImGuiCol_Text);
+    const bool frozen=photoTimeFrozen.load(), owned=photoPauseOwned.load();
+    UI::BeginDisabled(frozen && !owned);
+    // Keep the action visible in every theme and preserve state colors on hover/press.
+    UI::PushStyleColor(UI::ImGuiCol_Button,frozen ? UI::ImVec4{.55f,.43f,.19f,1.f} : UI::ImVec4{.16f,.36f,.56f,1.f});
+    UI::PushStyleColor(UI::ImGuiCol_ButtonHovered,frozen ? UI::ImVec4{.65f,.51f,.23f,1.f} : UI::ImVec4{.21f,.46f,.70f,1.f});
+    UI::PushStyleColor(UI::ImGuiCol_ButtonActive,frozen ? UI::ImVec4{.48f,.36f,.15f,1.f} : UI::ImVec4{.12f,.29f,.47f,1.f});
+    if(UI::Button(id,{side,side})) photoPauseRequested=true;
+    UI::PopStyleColor(3);
+    const auto pauseMin=UI::GetItemRectMin();
+    if(frozen) {
+        UI::ImDrawListManager::AddTriangleFilled(draw,{pauseMin.x+side*.35f,pauseMin.y+side*.23f},{pauseMin.x+side*.77f,pauseMin.y+side*.50f},{pauseMin.x+side*.35f,pauseMin.y+side*.77f},color);
+    } else {
+        for(float x:{.29f,.57f}) UI::ImDrawListManager::AddRectFilled(draw,{pauseMin.x+side*x,pauseMin.y+side*.25f},{pauseMin.x+side*(x+.14f),pauseMin.y+side*.75f},color,0,0);
+    }
+    UI::EndDisabled();
+    if(UI::IsItemHovered(UI::ImGuiHoveredFlags_AllowWhenDisabled)) UI::SetTooltip("%s",Tr(frozen && !owned?"Time is already paused by another feature.":frozen?"Resume game. Closing the gallery also resumes time.":"Pause game for photos. Camera and gallery controls remain available."));
+}
 void RenderCameraSlots(bool retakeColumns=false) {
     UI::BeginDisabled(saveBusy);
     // A font-independent settings toggle keeps the toolbar compact in both languages.
@@ -933,22 +958,7 @@ void RenderCameraSlots(bool retakeColumns=false) {
     }
     // Font-independent play/pause glyph, next to camera preset 7.
     if(UI::GetWindowPos().x+UI::GetWindowWidth()-UI::GetStyle()->WindowPadding.x-UI::GetItemRectMax().x>side+UI::GetStyle()->ItemSpacing.x) UI::SameLine();
-    const bool frozen=photoTimeFrozen.load(), owned=photoPauseOwned.load();
-    UI::BeginDisabled(frozen && !owned);
-    // Keep the action visible in every theme and preserve state colors on hover/press.
-    UI::PushStyleColor(UI::ImGuiCol_Button,frozen ? UI::ImVec4{.55f,.43f,.19f,1.f} : UI::ImVec4{.16f,.36f,.56f,1.f});
-    UI::PushStyleColor(UI::ImGuiCol_ButtonHovered,frozen ? UI::ImVec4{.65f,.51f,.23f,1.f} : UI::ImVec4{.21f,.46f,.70f,1.f});
-    UI::PushStyleColor(UI::ImGuiCol_ButtonActive,frozen ? UI::ImVec4{.48f,.36f,.15f,1.f} : UI::ImVec4{.12f,.29f,.47f,1.f});
-    if(UI::Button("##photoPause",{side,side})) photoPauseRequested=true;
-    UI::PopStyleColor(3);
-    const auto pauseMin=UI::GetItemRectMin();
-    if(frozen) {
-        UI::ImDrawListManager::AddTriangleFilled(draw,{pauseMin.x+side*.35f,pauseMin.y+side*.23f},{pauseMin.x+side*.77f,pauseMin.y+side*.50f},{pauseMin.x+side*.35f,pauseMin.y+side*.77f},color);
-    } else {
-        for(float x:{.29f,.57f}) UI::ImDrawListManager::AddRectFilled(draw,{pauseMin.x+side*x,pauseMin.y+side*.25f},{pauseMin.x+side*(x+.14f),pauseMin.y+side*.75f},color,0,0);
-    }
-    UI::EndDisabled();
-    if(UI::IsItemHovered(UI::ImGuiHoveredFlags_AllowWhenDisabled)) UI::SetTooltip("%s",Tr(frozen && !owned?"Time is already paused by another feature.":frozen?"Resume game. Closing the gallery also resumes time.":"Pause game for photos. Camera and gallery controls remain available."));
+    RenderPhotoPauseButton("##photoPause",side);
     if(retakeColumns) {
         const float width=side+20.f;
         const auto* toolbarStyle=UI::GetStyle();
@@ -1276,13 +1286,19 @@ void __stdcall RenderStudio() {
             UI::TextWrapped(Tr("Enable Add missing base items to restore unowned items. Conflicting worn armor is removed as a whole, including wigs or clothing using multiple slots."));
             UI::TextWrapped(Tr("Drag inside the camera frame to move the subject. Use the wheel to change distance."));
             UI::TextWrapped(Tr("Right-drag horizontally to orbit; vertically to look up or down."));
+            UI::TextWrapped("%s",Tr("Double-click the preview to pause or resume. Drag to adjust the camera."));
             if(UI::Button(Label("Close"))) helpOpen=false;
         }
         UI::End();
         if(RawPadPressed(8192)) helpOpen=false;
     }
     if(autoPanel) {RenderAutoOutfitPanel(screen); if(!opened || UI::IsKeyPressed(UI::ImGuiKey_Escape,false)) command=2; return;}
+    static PreviewPauseGesture previewPauseGesture;
+    static unsigned previewPauseSerial{};static bool previousPreviewMode{};
     const bool preview=detachedPreview.load();
+    if(previewPauseSerial!=studioOpenSerial.load() || preview!=previousPreviewMode) {
+        previewPauseGesture.Reset();previewPauseSerial=studioOpenSerial.load();previousPreviewMode=preview;
+    }
     bool previewOpen=true;
     static UI::ImVec2 lastScreen{};
     if(lastScreen.x!=screen.x || lastScreen.y!=screen.y) {resetPreviewRect=true; lastScreen=screen;}
@@ -1326,6 +1342,11 @@ void __stdcall RenderStudio() {
             mouseScale=screen.x*.45f/std::max(1.f,imageSize.x);
         }
         UI::InvisibleButton("##pan",{std::max(1.f,imageSize.x),std::max(1.f,imageSize.y)},UI::ImGuiButtonFlags_MouseButtonLeft|UI::ImGuiButtonFlags_MouseButtonRight);
+        if(previewPauseGesture.Update(!saveBusy && !helpOpen && !bindingMode,
+            UI::IsItemHovered(),UI::IsMouseClicked(0),UI::IsMouseDoubleClicked(0),
+            UI::IsMouseDragging(0),UI::IsMouseReleased(0),UI::IsMouseDown(1))) {
+            if(!photoTimeFrozen.load() || photoPauseOwned.load())photoPauseRequested=true;
+        }
         if(portraitThumbnails && !saveBusy && thumbnailVisibleWidth<1.f) {
             const auto a=UI::GetItemRectMin(), b=UI::GetItemRectMax();
             const float inset=(b.x-a.x)*(1.f-thumbnailVisibleWidth)*.5f;
@@ -1355,7 +1376,7 @@ void __stdcall RenderStudio() {
             }
             if(changed) settingsChangedAt=GetTickCount64();
         }
-    }
+    } else previewPauseGesture.Reset();
     UI::End(); UI::PopStyleVar();
     if(preview && !previewOpen && !saveBusy) {detachedPreview=false; previewSettled=0; settingsChangedAt=GetTickCount64();}
     auto* draw = UI::GetForegroundDrawList();
@@ -1366,7 +1387,7 @@ void __stdcall RenderStudio() {
 void __stdcall RenderSettings() {
     ProcessCapturedHotkey();
     RenderHotkeys();
-    UI::TextUnformatted("Outfit Gallery 2.2.5");
+    UI::TextUnformatted("Outfit Gallery 2.2.8");
     UI::TextWrapped(Tr("Close this menu and press the configured hotkey (default F8) while standing in a safe open area."));
     UI::TextUnformatted(Tr("F9 in the studio saves a photo and equipment. Click a preset photo to apply."));
     UI::Text(Tr("SmoothCam API: %s / TDM API: %s"), smooth ? "ready" : "not available", tdm ? "ready" : "not available");
@@ -1538,7 +1559,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     spdlog::set_default_logger(logger);
     spdlog::set_level(spdlog::level::info);
     spdlog::flush_on(spdlog::level::info);
-    SKSE::log::info("OutfitGallery release=2.2.5; equipment acquisition, random try-on, customization and reroll; 2.0.1 compatibility fixes retained");
+    SKSE::log::info("OutfitGallery release=2.2.8; equipment acquisition, random try-on, customization and reroll; 2.0.1 compatibility fixes retained");
     const auto runtime=skse->RuntimeVersion();
     const auto supported=SKSEPlugin_Version.GetRuntimeCompatibility().GetCompatibleRuntimeVersions();
     if(std::none_of(supported.begin(),supported.end(),[&](const auto& version){return static_cast<REL::Version>(version)==runtime;})) {
@@ -1553,8 +1574,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     Gallery::saveHotkey = GetPrivateProfileIntW(L"Input", L"SaveHotkey", 67, ini.c_str());
     Gallery::captureKeys[0]=Gallery::saveHotkey;
     Gallery::gamepadHotkey = GetPrivateProfileIntW(L"Input", L"GamepadHotkey", 32, ini.c_str());
-    SKSE::log::info("OutfitGallery 2.2.5");
-    SKSE::log::info("OutfitGallery 2.2.5 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
+    SKSE::log::info("OutfitGallery 2.2.8");
+    SKSE::log::info("OutfitGallery 2.2.8 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
     return SKSE::GetMessagingInterface()->RegisterListener(Gallery::Message);
 }
 

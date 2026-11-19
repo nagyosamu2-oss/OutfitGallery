@@ -57,6 +57,13 @@ const std::map<std::string,std::string> japanese{
  {"Registered enchanted item is missing; enable Add missing base items to reproduce it","登録した付呪装備が見つかりません。再現するには「不足している装備を追加して復元」を有効にしてください。"},
  {"Enchantment reproduction supports 1 to 32 effects","付呪の再現は1～32効果に対応しています。"},
  {"Enchanted","付呪"},
+ {"Skipped unavailable equipment: ","見つからない装備を除外しました："},
+ {"No available equipment in this set. Equipment unchanged.","このセットには利用できる装備がありません。装備は変更していません。"},
+ {"Double-click the preview to pause or resume. Drag to adjust the camera.","プレビューをダブルクリックで再生・停止します。ドラッグでカメラを調整できます。"},
+ {"Cannot reproduce saved enchantment; required plugin is not active: ","付呪を再現できません。必要なプラグインが有効ではありません："},
+ {"Saved enchantment reference is missing or changed: ","保存した付呪の参照先が見つからないか変更されています："},
+ {"Sample requires a plugin that is not active","保存した付呪に必要なプラグインが有効ではありません。"},
+ {"Saved enchantment omitted: ","保存した付呪を省いて装備しました："},
  {"Choose outfit reproduction","装備の再現方法を選択"},
  {"When generating missing equipment, reproduce the saved smithing improvements and custom enchantments?","未所持の装備を生成するとき、登録した鍛冶強化・自作付呪も再現しますか？"},
  {"Owned items keep their existing properties. You can change this later in Options. Save your game to remember this choice.","所持している装備の性能は変更しません。後からオプションで変更できます。選択後にゲームをセーブすると記録されます。"},
@@ -580,6 +587,17 @@ std::string CategoryTitle(const Category& c) {
     return c.name;
 }
 std::string StatusText(const std::string& text) {
+    const std::string omittedMarker=" Saved enchantment omitted: ";
+    if(const auto pos=text.find(omittedMarker);pos!=std::string::npos)
+        return StatusText(text.substr(0,pos))+" "+Tr("Saved enchantment omitted: ")+text.substr(pos+omittedMarker.size());
+
+    for(const char* prefix:{"Cannot reproduce saved enchantment; required plugin is not active: ","Saved enchantment reference is missing or changed: "})
+        if(text.starts_with(prefix))return std::string(Tr(prefix))+text.substr(std::char_traits<char>::length(prefix));
+
+    const std::string skippedMarker=" Skipped unavailable equipment: ";
+    if(const auto pos=text.find(skippedMarker);pos!=std::string::npos)
+        return StatusText(text.substr(0,pos))+" "+Tr("Skipped unavailable equipment: ")+text.substr(pos+skippedMarker.size());
+
     // Translate our warning separately; keep item and preset names unchanged.
     constexpr std::string_view marker=" Registered enchantment not restored: ";
     if(const auto pos=text.find(marker); pos!=std::string::npos) {

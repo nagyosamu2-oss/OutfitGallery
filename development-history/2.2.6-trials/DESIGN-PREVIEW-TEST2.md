@@ -1,0 +1,3 @@
+# Preview test2
+
+Base preview-test1, metadata 2.2.6.6. Remove child overlay inside image. Detached mode reserves a side+16 UI-pixel toolbar band before computing FitPreview; anchored child button sits above image. Transparent mode has no header, so a fixed button-sized no-background window is positioned above the capture border (top minus button size minus gap). Position/size are recomputed each render; no position setting or serialization added. Existing shared button/gesture/camera/freezing logic unchanged. Old gesture test retained, 61 selected checks. Final layout and screenshot capture await in-game confirmation.

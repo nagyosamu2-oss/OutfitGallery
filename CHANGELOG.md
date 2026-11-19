@@ -1,3 +1,76 @@
+# Outfit Gallery 2.2.8
+
+## Changes in 2.2.8 (since 2.2.5)
+
+- Normal outfit changes can now skip entries whose source mod/base equipment is missing and apply the remaining equipment. Skipped items are listed, and saved outfit data is kept. If no equipment is available, the current actual equipment is left unchanged.
+- If a saved custom enchantment requires an unavailable mod or record, equip the item without that saved custom enchantment while retaining its saved smithing improvement. Apply the rest of the outfit and report the affected item/reference.
+- Include missing plugin names or reference IDs in enchantment errors, with localized notices.
+- Reopening the gallery now starts with Options collapsed, even if it was open when the gallery was closed. Setting values are preserved.
+- Replace the main gallery's circular favorite badge background with a star outline and subtle shadow.
+- Add favorite badges to organizer cards and expanded variations. The organizer uses a circular background for visibility and positions badges slightly inward from the right edge. Unsaved membership changes are reflected immediately.
+- Double-click the right-hand viewing area to pause or resume time for photos, with independent preview either ON or OFF. The existing left-hand playback button remains available.
+
+- Fix a transmog hair-disappearance case caused by secondary rendering markers spanning slots31/41. Confirmed in both directions between actual Painter Hair and Yuna appearances.
+- On the specifically supported FSMP build, keep native-hair physics active while a transmog look shows native hair over an actually equipped wig. Actual equipment, enchantments, armor rating and global FSMP settings are preserved. See the additional integration scope below.
+
+### Missing equipment
+
+Filtering only affects the current outfit application; saved presets are not rewritten. Restoring the source mod makes its equipment available again without re-registration. Remaining equipment follows the saved smithing/enchantment reproduction settings. Verification uses available entries, allowing the existing generated-item cleanup checks to proceed after a successful match.
+
+This applies to normal equipment changes. Transmog and equipment-editing reference checks remain unchanged. If base equipment still exists but a saved custom enchantment reference is unavailable, omit that entire saved custom enchantment for the current application. Individual effects are not selectively discarded. Keep the saved recipe so restoring the provider mod allows reproduction without re-registration. Identified owned items and enchantments built into base armor are not stripped. Changed record types, incompatible slot layouts, malformed recipes and ambiguous instance identity continue to stop application. Missing-item generation still requires Add missing base items.
+
+### Double-click controls
+
+Left-double-click without dragging inside the right-hand character viewing area. The action is confirmed on the second release. Dragging, releasing outside the area, or using the right button cancels the gesture. Existing left-drag positioning, right-drag orbit/angle and mouse-wheel distance controls remain available.
+
+Time paused by Outfit Gallery resumes when the gallery closes. Time already paused by another feature is not released. No new permanent right-hand playback button is included in this release.
+
+### Transmog hair and FSMP integration scope
+
+Wig replacement uses confirmed worn-item/addon ownership, not equipment or mod names. This does not promise compatibility with every wig, mixed body/head pieces or ambiguous shared ownership.
+
+The additional native-hair physics bridge currently supports **Skyrim1.6.1170 with the measured FSMP4.1.1 AE AVX binary, player only**. Other4.1.1 CPU variants (SSE2, AVX2 and AVX-512) are not included. It activates automatically only when the image identity and measured function code match. Unknown or modified builds disable only this additional bridge. Existing normal-equipment/transmog runtime support is unchanged, and FSMP remains optional.
+
+On that supported build, native hair can continue simulating with FSMP's Disable hair physics when there's a wig option ON while the transmog appearance shows native hair. Wig appearances, clearing transmog and a full game restart/save reload were confirmed by the user. No global FSMP configuration is rewritten. Outside the bridge's scope, turning that FSMP option OFF is an available workaround, at the possible cost of continuing physics on native hair hidden by wigs.
+
+Actual head equipment is retained with its stats. Native hair is not generated as a separate wig. No global physics reset or extra equip/unequip cycle is added; the bridge scopes its headpart activity adjustment to the existing supported physics update.
+
+### Updating
+
+Exit Skyrim and install with priority over older/trial DLLs. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. No new game or outfit re-registration is required. Requirements and the supported runtime list are unchanged.
+
+---
+
+# Outfit Gallery 2.2.7
+
+## Changes in 2.2.7 (since 2.2.5)
+
+- Normal outfit changes can now skip entries whose source mod/base equipment is missing and apply the remaining equipment. Skipped items are listed, and saved outfit data is kept. If no equipment is available, the current actual equipment is left unchanged.
+- If a saved custom enchantment requires an unavailable mod or record, equip the item without that saved custom enchantment while retaining its saved smithing improvement. Apply the rest of the outfit and report the affected item/reference.
+- Include missing plugin names or reference IDs in enchantment errors, with localized notices.
+- Reopening the gallery now starts with Options collapsed, even if it was open when the gallery was closed. Setting values are preserved.
+- Replace the main gallery's circular favorite badge background with a star outline and subtle shadow.
+- Add favorite badges to organizer cards and expanded variations. The organizer uses a circular background for visibility and positions badges slightly inward from the right edge. Unsaved membership changes are reflected immediately.
+- Double-click the right-hand viewing area to pause or resume time for photos, with independent preview either ON or OFF. The existing left-hand playback button remains available.
+
+### Missing equipment
+
+Filtering only affects the current outfit application; saved presets are not rewritten. Restoring the source mod makes its equipment available again without re-registration. Remaining equipment follows the saved smithing/enchantment reproduction settings. Verification uses available entries, allowing the existing generated-item cleanup checks to proceed after a successful match.
+
+This applies to normal equipment changes. Transmog and equipment-editing reference checks remain unchanged. If base equipment still exists but a saved custom enchantment reference is unavailable, omit that entire saved custom enchantment for the current application. Individual effects are not selectively discarded. Keep the saved recipe so restoring the provider mod allows reproduction without re-registration. Identified owned items and enchantments built into base armor are not stripped. Changed record types, incompatible slot layouts, malformed recipes and ambiguous instance identity continue to stop application. Missing-item generation still requires Add missing base items.
+
+### Double-click controls
+
+Left-double-click without dragging inside the right-hand character viewing area. The action is confirmed on the second release. Dragging, releasing outside the area, or using the right button cancels the gesture. Existing left-drag positioning, right-drag orbit/angle and mouse-wheel distance controls remain available.
+
+Time paused by Outfit Gallery resumes when the gallery closes. Time already paused by another feature is not released. No new permanent right-hand playback button is included in this release.
+
+### Updating
+
+Exit Skyrim and install with priority over older/trial DLLs. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. No new game or outfit re-registration is required. Requirements and the supported runtime list are unchanged.
+
+---
+
 # Outfit Gallery 2.2.5
 
 ## Changes in 2.2.5

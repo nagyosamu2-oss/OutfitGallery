@@ -3,6 +3,7 @@
 #include "EnchantmentSignature.h"
 #include "ActivePluginLookup.h"
 #include <memory>
+#include <format>
 namespace Gallery {
 namespace {using EnchantProbe::Json;
 Json FormKey(RE::TESForm* form) {
@@ -15,11 +16,11 @@ RE::TESForm* Resolve(const Json& key) {
  EnchantProbe::Key(key);
  auto* data=RE::TESDataHandler::GetSingleton();auto name=key[0].get<std::string>();
  auto* file=FindActivePlugin(data,name);
- EnchantProbe::Require(file!=nullptr,"Sample requires a plugin that is not active");
+ if(!file)throw MissingEnchantmentReference("Cannot reproduce saved enchantment; required plugin is not active: "+name,name);
  auto id=EnchantProbe::UInt(key[1]);
  EnchantProbe::Require(!file->IsLight() || id<=0xFFF,"Invalid light-plugin local ID");
  auto* form=data->LookupForm(id,name);
- EnchantProbe::Require(form && FormKey(form)==key,"Portable reference did not resolve exactly");return form;
+ if(!form || FormKey(form)!=key)throw MissingEnchantmentReference("Saved enchantment reference is missing or changed: "+name+" / "+std::format("{:06X}",id),name+" / "+std::format("{:06X}",id));return form;
 }
 Json Encode(RE::EnchantmentItem* enchant,std::uint16_t charge,bool temporary,float health) {
  EnchantProbe::Require(enchant && !enchant->effects.empty() && enchant->effects.size()<=EnchantProbe::MaxEffects,"Enchantment reproduction supports 1 to 32 effects");
@@ -35,6 +36,14 @@ Json Encode(RE::EnchantmentItem* enchant,std::uint16_t charge,bool temporary,flo
 std::string CapturePortableEnchantment(RE::ExtraDataList* extra) {
  if(!extra || !extra->HasType<RE::ExtraEnchantment>())return {};
  auto text=EnchantmentSignature(extra);auto j=EnchantProbe::ParseSignature(text);return j.dump();
+}
+void ValidatePortableEnchantmentReferences(const std::string& text) {
+ const auto signature=EnchantProbe::ParseSignature(text);
+ for(int n:{9,10})if(!signature[n].is_null())Resolve(signature[n]);
+ for(const auto& item:signature[1]) {
+  auto* base=Resolve(item[0])->As<RE::EffectSetting>();
+  EnchantProbe::Require(base!=nullptr,"Sample effect is not a magic effect");
+ }
 }
 void AttachPortableEnchantment(RE::ExtraDataList* extra,const std::string& text) {
  EnchantProbe::Require(extra && !extra->HasType<RE::ExtraEnchantment>(),"Fresh enchantment list required");

@@ -1,0 +1,10 @@
+OutfitGallery 2.2.6-preview-test2 / metadata 2.2.6.6 / 2026-11-19
+MSVC Release build succeeded. 61/61 selected tests passed.
+Known TrashVirtualPathSafety environment fixture excluded, NOT passing.
+Three SKSE exports and ZIP/member/DLL integrity verified.
+Playback button outside image: toolbar band in detached mode, above border otherwise.
+Double-click gesture, camera drag, freeze ownership, equipment and persistence unchanged.
+61 selected tests retained. User confirmed prior double-click operation.
+New layout and capture behavior await runtime confirmation.
+Public 2.2.5 retained. No install, GitHub sync, publishing or upload performed.
+DLL SHA256: DBCF7BE19824CD0DD0E2821763952597C18F0FFF387C12F92DCAFDA9EBBEF5DD

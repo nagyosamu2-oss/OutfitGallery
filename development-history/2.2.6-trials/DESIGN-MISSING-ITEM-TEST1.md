@@ -1,0 +1,7 @@
+# Missing-base-item filtering trial
+
+Base public 2.2.5. FilterUnavailableEquipment uses a resolver to omit absent armor base forms from a working copy only; keeps recipes and registered source. Wrong types and invalid surviving slot layouts throw. All missing/legacy-only outfits throw before inventory mutation. Accessory scope is reduced to surviving masks only when entries were missing; slotless survivors remain present.
+
+AvailableEquipmentPreset resolves on game thread. ApplyEquipment uses it before preparation. Normal accessory toggle/removal verification uses the same subset. Normal post-equip verification resolves the available subset before comparing, so missing entries do not prevent verified cleanup; final status lists omitted items. Automatic player/follower/crafting preflights use the subset while keeping original target metadata. Manual exchange-slot path filters before slot selection. Transmog and preset editing remain strict. No persistent record, recipe format, identity, removal ownership or factory changes.
+
+Tests cover mixed present/missing forms, preserved source and recipes, returning plugin, scoped accessory reduction, slotless survivors, all missing and propagated type/layout failures. Native engine paths and cleanup behavior await runtime confirmation. Shared accessory-ID helpers also omit absent base forms when checking ordinary equipment removal. No save-file migration or automatic preset rewriting.

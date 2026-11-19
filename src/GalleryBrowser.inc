@@ -21,6 +21,17 @@ bool CommitLibrary(Library next) {
     catch(const std::exception& e) { SetStatus(e.what()); return false; }
 }
 
+void DrawFavoriteMark(UI::ImVec2 photoMin,UI::ImVec2 photoMax,float w,bool background=false) {
+            auto* draw=UI::GetWindowDrawList();
+            const float radius=std::clamp(w*.055f,8.f,15.f);
+            const UI::ImVec2 center{photoMax.x-radius-6.f,photoMin.y+radius+6.f};
+            if(background)UI::ImDrawListManager::AddCircleFilled(draw,center,radius+3.f,0xD0202020,20);
+            UI::ImVec2 points[10];
+            for(int k=0;k<10;++k) {const float angle=-std::numbers::pi_v<float>/2+k*std::numbers::pi_v<float>/5; const float r=k%2?radius*.43f:radius; points[k]={center.x+std::cos(angle)*r,center.y+std::sin(angle)*r};}
+            for(int k=0;k<10;++k) UI::ImDrawListManager::AddLine(draw,points[k],points[(k+1)%10],0x80000000,3.5f);
+            for(int k=0;k<10;++k) UI::ImDrawListManager::AddLine(draw,points[k],points[(k+1)%10],0xFF55DFFF,2.f);
+}
+
 #include "GalleryOrganizeUI.inc"
 
 void RenderBrowser(bool& addMissing) {
@@ -47,7 +58,9 @@ void RenderBrowser(bool& addMissing) {
     const auto variationNow=GetTickCount64();
     static bool tabsFocused{}, columnsFocused{};
     static unsigned lastOpen{};
+    static bool resetOptionsOnOpen=true;
     if(lastOpen!=studioOpenSerial.load()) {
+        resetOptionsOnOpen=true;
         variation={}; cancelVerticalUntilRelease=false;
         EndOrganizer();
         SetMissingCheckMode(false);
@@ -67,6 +80,10 @@ void RenderBrowser(bool& addMissing) {
         if(UI::Button(language==1?"実際の装備の外見に戻す":"Restore actual appearance")) command=31;
     }
     bool openEdit=false, openTab=false;
+    if(!photoRetakeActive && resetOptionsOnOpen) {
+        UI::SetNextItemOpen(false,UI::ImGuiCond_Always);
+        resetOptionsOnOpen=false;
+    }
     if(!photoRetakeActive && UI::CollapsingHeader(Label("Options"))) {
         bool compatibleUpscaling = upscalerCompatibility.load();
         if (UI::Checkbox(Label("Upscaler compatibility mode"), &compatibleUpscaling)) {
@@ -622,13 +639,7 @@ void RenderBrowser(bool& addMissing) {
         const auto mouse=UI::GetIO()->MousePos;
         const bool overMissing=flagged && mouse.x>=missingCenter.x-missingHalf && mouse.x<=missingCenter.x+missingHalf && mouse.y>=missingCenter.y-missingHalf && mouse.y<=missingCenter.y+missingHalf;
         if(!p.slotMask && !p.accessories && label!=library.labels.end() && std::find(label->second.categories.begin(),label->second.categories.end(),"favorites")!=label->second.categories.end()) {
-            auto* draw=UI::GetWindowDrawList();
-            const float radius=std::clamp(w*.055f,8.f,15.f);
-            const UI::ImVec2 center{photoMax.x-radius-6.f,photoMin.y+radius+6.f};
-            UI::ImDrawListManager::AddCircleFilled(draw,center,radius+3.f,0xD0202020,20);
-            UI::ImVec2 points[10];
-            for(int k=0;k<10;++k) {const float angle=-std::numbers::pi_v<float>/2+k*std::numbers::pi_v<float>/5; const float r=k%2?radius*.43f:radius; points[k]={center.x+std::cos(angle)*r,center.y+std::sin(angle)*r};}
-            for(int k=0;k<10;++k) UI::ImDrawListManager::AddLine(draw,points[k],points[(k+1)%10],0xFF55DFFF,2.f);
+            DrawFavoriteMark(photoMin,photoMax,w);
         }
         if(hover && !overMissing) UI::SetTooltip("%s",p.name.c_str());
         if(!photoRetakeActive && UI::IsItemClicked(1)) {contextPhoto=p.photo; strcpy_s(editName,p.name.c_str()); openEdit=true; selected=p.photo;}

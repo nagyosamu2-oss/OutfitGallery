@@ -1,0 +1,3 @@
+# UI test2
+
+Base ui-test1. Extract existing favorite-outline rendering into shared DrawFavoriteMark before organizer include, preserving main appearance exactly. Organizer reads draft membership per visible card, including variation popup choices. No JSON writes or runtime game-state access from drawing. Selected marker remains top-left; missing-item indicator keeps top-right and shifts star left. Existing category assignment/save/cancel logic is unchanged. Native diff limited to GalleryBrowser.inc, GalleryOrganizeUI.inc and main version 2.2.6.3. No new tests for drawing-only change; existing 60 selected tests retained. Runtime UI validation pending.

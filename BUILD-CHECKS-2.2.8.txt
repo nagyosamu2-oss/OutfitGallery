@@ -1,0 +1,15 @@
+Outfit Gallery 2.2.8 / DLL metadata 2.2.8.0 / 2026-11-19
+Release MSVC build completed. 64/64 selected automated tests passed.
+TrashVirtualPathSafety excluded for known junction-fixture environment limitation;
+not counted passing. Three SKSE exports and packed DLL version verified.
+Functional source/tests/dependencies/translations/default INI equal confirmed trial.
+Only release labels and one diagnostic word changed in native source.
+User confirmed native hair with FSMP option ON, wig appearances, clear, and
+save/full restart/load with native-hair physics and clear restoring actual wig.
+FSMP optional bridge: measured 4.1.1 AE AVX binary, game 1.6.1170, player only.
+Unknown image/modified code skips optional bridge. No universal SMP claim.
+Runtime/source ZIP CRC, exact members and member bytes verified.
+No user presets/photos/settings/saves/logs, FSMP DLL/PDB, or build outputs bundled.
+Unlogged external generated-item retention report is not claimed fixed.
+All existing ZIP archives retained unchanged. No deployment/sync/upload performed.
+DLL SHA256: D4152F66D8443C83FFA0FC604545EA3D3B4076C941B36587DDCE977212318358
