@@ -1,11 +1,11 @@
 // Renderer-only panel. No engine pointers, no game mutations.
 const char* AutoPlaceLabel(unsigned n) {
-    static constexpr std::array<const char*,28> labels{"Default","Town / City","Player home","Inn","Combat base","Night","Rain","Snow","Dungeon","Temple","Swimming","Fort Dawnguard","College of Winterhold","Dark Brotherhood sanctuaries","Jorrvaskr","Bards College","Ragged Flagon","Blue Palace","Combat: Melee","Combat: Magic","Combat: Archery","Combat: Unarmed","Sneaking","Smithing (test)","Alchemy (test)","Enchanting (test)","Shop","Sleeping"};
+    static constexpr std::array<const char*,30> labels{"Default","Town / City","Player home","Inn","Combat base","Night","Rain","Snow","Dungeon","Temple","Swimming","Fort Dawnguard","College of Winterhold","Dark Brotherhood sanctuaries","Jorrvaskr","Bards College","Ragged Flagon","Blue Palace","Combat: Melee","Combat: Magic","Combat: Archery","Combat: Unarmed","Sneaking","Smithing (test)","Alchemy (test)","Enchanting (test)","Shop","Sleeping","Cold region","Cold exposure"};
     return n<labels.size()?labels[n]:"Default";
 }
 // Presentation order only: saved slot IDs and policy priority remain unchanged.
-constexpr std::array<unsigned,28> AutoDisplayOrder{0,1,2,3,27,26,9,8,4,18,19,20,21,22,10,5,6,7,11,12,13,14,15,16,17,23,24,25};
-static_assert([] {std::array<bool,28> seen{};for(auto slot:AutoDisplayOrder){if(slot>=seen.size() || seen[slot]) return false;seen[slot]=true;}return true;}());
+constexpr std::array<unsigned,30> AutoDisplayOrder{0,1,2,3,27,26,9,8,4,18,19,20,21,22,10,28,29,5,6,7,11,12,13,14,15,16,17,23,24,25};
+static_assert([] {std::array<bool,30> seen{};for(auto slot:AutoDisplayOrder){if(slot>=seen.size() || seen[slot]) return false;seen[slot]=true;}return true;}());
 const char* AutoCardLabel(unsigned slot) {
     return slot==12?"Mage College":slot==13?"Dark Brotherhood":AutoPlaceLabel(slot);
 }
@@ -44,7 +44,7 @@ bool SaveAutoOutfitPreferences(const AutoOutfitSlots& slots,int seconds,int colu
     }catch(const std::exception& e) {SetStatus(e.what()); return false;}
 }
 bool AssignAutoPhoto(unsigned slot,const std::string& photo) {
-    if((!PanelFollowerID() && !autoSlotsWritable) || !libraryWritable || slot>=28 || (PanelFollowerID() && slot>=23 && slot<=25)) return false;
+    if((!PanelFollowerID() && !autoSlotsWritable) || !libraryWritable || slot>=30 || (PanelFollowerID() && ((slot>=23 && slot<=25) || slot>=28))) return false;
     if(!photo.empty()) {
         std::scoped_lock lock(presetsMutex);
         const auto it=std::find_if(presets.begin(),presets.end(),[&](const auto& p){return p.photo==photo;});
@@ -54,7 +54,7 @@ bool AssignAutoPhoto(unsigned slot,const std::string& photo) {
             SetStatus("Assign a full outfit without slot overrides"); return false;
         }
     }
-    auto settings=PanelAutoSettings();settings.slots[slot]=photo;
+    auto settings=PanelAutoSettings();AssignAutoOutfitSlot(settings.slots,slot,photo);
     return SaveAutoOutfitPreferences(settings.slots,settings.delaySeconds,settings.columns,true);
 }
 bool SaveAutoOutfitToggles(bool enabled,bool paused,bool combat,bool playerOnly=false) {
@@ -196,7 +196,7 @@ void RenderAutoOutfitHelp(bool follower=false) {
         UI::TextWrapped("%s",Tr("Sneaking uses its own delay in Options (0-5 seconds, default 2). Combat and swimming take priority; otherwise sneaking overrides weather and locations. Empty slots keep existing rules."));
         UI::TextWrapped("%s",Tr("Styles must stay stable for 1 second, or 2 seconds for Unarmed. Attack/casting and weapon draw transitions wait. The usual delay and configured combat interval still apply. Manual changes last until combat ends."));
         UI::TextWrapped("%s",Tr("Combat styles follow the right hand; bows use either hand. Unarmed requires both hands empty. Empty style slots use Combat. Leave all four empty for the original once-per-combat behavior."));
-        UI::TextWrapped("%s",Tr("Outdoors: Snow > Rain > Night > location. Night is 20:00-06:00. Home, inn, temple and dungeon keep dedicated location rules."));
+        UI::TextWrapped("%s",Tr("Outdoors: the assigned cold rule > Snow > Rain > Night > location. Assigning one cold slot clears the other. Cold rules work with Survival Mode ON or OFF. If cold data is unavailable, normal rules continue. Player only."));
         UI::TextWrapped("%s",Tr("Empty temple/dungeon slots use Town only inside a town, otherwise Default. Overlapping locations: Home > Inn > Temple > Dungeon > Town."));
         UI::TextWrapped("%s",Tr("Player home or Inn takes priority over Town / City, then Default. Empty slots fall back; invalid assigned sets are skipped."));
         UI::TextWrapped("%s",Tr("Assigned swimming outfits override weather and locations. Combat has priority. Shallow water does not trigger swimming."));
@@ -213,7 +213,7 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
     bool panelHideAssign=panelSettings.hideAssignButtons;
     const bool panelWritable=followerID?true:Gallery::autoSlotsWritable;
     std::vector<unsigned> displayOrder;
-    for(auto slot:AutoDisplayOrder) if(!followerID || slot<23 || slot>25) displayOrder.push_back(slot);
+    for(auto slot:AutoDisplayOrder) if(!followerID || ((slot<23 || slot>25) && slot<28)) displayOrder.push_back(slot);
 
     UI::SetNextWindowPos({screen.x*.535f,screen.y*.015f},UI::ImGuiCond_Always);
     UI::SetNextWindowSize({screen.x*.455f,screen.y*.97f},UI::ImGuiCond_Always);
@@ -321,6 +321,10 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
             UI::Text("%s / %02d:%02d / %s",Tr(env.flags.outside?"Outdoors":"Indoors"),minutes/60,minutes%60,Tr(env.flags.night?"Night":"Daytime"));
             UI::Text("%s: %s",Tr("Precipitation"),Tr(!env.flags.outside?"Not applicable indoors":env.flags.snow?(env.flags.rain?"Rain and snow":"Snow"):env.flags.rain?"Rain":"None"));
         } else UI::TextUnformatted(Tr("Waiting for environment data"));
+        if(!followerID) {
+            UI::Text("%s: %s",Tr("Cold classification"),Tr(!env.flags.outside?"Not applicable indoors":!env.coldReady?"Cold data unavailable; using normal rules":env.coldArea==3?"Freezing region":env.coldArea==1?"Warm region":env.coldArea==2?"Cool region":"Not a freezing region"));
+            if(env.flags.outside && env.coldReady)UI::Text(Tr("Environmental cold level: %d"),env.coldLevel);
+        }
         if(env.flags.swimming) UI::TextUnformatted(Tr("Swimming detected"));
         if(env.flags.sneaking) UI::TextUnformatted(Tr("Sneaking detected"));
         UI::Text("%s: %s",Tr("Selected outfit rule"),environment.selectedSlot<0?Tr("Not assigned"):Tr(AutoPlaceLabel(environment.selectedSlot)));
@@ -332,7 +336,7 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
         const float buttonHeight=UI::GetFrameHeight();
         UI::BeginDisabled(!panelWritable || !libraryWritable);
         if(UI::Button("##panelColumns",{buttonHeight+20.f,buttonHeight}))
-            SaveAutoOutfitPreferences(slots,panelDelay,panelColumns==5?3:panelColumns+1,false);
+            SaveAutoOutfitPreferences(slots,panelDelay,panelColumns==6?3:panelColumns+1,false);
         DrawColumnCountIcon(buttonHeight);
         if(UI::IsItemHovered()) UI::SetTooltip(Tr("Columns: %d (click to cycle)"),panelColumns);
         UI::EndDisabled();
@@ -362,7 +366,7 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
             UI::PushTextWrapPos(UI::GetCursorPosX()+width);
             UI::TextWrapped("%s",Tr(AutoCardLabel(n)));
             UI::PopTextWrapPos();
-            if(UI::IsItemHovered()) UI::SetTooltip("%s%s%s",Tr(n==4?"Used during combat when the matching weapon-style slot is empty or no style matches.":AutoPlaceLabel(n)),combatOff?"\n":"",combatOff?Tr("Combat switching is OFF. Assignments can still be edited."):"");
+            if(UI::IsItemHovered()) {if(n==29)UI::SetTooltip("%s\n%s",Tr(AutoPlaceLabel(n)),Tr("Uses the official-style environmental cold calculation for region, night, rain and snow. Works with Survival Mode OFF."));else UI::SetTooltip("%s%s%s",Tr(n==4?"Used during combat when the matching weapon-style slot is empty or no style matches.":AutoPlaceLabel(n)),combatOff?"\n":"",combatOff?Tr("Combat switching is OFF. Assignments can still be edited."):"");}
             UI::SetCursorScreenPos({start.x+col*(width+gap),rowY+rowHeaderHeight+UI::GetStyle()->ItemSpacing.y});
             const auto path=(std::filesystem::path("Data/SKSE/Plugins/OutfitGallery/Captures")/slots[n]).generic_string();
             const auto tex=slots[n].empty()?nullptr:LoadPortraitView(path);
@@ -381,18 +385,33 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
             }
             else UI::Button(Tr("Drop outfit here"),{width,cardHeight+frameY*2.f});
             const auto photoMin=UI::GetItemRectMin(),photoMax=UI::GetItemRectMax();
-            if(n==27 && slots[n].empty()) {
+            if((n==27 || n==28 || n==29) && slots[n].empty()) {
                 // Draw within the photo/button, without adding a tall layout
                 // item beneath this card or changing its drag/drop hit area.
-                const char* note=Tr("Avoid using other sleepwear features at the same time.");
+                const char* note=Tr(n==28?"Region only.\nChoose either this or Cold exposure.":n==29?"Region, night, rain and snow determine the rule.\nWorks with Survival Mode OFF.":"Avoid using other sleepwear features at the same time.");
                 const float padding=std::max(4.f,UI::GetFontSize()*.25f);
                 const float wrap=std::max(1.f,photoMax.x-photoMin.x-padding*2.f);
-                const auto textSize=UI::CalcTextSize(note,nullptr,false,wrap);
-                const float top=std::max(photoMin.y,photoMax.y-textSize.y-padding*2.f);
+                float noteFont=UI::GetFontSize()*(n==27?1.f:.8f);
+                auto textSize=UI::ImFontManger::CalcTextSizeA(UI::GetFont(),noteFont,FLT_MAX,wrap,note,nullptr,nullptr);
+                const float noteMin=n==27?photoMin.y:(photoMin.y+photoMax.y)*.5f+UI::GetFontSize()*.6f+padding;
+                const float noteRoom=std::max(1.f,photoMax.y-noteMin-padding*2.f);
+                // Both cold cards use the same font size, fitting the longer
+                // translated caption so column count/language cannot split sizes.
+                const auto fitHeight=[&] {
+                    if(n==27)return textSize.y;
+                    const auto region=UI::ImFontManger::CalcTextSizeA(UI::GetFont(),noteFont,FLT_MAX,wrap,Tr("Region only.\nChoose either this or Cold exposure."),nullptr,nullptr);
+                    const auto weather=UI::ImFontManger::CalcTextSizeA(UI::GetFont(),noteFont,FLT_MAX,wrap,Tr("Region, night, rain and snow determine the rule.\nWorks with Survival Mode OFF."),nullptr,nullptr);
+                    return std::max(region.y,weather.y);
+                };
+                while(n!=27 && fitHeight()>noteRoom && noteFont>UI::GetFontSize()*.6f) {
+                    noteFont-=UI::GetFontSize()*.05f;
+                    textSize=UI::ImFontManger::CalcTextSizeA(UI::GetFont(),noteFont,FLT_MAX,wrap,note,nullptr,nullptr);
+                }
+                const float top=std::max(noteMin,photoMax.y-textSize.y-padding*2.f);
                 auto* draw=UI::GetWindowDrawList();
                 UI::ImDrawListManager::PushClipRect(draw,photoMin,photoMax,true);
                 UI::ImDrawListManager::AddRectFilled(draw,{photoMin.x,top},photoMax,0xB0000000,0,0);
-                UI::ImDrawListManager::AddText(draw,UI::GetFont(),UI::GetFontSize(),
+                UI::ImDrawListManager::AddText(draw,UI::GetFont(),noteFont,
                     {photoMin.x+padding,top+padding},0xFFFFFFFF,note,nullptr,wrap);
                 UI::ImDrawListManager::PopClipRect(draw);
             }
@@ -426,7 +445,7 @@ void RenderAutoOutfitPanel(UI::ImVec2 screen) {
                     UI::EndDisabled();
                     UI::SetCursorPos(cursor);
                 }
-                if(!clearHovered) UI::SetTooltip("%s%s%s",title.c_str(),combatOff?"\n":"",combatOff?Tr("Combat switching is OFF. Assignments can still be edited."):"");
+                if(!clearHovered) {if(n==29)UI::SetTooltip("%s\n%s",title.c_str(),Tr("Uses the official-style environmental cold calculation for region, night, rain and snow. Works with Survival Mode OFF."));else UI::SetTooltip("%s%s%s",title.c_str(),combatOff?"\n":"",combatOff?Tr("Combat switching is OFF. Assignments can still be edited."):"");}
             }
             if(!panelHideAssign) {
             UI::BeginDisabled(!panelWritable || !libraryWritable || autoSelectedPhoto.empty());

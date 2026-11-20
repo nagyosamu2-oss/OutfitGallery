@@ -33,11 +33,12 @@ struct ArrivalCheck {
     void Checked() {if(++checks>=2) pending=false;}
 };
 inline void Validate(const AutoOutfitSettings& s) {
-    if(s.delaySeconds<0 || s.delaySeconds>10 || s.columns<3 || s.columns>5 ||
+    if(s.delaySeconds<0 || s.delaySeconds>10 || s.columns<3 || s.columns>6 ||
        s.sneakDelaySeconds<0 || s.sneakDelaySeconds>5 || s.combatIntervalSeconds<2 || s.combatIntervalSeconds>10 ||
        s.ostimRecoverySeconds<5 || s.ostimRecoverySeconds>30) throw std::runtime_error("Invalid follower automatic settings");
     for(const auto& p:s.slots) if(!p.empty() && (p.size()>240 || p.find_first_of("/\\:")!=std::string::npos ||
         p.find('\0')!=std::string::npos || std::filesystem::path(p).extension()!=".png")) throw std::runtime_error("Invalid follower outfit photo");
+    if(!s.slots[28].empty() || !s.slots[29].empty()) throw std::runtime_error("Follower cold region outfits are not supported");
     for(unsigned i=23;i<=25;++i) if(!s.slots[i].empty()) throw std::runtime_error("Follower crafting outfits are not supported");
 }
 inline std::string Encode(const AutoOutfitSettings& s) {

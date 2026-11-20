@@ -1,0 +1,18 @@
+Outfit Gallery 2.2.9-cold-test2 / metadata 2.2.9.5 / 2026-11-20
+MSVC Release build completed; 64/64 automated tests passed.
+Known junction fixture TrashVirtualPathSafety excluded; not counted passing.
+Three SKSE exports, trial string and packed metadata verified.
+Official region spell five condition groups read at the MO2 load-order winner.
+Native condition evaluation is restricted to GetPos/IsPlayerInRegion and Subject.
+No Survival Mode ON/OFF read, VM alias reads, spells, quests or script writes.
+Cold region and environmental cold slots are mutually selected; both persist.
+Pure tests cover official region priority, night boundaries, rain/snow/blizzard,
+the adverse exposure threshold, inactive-slot fallback and mode persistence.
+Existing 6-column player/follower roundtrip tests retained.
+Equipment/cleanup/enchantment/transmog/FSMP/try-on/organizer unchanged.
+Final main object timestamp checked against modified includes.
+Runtime/source CRC, exact member set and every member byte verified.
+No official scripts/PEX/BSA, user data or default INI in runtime package.
+Previous archives unchanged; no install/GitHub sync/publish performed.
+Actual game native-region evaluation and UI behavior await user testing.
+DLL SHA256: 43019F05828C5AD46613DD91EE44D58783163707167E8F262DBB6A8E574EB302

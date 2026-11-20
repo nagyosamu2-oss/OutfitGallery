@@ -17,7 +17,8 @@ std::atomic<ULONGLONG> autoDue{};
 const std::filesystem::path autoFile="Data/SKSE/Plugins/OutfitGallery/AutoOutfits.json";
 std::string autoState="Disabled", autoLocation;
 int autoPlace{};
-struct AutoEnvironmentInfo {AutoOutfit::Environment flags; float hour{12.f}; bool ready{};};
+struct AutoEnvironmentInfo {AutoOutfit::Environment flags; float hour{12.f}; bool ready{},coldReady{};int coldArea{},coldLevel{},coldStage{};};
+#include "SurvivalColdRegion.inc"
 struct AutoEnvironmentDisplay {AutoEnvironmentInfo environment; int locationPlace{}, selectedSlot{-1};};
 AutoEnvironmentDisplay autoEnvironment; // autoMutex, values only; no engine pointers in UI
 bool PlayerSleepMenu(RE::UI* ui) {
@@ -36,14 +37,25 @@ AutoEnvironmentInfo ReadAutoEnvironment(RE::Actor* player) {
     if(calendar) {info.hour=calendar->GetHour();info.flags.night=AutoOutfit::IsNight(info.hour);}
     info.ready=cell && calendar && info.hour>=0.f && info.hour<24.f && (!info.flags.outside || sky);
     if(info.flags.outside && sky) {info.flags.rain=sky->IsRaining();info.flags.snow=sky->IsSnowing();}
+    if(player==RE::PlayerCharacter::GetSingleton() && info.flags.outside) {
+        const auto cold=ReadSurvivalColdRegion(player,info.hour);
+        info.coldReady=cold.ready;info.coldArea=cold.area;info.coldLevel=cold.level;info.coldStage=cold.stage;
+        info.flags.coldRegion=cold.ready && cold.area==3;
+        info.flags.coldWeather=cold.ready && cold.level>=4;
+        // Optional cold data must never block the ordinary environment or
+        // combat/swimming/sneaking/location/weather rules. Unavailable data
+        // leaves only these cold flags false so existing rules remain active.
+    }
     return info;
 }
 void AutoEnvironmentStatus(const AutoEnvironmentInfo& info,int location,int slot) {
     std::scoped_lock lock(autoMutex);
     const auto& old=autoEnvironment.environment;
     if(old.flags.outside!=info.flags.outside || old.flags.night!=info.flags.night || old.flags.rain!=info.flags.rain ||
-       old.flags.snow!=info.flags.snow || old.flags.swimming!=info.flags.swimming || old.flags.sneaking!=info.flags.sneaking || old.flags.sleeping!=info.flags.sleeping || old.ready!=info.ready || autoEnvironment.locationPlace!=location || autoEnvironment.selectedSlot!=slot)
+       old.flags.coldRegion!=info.flags.coldRegion || old.flags.coldWeather!=info.flags.coldWeather || old.coldStage!=info.coldStage || old.coldReady!=info.coldReady || old.coldArea!=info.coldArea || old.coldLevel!=info.coldLevel || old.flags.snow!=info.flags.snow || old.flags.swimming!=info.flags.swimming || old.flags.sneaking!=info.flags.sneaking || old.flags.sleeping!=info.flags.sleeping || old.ready!=info.ready || autoEnvironment.locationPlace!=location || autoEnvironment.selectedSlot!=slot)
         SKSE::log::info("OG-AUTO environment outside={} hour={} night={} rain={} snow={} swimming={} sleeping={} ready={} locationPlace={} selectedSlot={}",info.flags.outside,info.hour,info.flags.night,info.flags.rain,info.flags.snow,info.flags.swimming,info.flags.sleeping,info.ready,location,slot);
+    if(old.flags.coldRegion!=info.flags.coldRegion || old.flags.coldWeather!=info.flags.coldWeather || old.coldStage!=info.coldStage || old.coldReady!=info.coldReady || old.coldArea!=info.coldArea || old.coldLevel!=info.coldLevel)
+        SKSE::log::info("OG-COLD3 stage={} ready={} area={} level={} regionRule={} weatherRule={}",info.coldStage,info.coldReady,info.coldArea,info.coldLevel,info.flags.coldRegion,info.flags.coldWeather);
     autoEnvironment={info,location,slot};
 }
 std::string autoOutcome="Ready"; // game thread only

@@ -1,3 +1,38 @@
+# Outfit Gallery 2.2.9
+
+## Changes in 2.2.9 (since 2.2.8)
+
+- Organizer tabs now support both browsing and registration: click to browse, drop photos to register. Clicking never registers selected photos.
+- Match the main gallery tab order, add headgear/accessory icons, and open the trash list from the upper trash icon.
+- Clear processed selections after dropping onto a category; incompatible photos remain selected.
+- Add category membership controls to photo context menus. Make menus wider and open near the cursor, or near the target photo for controller use.
+- Add Wear set to random try-on: equip the displayed trial without saving it as a gallery entry.
+- Mention the right-view double-click gesture in the photo pause/resume tooltip.
+- Expand automatic outfit selection to a maximum of six columns.
+- Add player-only Cold region and Cold exposure automatic outfit assignments. Missing optional cold information no longer blocks ordinary automatic switching.
+
+### Cold outfit rules
+
+Cold region uses the official Survival Mode freezing-region classification, regardless of time or weather. Cold exposure calculates environmental cold using region, night, rain and snow. Neither requires Survival Mode to be ON; both require its data plugin, ccQDRSSE001-SurvivalMode.esl. This is not a full simulation of accumulated player cold or clothing warmth.
+
+Assign either cold slot: assigning one clears the other. Combat, sleeping, swimming, sneaking and dedicated sheltered locations take priority; outdoors the selected cold rule takes priority over ordinary snow, rain and night outfits. Leave both empty to retain ordinary rules.
+
+Explanations appear only at the bottom inside unassigned cards and disappear when a photo is assigned. The Cold exposure tooltip provides additional detail.
+
+### Organizer and try-on
+
+Organizer changes are committed with Save and close; Cancel discards them. Built-in headgear/accessory tabs are for browsing, not converting a full outfit into another set type.
+
+Wear set changes actual equipment. It uses the existing missing-item, property reproduction and generated-item cleanup settings and protections.
+
+### Updating and ongoing investigation
+
+Exit Skyrim and install with priority over older/trial DLLs. Preserve photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. No new game or outfit re-registration is required. Existing requirements and supported runtimes are unchanged. Hair/FSMP integration from 2.2.8 retains its documented scope.
+
+A report of generated items remaining in inventory on 2.2.4 is still under investigation. The supplied diagnostic portion shows already-owned items and zero tracked cleanup candidates; it does not include detailed generation evidence. This update does not claim to resolve that report.
+
+---
+
 # Outfit Gallery 2.2.8
 
 ## Changes in 2.2.8 (since 2.2.5)

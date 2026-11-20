@@ -1,5 +1,6 @@
 #include "AutoOutfitPolicy.h"
 #include "Presets.h"
+#include "SurvivalColdRegion.h"
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
@@ -8,6 +9,50 @@ using namespace Gallery::AutoOutfit;
 void require(bool value,const char* message) {if(!value) throw std::runtime_error(message);}
 int main() {
  try {
+    // Region precedence follows the official script; mountains override the
+    // broader warm/cool regions, while unknown regions are never guessed cold.
+    require(!SurvivalRegion::IsFreezing(false,false,false,false,false),"unknown region is not cold");
+    require(SurvivalRegion::IsFreezing(false,false,true,false,false),"freezing region");
+    require(!SurvivalRegion::IsFreezing(true,false,true,false,false),"warm region overrides broad freezing");
+    require(!SurvivalRegion::IsFreezing(false,true,true,false,false),"cool region overrides broad freezing");
+    require(SurvivalRegion::IsFreezing(true,true,false,true,false),"south mountains override");
+    require(SurvivalRegion::IsFreezing(true,true,false,false,true),"fall mountains override");
+    for(unsigned function:{6u,74u,117u})require(SurvivalRegion::ReadOnlyCondition(function),"runtime read-only region conditions accepted");
+    for(unsigned function:{2u,7u,15u,28u,29u})require(!SurvivalRegion::ReadOnlyCondition(function),"mutation condition functions rejected");
+    using Climate=SurvivalRegion::Weather;
+    require(SurvivalRegion::Area(false,false,false,false,false)==2,"official unknown region defaults cool");
+    require(SurvivalRegion::Area(true,true,true,false,false)==1,"warm precedence");
+    require(SurvivalRegion::Area(false,true,true,false,false)==2,"cool precedence");
+    require(SurvivalRegion::Area(true,true,false,true,false)==3,"mountain exception");
+    require(SurvivalRegion::ColdLevel(1,12,Climate::Clear)==0,"warm clear day");
+    require(SurvivalRegion::ColdLevel(2,12,Climate::Clear)==3,"cool day remains below adverse threshold");
+    require(SurvivalRegion::ColdLevel(3,12,Climate::Clear)==6,"freezing clear day");
+    require(SurvivalRegion::ColdLevel(2,6.999f,Climate::Clear)==5,"cool night can be adverse");
+    require(SurvivalRegion::ColdLevel(2,7,Climate::Clear)==3 && SurvivalRegion::ColdLevel(2,19,Climate::Clear)==3,"official daytime boundaries");
+    require(SurvivalRegion::ColdLevel(2,19.001f,Climate::Clear)==5,"official evening boundary");
+    require(SurvivalRegion::ColdLevel(1,12,Climate::Rain)==3,"warm rain below adverse threshold");
+    require(SurvivalRegion::ColdLevel(1,0,Climate::Rain)==4,"warm rainy night reaches threshold");
+    require(SurvivalRegion::ColdLevel(1,12,Climate::Snow)==6,"warm snow adverse");
+    require(SurvivalRegion::ColdLevel(3,0,Climate::Blizzard)==20,"blizzard replaces snow increment");
+    require(SurvivalRegion::ColdLevel(0,0,Climate::Blizzard)==0,"interior ignores weather");
+    require(SurvivalRegion::ColdLevel(3,24,Climate::Clear)==-1,"invalid time not guessed");
+    Slots coldSlots{};coldSlots[0]="default.png";coldSlots[5]="night.png";coldSlots[6]="rain.png";coldSlots[7]="snow.png";coldSlots[28]="cold.png";
+    Environment coldEnv{};coldEnv.outside=true;coldEnv.coldRegion=true;
+    for(bool night:{false,true})for(bool rain:{false,true})for(bool snow:{false,true}) {
+        coldEnv.night=night;coldEnv.rain=rain;coldEnv.snow=snow;
+        require(SelectCondition(Place::Normal,coldEnv,false,coldSlots)==Place::ColdRegion,"cold region overrides weather and night");
+    }
+    require(Choose(Place::ColdRegion,coldSlots,false)=="cold.png","cold slot is selected");
+    require(SelectCondition(Place::Normal,coldEnv,true,coldSlots)==Place::Combat,"combat retained");
+    coldSlots[10]="swim.png";coldEnv.swimming=true;
+    require(SelectCondition(Place::Normal,coldEnv,false,coldSlots)==Place::Swimming,"swimming retained");coldEnv.swimming=false;
+    require(SelectCondition(Place::Inn,coldEnv,false,coldSlots)==Place::Inn,"shelter retained");
+    coldEnv.outside=false;require(SelectCondition(Place::Normal,coldEnv,false,coldSlots)==Place::Normal,"indoor cold excluded");
+    coldEnv.outside=true;coldSlots[28].clear();require(SelectCondition(Place::Normal,coldEnv,false,coldSlots)==Place::Snow,"unassigned cold falls back to snow");
+    coldSlots[28]="region.png";coldSlots[29]="weather.png";coldEnv.coldRegion=false;coldEnv.coldWeather=true;
+    require(SelectCondition(Place::Normal,coldEnv,false,coldSlots)==Place::ColdWeather,"weather mode picks its own slot");
+    require(Choose(Place::ColdWeather,coldSlots,false)=="weather.png","weather assignment used");
+    coldSlots[29].clear();require(SelectCondition(Place::Normal,coldEnv,false,coldSlots)==Place::Snow,"inactive location slot is not a fallback");
     const AutoOutfitSlots slots{"adventure.png","town.png","home.png","inn.png","combat.png","night.png","rain.png","snow.png","dungeon.png","temple.png"};
     require(Choose(Place::Home,slots,true)=="home.png","home priority");
     require(Choose(Place::Town,slots,true)=="town.png","town priority");
@@ -118,15 +163,39 @@ int main() {
             require(rejected,"invalid climate assignment rejected");
         }
     }
-    for(int delay:{0,1,3,10}) for(int columns:{3,4,5}) {
+    for(int delay:{0,1,3,10}) for(int columns:{3,4,5,6}) {
         WriteAutoOutfitSettings({slots,delay,columns},file); const auto settings=ReadAutoOutfitSettings(file);
         require(settings.slots==slots && settings.delaySeconds==delay && settings.columns==columns,"preferences roundtrip");
     }
-    for(const auto invalid: {AutoOutfitSettings{slots,-1,3},AutoOutfitSettings{slots,11,3},AutoOutfitSettings{slots,3,2},AutoOutfitSettings{slots,3,6}}) {
+    auto coldSettings=ReadAutoOutfitSettings(file);coldSettings.slots[28]="cold.png";WriteAutoOutfitSettings(coldSettings,file);
+    const auto coldRead=ReadAutoOutfitSettings(file);
+    require(coldRead.slots[28]=="cold.png" && coldRead.columns==6 && coldRead.slots[0]==slots[0],"cold assignment persists without shifting old slots");
+    require(AssignAutoOutfitSlot(coldSettings.slots,29,"weather.png"),"weather slot can be assigned");
+    require(coldSettings.slots[28].empty() && coldSettings.slots[29]=="weather.png" && coldSettings.slots[0]==slots[0],"assignment clears only the other cold slot");
+    WriteAutoOutfitSettings(coldSettings,file);require(ReadAutoOutfitSettings(file).slots==coldSettings.slots,"exclusive assignment persists");
+    require(AssignAutoOutfitSlot(coldSettings.slots,28,"region.png") && coldSettings.slots[29].empty(),"location assignment replaces weather assignment");
+    require(AssignAutoOutfitSlot(coldSettings.slots,29,"") && coldSettings.slots[28]=="region.png","clearing an empty opposite slot preserves the assigned slot");
+    const auto beforeInvalid=coldSettings.slots;
+    require(!AssignAutoOutfitSlot(coldSettings.slots,30,"bad.png") && coldSettings.slots==beforeInvalid,"invalid slot cannot mutate settings");
+    auto invalidCold=coldSettings;invalidCold.slots[29]="both.png";
+    bool invalidPair=false;try{WriteAutoOutfitSettings(invalidCold,file);}catch(...){invalidPair=true;}
+    require(invalidPair && ReadAutoOutfitSettings(file).slots[29]=="weather.png","invalid pair does not overwrite the saved settings");
+    for(int oldMode:{0,1}) {
+        {std::ofstream out(file);out<<"{\"schema\":1,\"slots\":[\"a.png\",\"\",\"\"],\"delaySeconds\":10,\"coldRegionPhoto\":\"region.png\",\"coldWeatherPhoto\":\"weather.png\",\"coldMode\":"<<oldMode<<"}";}
+        const auto migratedCold=ReadAutoOutfitSettings(file);
+        require(migratedCold.slots[oldMode?29:28]==(oldMode?"weather.png":"region.png") && migratedCold.slots[oldMode?28:29].empty(),"old radio selection migrates to one assignment");
+    }
+    // Failed optional cold data leaves only cold flags false. The existing
+    // time/weather/location selection remains available instead of being blocked.
+    Environment unavailable{};unavailable.outside=true;unavailable.night=true;
+    require(SelectCondition(Place::Normal,unavailable,false,coldSlots)==Place::Night,"missing cold data keeps the night rule");
+    unavailable.rain=true;require(SelectCondition(Place::Normal,unavailable,false,coldSlots)==Place::Rain,"missing cold data keeps the rain rule");
+    require(SelectCondition(Place::Normal,unavailable,true,coldSlots)==Place::Combat,"missing cold data keeps combat");
+    for(const auto invalid: {AutoOutfitSettings{slots,-1,3},AutoOutfitSettings{slots,11,3},AutoOutfitSettings{slots,3,2},AutoOutfitSettings{slots,3,7}}) {
         rejected=false; try {WriteAutoOutfitSettings(invalid,file);}catch(const std::exception&){rejected=true;}
         require(rejected,"invalid preferences rejected"); require(ReadAutoOutfitSettings(file).delaySeconds==10,"failed write preserves existing settings");
     }
-    for(const auto bad:{R"({"schema":1,"slots":["","",""],"delaySeconds":-1})",R"({"schema":1,"slots":["","",""],"delaySeconds":11})",R"({"schema":1,"slots":["","",""],"columns":6})",R"({"schema":1,"slots":["","",""],"delaySeconds":0.5})",R"({"schema":1,"slots":["","",""],"columns":true})"}) {
+    for(const auto bad:{R"({"schema":1,"slots":["","",""],"delaySeconds":-1})",R"({"schema":1,"slots":["","",""],"delaySeconds":11})",R"({"schema":1,"slots":["","",""],"columns":7})",R"({"schema":1,"slots":["","",""],"delaySeconds":0.5})",R"({"schema":1,"slots":["","",""],"columns":true})"}) {
         {std::ofstream out(file); out<<bad;}
         rejected=false; try{(void)ReadAutoOutfitSettings(file);}catch(const std::exception&){rejected=true;}
         require(rejected,"invalid persisted settings rejected");
@@ -150,6 +219,7 @@ int main() {
     }
     AutoOutfitSlots extended=slots;
     for(unsigned i=10;i<extended.size();++i)extended[i]="extra"+std::to_string(i)+".png";
+    extended[29].clear(); // Only one cold slot can be assigned.
     WriteAutoOutfitSettings({extended,0,5,20},file);
     auto expanded=ReadAutoOutfitSettings(file);
     require(expanded.slots==extended && expanded.ostimRecoverySeconds==20 && expanded.columns==5,"all twenty-eight assignments persist");

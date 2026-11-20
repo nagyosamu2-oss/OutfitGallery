@@ -1,0 +1,14 @@
+Outfit Gallery 2.2.9 / metadata 2.2.9.0 / 2026-11-20
+Release MSVC build completed. 64/64 selected automated tests passed.
+TrashVirtualPathSafety excluded for known junction-fixture environment limitation;
+not counted passing. Three SKSE exports and packed DLL version verified.
+All functional source/tests/dependencies/translations/default INI equal cold-test5.
+Only main release labels, CMake project version and release documents changed.
+Final main object timestamp checked against all source include files.
+User confirmed organizer, Wear set, cold switching and final caption appearance.
+Prior 2.2.8 hair/FSMP scope and validation remain applicable.
+Runtime/source ZIP CRC, exact members and member bytes verified.
+No user data, game scripts/PEX/BSA, FSMP DLL/PDB or build outputs bundled.
+The external generated-item retention report is not claimed fixed.
+All existing ZIP archives retained unchanged. No deployment/sync/upload performed.
+DLL SHA256: B3FE5181A77702454C088491AF137E907AE4F951B15CEE4435A9CA1C90731C39

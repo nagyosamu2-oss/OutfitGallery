@@ -33,6 +33,7 @@
 #include "FollowerAutoOutfits.h"
 #include "FollowerAutoState.h"
 #include "AutoOutfitPolicy.h"
+#include "SurvivalColdRegion.h"
 #include "CraftSession.h"
 #include "GuildLocationRules.h"
 #include "SceneSuspendPolicy.h"
@@ -56,7 +57,7 @@
 
 using namespace REL::literals;
 SKSEPluginInfo(
-    .Version = "2.2.8.0"_v,
+    .Version = "2.2.9.0"_v,
     .Name = "OutfitGallery",
     .Author = "Outfit Gallery contributors",
     // SKSE's final component is the store identifier: GOG is 1, not 0.
@@ -564,7 +565,7 @@ void RestorePlayerTransmogMode(bool mode,bool owned){autoAppearanceOnly=mode;aut
 #include "RandomTryOn.inc"
 void Tick() {
     const unsigned requested = command.exchange(0);
-    if (requested && requested != kRandomTryOn && requested != kRerollTryOn && requested != kOpenTryOnCustom && requested != kChangeTryOnCustom &&
+    if (requested && requested != kRandomTryOn && requested != kRerollTryOn && requested != kWearTryOn && requested != kOpenTryOnCustom && requested != kChangeTryOnCustom &&
         requested != kPrepareTryOnItems && requested != kAcquireTryOnItems && requested != 2 && requested != 3 && requested != 5 && requested != 6) {
         if (EndTransmogTryOn(RE::PlayerCharacter::GetSingleton()))
             SetStatus(language == 1 ? "試着前の外見に戻しました。" : "Restored the appearance from before try-on.");
@@ -606,7 +607,7 @@ void Tick() {
     if(requested==1 || requested==2) GALLERY_DIAG("OG-OPEN-DIAG tick command={} active={}",requested,active.load());
     // Pending ownership cleanup outlives the camera window, but is cancelled
     // explicitly at save/new-game boundaries before touching another character.
-    VerifyEquipment(requested==2 || requested==4);
+    VerifyEquipment(requested==2 || requested==4 || requested==kWearTryOn);
     if (requested == 2) { Close(); return; }
     if (requested == 1) Open();
     if (!active) {
@@ -716,12 +717,23 @@ void Tick() {
         try {masks=ResolvePresetSlots(p);names=ResolvePresetDisplayNames(p,&enchanted);} catch(const std::exception& e) {error=e.what();}
         {std::scoped_lock lock(presetsMutex); if(scopeRequest.photo==p.photo) {scopeMasks=std::move(masks);scopeNames=std::move(names);scopeEnchanted=std::move(enchanted);scopeError=std::move(error);scopeReady=true;}}
     }
-    if (requested == 4 && !saveBusy) {
+    if ((requested == 4 || (requested == kWearTryOn && !follower && !photoRetakeActive && !tryOnCustomPending && !tryOnInventoryPending)) && !saveBusy) {
         verificationTicks=0;
         try {
             Preset p; bool add;
             { std::scoped_lock lock(presetsMutex); p = requestedPreset; add = requestedAddMissing; }
-            const bool allowRemoval=AccessoryToggle::Allowed(p.accessories,p.slotMask,fullOutfitToggle.load());
+            if(requested==kWearTryOn) {
+                // Read the accepted/customized appearance on the game thread before
+                // the common equip path clears it. Never reroll or save a preset.
+                const auto trial=GetTransmogTryOnPreset(subject.get());
+                if(!trial || trial->items.empty()) {
+                    SetStatus(EquipmentText("着用する試着セットがありません。", "No try-on set to wear."));
+                    return;
+                }
+                p=*trial;
+                SKSE::log::info("Try-on wear set={} items={} addMissing={}",p.name,p.items.size(),add);
+            }
+            const bool allowRemoval=requested!=kWearTryOn && AccessoryToggle::Allowed(p.accessories,p.slotMask,fullOutfitToggle.load());
             if(p.outfitItems && !p.slotMask && !p.accessories) {
                 p=FilterExchangeSlots(p,{});
                 if(p.items.empty()) {SetStatus("No equipment selected. Equipment unchanged."); return;}
@@ -917,7 +929,7 @@ void RenderPhotoPauseButton(const char* id,float side) {
         for(float x:{.29f,.57f}) UI::ImDrawListManager::AddRectFilled(draw,{pauseMin.x+side*x,pauseMin.y+side*.25f},{pauseMin.x+side*(x+.14f),pauseMin.y+side*.75f},color,0,0);
     }
     UI::EndDisabled();
-    if(UI::IsItemHovered(UI::ImGuiHoveredFlags_AllowWhenDisabled)) UI::SetTooltip("%s",Tr(frozen && !owned?"Time is already paused by another feature.":frozen?"Resume game. Closing the gallery also resumes time.":"Pause game for photos. Camera and gallery controls remain available."));
+    if(UI::IsItemHovered(UI::ImGuiHoveredFlags_AllowWhenDisabled)) UI::SetTooltip("%s",Tr(frozen && !owned?"Time is already paused by another feature.":"Pause or resume the game. You can also double-click the right-hand viewing area."));
 }
 void RenderCameraSlots(bool retakeColumns=false) {
     UI::BeginDisabled(saveBusy);
@@ -1387,7 +1399,7 @@ void __stdcall RenderStudio() {
 void __stdcall RenderSettings() {
     ProcessCapturedHotkey();
     RenderHotkeys();
-    UI::TextUnformatted("Outfit Gallery 2.2.8");
+    UI::TextUnformatted("Outfit Gallery 2.2.9");
     UI::TextWrapped(Tr("Close this menu and press the configured hotkey (default F8) while standing in a safe open area."));
     UI::TextUnformatted(Tr("F9 in the studio saves a photo and equipment. Click a preset photo to apply."));
     UI::Text(Tr("SmoothCam API: %s / TDM API: %s"), smooth ? "ready" : "not available", tdm ? "ready" : "not available");
@@ -1559,7 +1571,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     spdlog::set_default_logger(logger);
     spdlog::set_level(spdlog::level::info);
     spdlog::flush_on(spdlog::level::info);
-    SKSE::log::info("OutfitGallery release=2.2.8; equipment acquisition, random try-on, customization and reroll; 2.0.1 compatibility fixes retained");
+    SKSE::log::info("OutfitGallery release=2.2.9; equipment acquisition, random try-on, customization and reroll; 2.0.1 compatibility fixes retained");
     const auto runtime=skse->RuntimeVersion();
     const auto supported=SKSEPlugin_Version.GetRuntimeCompatibility().GetCompatibleRuntimeVersions();
     if(std::none_of(supported.begin(),supported.end(),[&](const auto& version){return static_cast<REL::Version>(version)==runtime;})) {
@@ -1574,8 +1586,8 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
     Gallery::saveHotkey = GetPrivateProfileIntW(L"Input", L"SaveHotkey", 67, ini.c_str());
     Gallery::captureKeys[0]=Gallery::saveHotkey;
     Gallery::gamepadHotkey = GetPrivateProfileIntW(L"Input", L"GamepadHotkey", 32, ini.c_str());
-    SKSE::log::info("OutfitGallery 2.2.8");
-    SKSE::log::info("OutfitGallery 2.2.8 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
+    SKSE::log::info("OutfitGallery 2.2.9");
+    SKSE::log::info("OutfitGallery 2.2.9 (CommonLib 10.1.0); runtime {}; key={}", runtime.string(), Gallery::hotkey.load());
     return SKSE::GetMessagingInterface()->RegisterListener(Gallery::Message);
 }
 

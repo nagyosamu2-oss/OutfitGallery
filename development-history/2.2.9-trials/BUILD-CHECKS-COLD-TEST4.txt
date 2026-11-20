@@ -1,0 +1,18 @@
+Outfit Gallery 2.2.9-cold-test4 / metadata 2.2.9.7 / 2026-11-20
+MSVC Release build completed; 64/64 automated tests passed.
+Known junction fixture TrashVirtualPathSafety excluded; not counted passing.
+Three SKSE exports, trial string and packed metadata verified.
+Read-only host process query found three injected GetGlobalValue conditions.
+All 49 observed runtime conditions have supported functions/flags/base conditions.
+Native region evaluation now also admits read-only GetGlobalValue.
+Unit tests accept 6/74/117 and reject mutation calls (AddItem/AddSpell/etc.).
+Cold notes appear only in empty photo cards; outside captions removed.
+No actual game calls/injection or memory writes used during investigation.
+Equipment, reclaim, enchantment, transmog, FSMP, organizer, try-on and cold
+policy/assignment/math remain unchanged from test3.
+Final main object timestamp checked against modified includes.
+Runtime/source CRC, exact member set and every member byte verified.
+No memory dumps, official scripts/PEX/BSA, user data or default INI included.
+Previous archives unchanged. No deployment/GitHub sync/publish performed.
+Actual game result after loading the modified DLL still requires user testing.
+DLL SHA256: A7935AE968C5FB6E4C2F14D14A7EC2ADC22D18132CF9ECB66F49E50FCB672B0D

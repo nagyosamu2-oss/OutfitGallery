@@ -1,80 +1,67 @@
-# Outfit Gallery 2.2.8
+# Outfit Gallery 2.2.9
 
-## 2.2.8 更新内容（2.2.5から）
+## 2.2.9 更新内容（2.2.8から）
 
-- 通常着替えで、元のMOD・装備本体が見つからない項目を除外し、残りの装備を適用できるようにしました。除外した装備名を表示し、登録内容は維持します。全項目が見つからない場合は、現在の実際の装備を変更せず停止します。
-- 保存した自作付呪の参照先MOD・レコードが見つからない場合、その品は保存した鍛冶強化を維持し、自作付呪を省いて装備します。セットの残りも適用し、省いた品と参照先を日本語で案内します。
-- 付呪再現の参照エラーに、不足プラグイン名や参照IDを表示するようにしました。
-- オプションを開いたままギャラリーを閉じても、次に開いた時はオプションを折り畳んだメイン画面を表示します。設定値は維持します。
-- メイン画面のお気に入りマークの丸背景を外し、星の輪郭と薄い影に変更しました。
-- 整理画面の一覧・差分展開内にもお気に入りマークを追加しました。整理画面では見分けやすい丸背景付きの星を使い、右端から少し内側へ配置しています。登録・解除は保存前にも表示へ反映します。
-- 右側の表示領域をダブルクリックして、撮影用の一時停止／再開を切り替えられるようにしました。独立プレビューON／OFFの両方に対応します。左側の既存ボタンも引き続き利用できます。
+- 整理画面の「表示／登録先」タブをクリックすると一覧を切り替え、写真をドロップすると分類へ登録します。選択中の写真があってもクリックだけでは登録しません。
+- 整理画面のタブをメイン画面に沿った並びにし、頭装備・小物アイコンを追加しました。上部ごみ箱アイコンからごみ箱内を表示できます。
+- 分類へドロップした後は処理済みの写真の選択を解除します。種類が合わず登録できなかった写真は選択に残します。
+- 写真の右クリックに「登録する分類」を追加しました。メニューを広げ、カーソル付近へ表示します。パッドでは対象写真付近へ表示します。
+- おまかせ試着に「セットを着用」を追加しました。現在表示中の試着セットを登録せず実装備にできます。
+- 撮影用の停止／再開ボタンの説明に、右画面ダブルクリックの操作を追記しました。
+- 自動着替えの表示を最大6列まで拡張しました。
+- プレイヤーの自動着替えに「寒冷地」「寒さ対策」を追加しました。寒さ情報が未取得でも、通常の自動着替えは継続します。
 
-- 一部のウィッグを実装備にしたまま重ね着すると、重ね着先の髪が消える問題を修正しました。31番・41番にまたがる描画情報を扱い、Painter HairとYunaの双方向の切り替えで確認しています。
-- 対応するFSMP環境では、実装備のウィッグを維持したまま、自毛を表示する重ね着でもSMPが動くように連携します。装備の付呪・防御力を維持し、FSMPの全体設定は変更しません。追加連携の対応範囲は下記を参照してください。
+### 防寒衣装の設定
 
-### 欠落装備の除外について
+「寒冷地」は公式サバイバルの凍える地域の区分だけで判定し、昼夜・天候には左右されません。「寒さ対策」は地域・夜・雨・雪などから公式サバイバル相当の環境の寒さを計算します。どちらもサバイバルモードONを要求しませんが、公式サバイバルのデータ（ccQDRSSE001-SurvivalMode.esl）が必要です。蓄積した冷えや装備の暖かさをそのまま再現する機能ではありません。
 
-セットの保存内容は書き換えません。元のMODを戻すと、その装備も再登録なしで再び利用できます。残る装備は、保存した強化・付呪の再現設定に従って適用します。装備確認は利用可能な項目を対象に行い、確認後は従来の条件で生成品を回収します。
+2枠のどちらか一方へ衣装を登録してください。片方へ登録すると他方は解除します。戦闘・睡眠・水中・スニーク・専用の屋内場所などを優先し、屋外では防寒衣装を通常の雪・雨・夜の衣装より優先します。両方未登録なら従来のルールで動作します。
 
-対象は通常着替えです。重ね着や装備管理の編集は従来の参照確認を維持します。装備本体が存在し、保存した自作付呪の参照先だけが欠ける場合は、自作付呪全体を省いて適用します。一部の効果だけを切り捨てて再構成する方式ではありません。元の登録データは維持し、提供MODを戻せば再登録なしで再現できます。識別できる所持品や元の防具データの付呪を削除することはありません。装備の種類や対象スロットの変更、付呪データの形式不正、個体識別の曖昧さなど、欠落した参照先以外のエラーは従来どおり停止します。不足品の生成には「不足している装備を追加して復元」が必要です。
+説明は未登録枠の内側下部だけに表示し、写真を登録すると隠れます。寒さ対策の詳細はツールチップでも確認できます。
 
-### ダブルクリック操作について
+### 整理・試着の操作
 
-キャラクターが表示されている右側の領域を、動かさず左ダブルクリックしてください。2回目を離した時に切り替えます。ドラッグした場合・領域の外で離した場合・右ボタン併用時は切り替えません。左ドラッグの位置調整、右ドラッグの回転・角度調整、ホイールの距離調整は従来どおりです。
+整理画面の分類・並び・ごみ箱の変更は「保存して終了」で確定し、「キャンセル」で破棄します。頭装備・小物の組み込みタブは表示用で、ドロップでセットの種類を変換する機能ではありません。
 
-このMODが停止した時間はギャラリーを閉じると再開します。他の機能が既に停止させていた時間は解除しません。今回、右側に新しい常設ボタンは追加していません。
+「セットを着用」は実装備を変更します。重ね着として適用する操作ではありません。不足品の生成・性能の再現・生成品の回収には既存の設定と保護条件を使います。
 
-### 重ね着の髪・FSMP連携について
+### 更新方法・継続調査
 
-ウィッグ同士の置き換えは、装備名や特定MOD名ではなく、実装備と描画パーツの対応を確認して処理します。髪以外も含む複合装備、所有関係が曖昧なもの、すべてのウィッグの互換性を保証するものではありません。
+Skyrimを終了し、旧版・試験版よりこのDLLが優先されるよう導入してください。写真・プリセット・Library.json・設定・カスタムINIと、対になった.ess/.skseを保持してください。ニューゲーム・セットの再登録は不要です。必須環境と従来の対応ランタイムは変更していません。2.2.8の髪・FSMP連携も従来の対応範囲で維持しています。
 
-自毛SMPの追加連携は、現時点では**Skyrim1.6.1170＋解析済みのFSMP4.1.1 AE AVX版、プレイヤーのみ**が対象です。FSMPの同じ4.1.1でも、SSE2・AVX2・AVX-512版は今回の連携対象に含みません。DLLの識別情報と対象処理の一致を確認できた場合に自動で有効になり、対象外や対象処理が変更された環境では、この追加連携だけを無効にします。通常の着替え・重ね着の従来の対応環境は変わりません。FSMPの導入は必須ではありません。
+旧2.2.4で生成品が所持品に残るとの報告は継続調査中です。受領ログは生成後の所持済み装備と追跡対象0件を示しており、生成時の詳細記録がないため原因を特定できません。この更新で解決済みとは扱っていません。
 
-対応環境では「ウィッグ着用時に髪の物理を無効化」がONでも、自毛を表示する重ね着中はその物理演算を維持します。ウィッグへの重ね着、解除、セーブしてゲーム再起動後のロードを確認しています。FSMPの設定ファイルや全体のON/OFF設定は書き換えません。対象外の環境で同じ停止が起きる場合は、このFSMP設定をOFFにする回避方法がありますが、隠れている自毛の演算も残る場合があります。
+---
 
-頭装備を実際に外す処理は追加していません。自毛の髪型を別のウィッグとして生成する方式でもありません。全身の物理リセットや追加の装備切り替えを行わず、対応する物理更新中の頭部パーツ判定だけを補います。
+# Outfit Gallery 2.2.9
 
-### 更新方法
+## Changes in 2.2.9 (since 2.2.8)
 
-Skyrimを終了し、旧版・試験版より公開版DLLが優先されるよう導入してください。写真・プリセット・Library.json・設定・カスタムINIと、対になった.ess/.skseを保持してください。ニューゲーム・セットの再登録は不要です。必須環境・対応ランタイムは従来どおりです。
+- Organizer tabs now support both browsing and registration: click to browse, drop photos to register. Clicking never registers selected photos.
+- Match the main gallery tab order, add headgear/accessory icons, and open the trash list from the upper trash icon.
+- Clear processed selections after dropping onto a category; incompatible photos remain selected.
+- Add category membership controls to photo context menus. Make menus wider and open near the cursor, or near the target photo for controller use.
+- Add Wear set to random try-on: equip the displayed trial without saving it as a gallery entry.
+- Mention the right-view double-click gesture in the photo pause/resume tooltip.
+- Expand automatic outfit selection to a maximum of six columns.
+- Add player-only Cold region and Cold exposure automatic outfit assignments. Missing optional cold information no longer blocks ordinary automatic switching.
 
+### Cold outfit rules
 
-## Changes in 2.2.8 (since 2.2.5)
+Cold region uses the official Survival Mode freezing-region classification, regardless of time or weather. Cold exposure calculates environmental cold using region, night, rain and snow. Neither requires Survival Mode to be ON; both require its data plugin, ccQDRSSE001-SurvivalMode.esl. This is not a full simulation of accumulated player cold or clothing warmth.
 
-- Normal outfit changes can now skip entries whose source mod/base equipment is missing and apply the remaining equipment. Skipped items are listed, and saved outfit data is kept. If no equipment is available, the current actual equipment is left unchanged.
-- If a saved custom enchantment requires an unavailable mod or record, equip the item without that saved custom enchantment while retaining its saved smithing improvement. Apply the rest of the outfit and report the affected item/reference.
-- Include missing plugin names or reference IDs in enchantment errors, with localized notices.
-- Reopening the gallery now starts with Options collapsed, even if it was open when the gallery was closed. Setting values are preserved.
-- Replace the main gallery's circular favorite badge background with a star outline and subtle shadow.
-- Add favorite badges to organizer cards and expanded variations. The organizer uses a circular background for visibility and positions badges slightly inward from the right edge. Unsaved membership changes are reflected immediately.
-- Double-click the right-hand viewing area to pause or resume time for photos, with independent preview either ON or OFF. The existing left-hand playback button remains available.
+Assign either cold slot: assigning one clears the other. Combat, sleeping, swimming, sneaking and dedicated sheltered locations take priority; outdoors the selected cold rule takes priority over ordinary snow, rain and night outfits. Leave both empty to retain ordinary rules.
 
-- Fix a transmog hair-disappearance case caused by secondary rendering markers spanning slots31/41. Confirmed in both directions between actual Painter Hair and Yuna appearances.
-- On the specifically supported FSMP build, keep native-hair physics active while a transmog look shows native hair over an actually equipped wig. Actual equipment, enchantments, armor rating and global FSMP settings are preserved. See the additional integration scope below.
+Explanations appear only at the bottom inside unassigned cards and disappear when a photo is assigned. The Cold exposure tooltip provides additional detail.
 
-### Missing equipment
+### Organizer and try-on
 
-Filtering only affects the current outfit application; saved presets are not rewritten. Restoring the source mod makes its equipment available again without re-registration. Remaining equipment follows the saved smithing/enchantment reproduction settings. Verification uses available entries, allowing the existing generated-item cleanup checks to proceed after a successful match.
+Organizer changes are committed with Save and close; Cancel discards them. Built-in headgear/accessory tabs are for browsing, not converting a full outfit into another set type.
 
-This applies to normal equipment changes. Transmog and equipment-editing reference checks remain unchanged. If base equipment still exists but a saved custom enchantment reference is unavailable, omit that entire saved custom enchantment for the current application. Individual effects are not selectively discarded. Keep the saved recipe so restoring the provider mod allows reproduction without re-registration. Identified owned items and enchantments built into base armor are not stripped. Changed record types, incompatible slot layouts, malformed recipes and ambiguous instance identity continue to stop application. Missing-item generation still requires Add missing base items.
+Wear set changes actual equipment. It uses the existing missing-item, property reproduction and generated-item cleanup settings and protections.
 
-### Double-click controls
+### Updating and ongoing investigation
 
-Left-double-click without dragging inside the right-hand character viewing area. The action is confirmed on the second release. Dragging, releasing outside the area, or using the right button cancels the gesture. Existing left-drag positioning, right-drag orbit/angle and mouse-wheel distance controls remain available.
+Exit Skyrim and install with priority over older/trial DLLs. Preserve photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. No new game or outfit re-registration is required. Existing requirements and supported runtimes are unchanged. Hair/FSMP integration from 2.2.8 retains its documented scope.
 
-Time paused by Outfit Gallery resumes when the gallery closes. Time already paused by another feature is not released. No new permanent right-hand playback button is included in this release.
-
-### Transmog hair and FSMP integration scope
-
-Wig replacement uses confirmed worn-item/addon ownership, not equipment or mod names. This does not promise compatibility with every wig, mixed body/head pieces or ambiguous shared ownership.
-
-The additional native-hair physics bridge currently supports **Skyrim1.6.1170 with the measured FSMP4.1.1 AE AVX binary, player only**. Other4.1.1 CPU variants (SSE2, AVX2 and AVX-512) are not included. It activates automatically only when the image identity and measured function code match. Unknown or modified builds disable only this additional bridge. Existing normal-equipment/transmog runtime support is unchanged, and FSMP remains optional.
-
-On that supported build, native hair can continue simulating with FSMP's Disable hair physics when there's a wig option ON while the transmog appearance shows native hair. Wig appearances, clearing transmog and a full game restart/save reload were confirmed by the user. No global FSMP configuration is rewritten. Outside the bridge's scope, turning that FSMP option OFF is an available workaround, at the possible cost of continuing physics on native hair hidden by wigs.
-
-Actual head equipment is retained with its stats. Native hair is not generated as a separate wig. No global physics reset or extra equip/unequip cycle is added; the bridge scopes its headpart activity adjustment to the existing supported physics update.
-
-### Updating
-
-Exit Skyrim and install with priority over older/trial DLLs. Keep photos, presets, Library.json, settings, custom INI and paired .ess/.skse saves. No new game or outfit re-registration is required. Requirements and the supported runtime list are unchanged.
+A report of generated items remaining in inventory on 2.2.4 is still under investigation. The supplied diagnostic portion shows already-owned items and zero tracked cleanup candidates; it does not include detailed generation evidence. This update does not claim to resolve that report.

@@ -1,0 +1,16 @@
+Outfit Gallery 2.2.9-cold-test1 / metadata 2.2.9.4 / 2026-11-20
+MSVC Release build completed. 64/64 selected automated tests passed.
+Known junction fixture TrashVirtualPathSafety excluded; not counted passing.
+Three SKSE exports, trial string and packed metadata verified.
+Pause tooltip changed, 6-column player/follower persistence tested; 7 rejected.
+Cold region slot appended at28; old slot IDs and legacy arrays retained.
+Official Survival alias region precedence/weather priority/fallback tested.
+Official mode-enabled global and five automatic alias properties read only.
+No Papyrus calls/writes or temperature-global heuristic. Player exterior only.
+Equipment/cleanup/enchantment/transmog/FSMP/try-on-wear/organizer code unchanged.
+Final main object timestamps checked against changed includes.
+Runtime/source ZIP CRC/member set and every member byte verified.
+No official game script, PEX, BSA, user data or default INI bundled in runtime.
+Previous archives unchanged. No install/GitHub sync/publish performed.
+Actual game region-read/transition/save-load/equip checks await user testing.
+DLL SHA256: 3E6EFD626D361115700A10A1E500AAF1F4335300632D223A6DAD7D189062F9B0

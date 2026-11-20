@@ -14,7 +14,13 @@
 #include "RegisteredName.h"
 namespace RE { class Actor; }
 namespace Gallery {
-using AutoOutfitSlots=std::array<std::string,28>; // Sleeping appended at 27; existing saved indices stay stable.
+using AutoOutfitSlots=std::array<std::string,30>; // Cold region appended at 28; existing saved indices stay stable.
+inline bool AssignAutoOutfitSlot(AutoOutfitSlots& slots,unsigned slot,const std::string& photo) {
+    if(slot>=slots.size())return false;
+    slots[slot]=photo;
+    if(!photo.empty() && (slot==28 || slot==29))slots[slot==28?29:28].clear();
+    return true;
+}
 struct AutoOutfitSettings { AutoOutfitSlots slots; int delaySeconds{0}; int columns{3}; int ostimRecoverySeconds{10}; bool enabled{}, paused{}, combatEnabled{}, hideAssignButtons{}; int sneakDelaySeconds{1}; int combatIntervalSeconds{2}; };
 AutoOutfitSettings ReadAutoOutfitSettings(const std::filesystem::path&);
 void WriteAutoOutfitSettings(const AutoOutfitSettings&,const std::filesystem::path&);

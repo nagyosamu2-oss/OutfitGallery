@@ -1,0 +1,19 @@
+Outfit Gallery 2.2.9-cold-test3 / metadata 2.2.9.6 / 2026-11-20
+MSVC Release build completed; 64/64 automated tests passed.
+Known junction fixture TrashVirtualPathSafety excluded; not counted passing.
+Three SKSE exports, trial string and packed metadata verified.
+Optional cold-data failure no longer changes ordinary environment readiness.
+Cold assignments are exclusive in UI helper, persistence validation and migration.
+Old two-assignment/radio data retains the previously selected assignment.
+Radio selector removed; short cold notes moved below photo hit rectangles.
+Cold conditions/priority/math, equipment, cleanup, enchantment, transmog, FSMP,
+try-on and organizer implementations otherwise unchanged.
+Cold acquisition stage is logged for diagnosis; no root cause claimed for the
+still-unverified unavailable native region data in the previous user session.
+Tests cover exclusive assignment/replacement, migration, no failed-write data
+loss, invalid indices and normal weather/combat rules without cold data.
+Runtime/source CRC, exact member set and every member byte verified.
+No official scripts/PEX/BSA, user data or default INI bundled.
+Previous archives unchanged. No deployment/GitHub sync/publish performed.
+Actual game UI, fallback and cold-data acquisition await user testing.
+DLL SHA256: 14A78E7318149DD04EFAC070B82776140FBBA6F2EAABD68ED700B63946DDB2BE

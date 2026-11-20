@@ -1,0 +1,15 @@
+Outfit Gallery 2.2.9-tryon-wear-test1 / metadata 2.2.9.2 / 2026-11-20
+MSVC Release build completed. 64/64 selected existing automated tests passed.
+Known junction fixture TrashVirtualPathSafety excluded; not counted passing.
+Three SKSE exports, trial string and packed metadata verified.
+Only command routing, random try-on button, translation keys/template changed.
+Displayed accepted/customized try-on is read on game thread before appearance clear.
+Shared normal equipment application/verification/reclaim path; removal toggle disabled
+for explicit Wear set. No preset saving/capture/reroll is queued by this button.
+Existing equipment/cleanup/enchantment/transmog/FSMP implementations unchanged.
+Confirmed organizer UI and customization source unchanged.
+Final main object timestamp checked against all changed C++ includes.
+Runtime/source ZIP CRC/member set and every member byte verified.
+Previous archives unchanged. No install/GitHub sync/publish performed.
+Actual game behavior of new button awaits user verification.
+DLL SHA256: EEE0DE397EF17AFD6266F722034D3C36D9415760BE68C98586F6E7DD64E11A18

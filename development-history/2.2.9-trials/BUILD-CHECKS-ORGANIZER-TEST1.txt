@@ -1,0 +1,12 @@
+Outfit Gallery 2.2.9-organizer-test1 / metadata 2.2.9.1 / 2026-11-20
+Release MSVC build completed; 64/64 selected existing automated tests passed.
+TrashVirtualPathSafety excluded for known junction-fixture environment limitation.
+Three SKSE exports, trial label and packed version verified.
+Only organizer UI, translation additions and main version labels changed.
+Equipment, cleanup, enchantment, transmog and FSMP source are byte-identical to 2.2.8.
+Main object timestamp is after final organizer source edit; incremental build is clean.
+Runtime/source ZIP CRC, exact members and every member byte verified.
+No default INI or user photos/presets/settings/logs/saves included in runtime ZIP.
+Existing archives retained unchanged. No install or GitHub sync performed.
+Actual game UI appearance and mouse/pad behavior await user testing.
+DLL SHA256: C1534DEBBC0F3FDE3B2266499735BA475D12E4B0E097A0EA80E19DC597FE0489

@@ -1,0 +1,12 @@
+Outfit Gallery 2.2.9-cold-test5 / metadata 2.2.9.8 / 2026-11-20
+MSVC Release build completed; 64/64 automated tests passed.
+Known junction fixture TrashVirtualPathSafety excluded; not counted passing.
+Three SKSE exports, trial string and packed metadata verified.
+Only UI caption/font/tooltip, localization, version labels and notes changed.
+All other source files byte-identical to user-confirmed cold-test4.
+Final main object timestamp checked against modified includes.
+Runtime/source CRC, exact member set and every member byte verified.
+No memory dumps, official scripts/PEX/BSA, user data or default INI included.
+Previous archives unchanged. No deployment/GitHub sync/publish performed.
+Actual game appearance of the cosmetic change requires visual confirmation.
+DLL SHA256: E7CA018D0265DDD78226E622783702B5E30D3C7D3593EE2336796D867867D7AE

@@ -19,6 +19,7 @@
 namespace Gallery {
 using Json = nlohmann::json;
 static void ValidateAutoSlots(const AutoOutfitSlots& slots) {
+    if(!slots[28].empty() && !slots[29].empty())throw std::runtime_error("Choose only one cold outfit rule");
     for(const auto& photo:slots) {
         if(photo.empty()) continue;
         if(photo.size()>240 || photo.find_first_of("/\\:")!=std::string::npos || photo.find('\0')!=std::string::npos ||
@@ -59,6 +60,11 @@ AutoOutfitSettings ReadAutoOutfitSettings(const std::filesystem::path& path) {
     settings.slots[25]=j.value("enchantingPhoto",std::string{});
     settings.slots[26]=j.value("shopPhoto",std::string{});
     settings.slots[27]=j.value("sleepPhoto",std::string{});
+    settings.slots[28]=j.value("coldRegionPhoto",std::string{});
+    settings.slots[29]=j.value("coldWeatherPhoto",std::string{});
+    if(j.contains("coldMode") && (!j["coldMode"].is_number_integer() || j["coldMode"]<0 || j["coldMode"]>1))throw std::runtime_error("Invalid cold outfit mode");
+    // Migrate test2's two assignments by retaining the explicitly selected rule.
+    if(!settings.slots[28].empty() && !settings.slots[29].empty())settings.slots[j.value("coldMode",0)==1?28:29].clear();
     for(const auto* key:{"enabled","paused","combatEnabled","hideAssignButtons"}) if(j.contains(key) && !j.at(key).is_boolean())
         throw std::runtime_error("Invalid auto outfit toggle setting");
     settings.hideAssignButtons=j.value("hideAssignButtons",false); settings.enabled=j.value("enabled",false); settings.paused=j.value("paused",false); settings.combatEnabled=j.value("combatEnabled",false);
@@ -67,7 +73,7 @@ AutoOutfitSettings ReadAutoOutfitSettings(const std::filesystem::path& path) {
         throw std::runtime_error("Invalid auto outfit numeric setting");
     if((j.contains("ostimRecoverySeconds") && (j["ostimRecoverySeconds"]<5 || j["ostimRecoverySeconds"]>30)) ||
        (j.contains("delaySeconds") && (j["delaySeconds"]<0 || j["delaySeconds"]>10)) ||
-       (j.contains("columns") && (j["columns"]<3 || j["columns"]>5)))
+       (j.contains("columns") && (j["columns"]<3 || j["columns"]>6)))
         throw std::runtime_error("Auto outfit setting out of range");
     if(j.contains("sneakDelaySeconds") && (j["sneakDelaySeconds"]<0 || j["sneakDelaySeconds"]>5)) throw std::runtime_error("Auto outfit setting out of range");
     if(j.contains("combatIntervalSeconds") && (j["combatIntervalSeconds"]<2 || j["combatIntervalSeconds"]>10)) throw std::runtime_error("Auto outfit setting out of range");
@@ -75,17 +81,17 @@ AutoOutfitSettings ReadAutoOutfitSettings(const std::filesystem::path& path) {
     settings.sneakDelaySeconds=j.value("sneakDelaySeconds",1);
     settings.ostimRecoverySeconds=j.value("ostimRecoverySeconds",10);
     settings.delaySeconds=j.value("delaySeconds",0); settings.columns=j.value("columns",3);
-    if(settings.combatIntervalSeconds<2 || settings.combatIntervalSeconds>10 || settings.sneakDelaySeconds<0 || settings.sneakDelaySeconds>5 || settings.ostimRecoverySeconds<5 || settings.ostimRecoverySeconds>30 || settings.delaySeconds<0 || settings.delaySeconds>10 || settings.columns<3 || settings.columns>5)
+    if(settings.combatIntervalSeconds<2 || settings.combatIntervalSeconds>10 || settings.sneakDelaySeconds<0 || settings.sneakDelaySeconds>5 || settings.ostimRecoverySeconds<5 || settings.ostimRecoverySeconds>30 || settings.delaySeconds<0 || settings.delaySeconds>10 || settings.columns<3 || settings.columns>6)
         throw std::runtime_error("Auto outfit setting out of range");
     return settings;
 }
 void WriteAutoOutfitSettings(const AutoOutfitSettings& settings,const std::filesystem::path& path) {
     ValidateAutoSlots(settings.slots);
-    if(settings.combatIntervalSeconds<2 || settings.combatIntervalSeconds>10 || settings.sneakDelaySeconds<0 || settings.sneakDelaySeconds>5 || settings.ostimRecoverySeconds<5 || settings.ostimRecoverySeconds>30 || settings.delaySeconds<0 || settings.delaySeconds>10 || settings.columns<3 || settings.columns>5)
+    if(settings.combatIntervalSeconds<2 || settings.combatIntervalSeconds>10 || settings.sneakDelaySeconds<0 || settings.sneakDelaySeconds>5 || settings.ostimRecoverySeconds<5 || settings.ostimRecoverySeconds>30 || settings.delaySeconds<0 || settings.delaySeconds>10 || settings.columns<3 || settings.columns>6)
         throw std::runtime_error("Auto outfit setting out of range");
     // Keep schema-1's original three slots so earlier trial versions can still read them.
     const std::array<std::string,3> legacySlots{settings.slots[0],settings.slots[1],settings.slots[2]};
-    Json j={{"schema",1},{"slots",legacySlots},{"innPhoto",settings.slots[3]},{"combatPhoto",settings.slots[4]},{"nightPhoto",settings.slots[5]},{"rainPhoto",settings.slots[6]},{"snowPhoto",settings.slots[7]},{"dungeonPhoto",settings.slots[8]},{"templePhoto",settings.slots[9]},{"swimmingPhoto",settings.slots[10]},{"dawnguardPhoto",settings.slots[11]},{"collegePhoto",settings.slots[12]},{"brotherhoodPhoto",settings.slots[13]},{"companionsPhoto",settings.slots[14]},{"bardsPhoto",settings.slots[15]},{"thievesPhoto",settings.slots[16]},{"bluePalacePhoto",settings.slots[17]},{"meleePhoto",settings.slots[18]},{"magicPhoto",settings.slots[19]},{"archeryPhoto",settings.slots[20]},{"unarmedPhoto",settings.slots[21]},{"sneakingPhoto",settings.slots[22]},{"smithingPhoto",settings.slots[23]},{"alchemyPhoto",settings.slots[24]},{"enchantingPhoto",settings.slots[25]},{"shopPhoto",settings.slots[26]},{ "sleepPhoto",settings.slots[27]},{"combatIntervalSeconds",settings.combatIntervalSeconds},{"delaySeconds",settings.delaySeconds},{"sneakDelaySeconds",settings.sneakDelaySeconds},{"columns",settings.columns},{"ostimRecoverySeconds",settings.ostimRecoverySeconds},{"enabled",settings.enabled},{"paused",settings.paused},{"combatEnabled",settings.combatEnabled},{"hideAssignButtons",settings.hideAssignButtons}};
+    Json j={{"schema",1},{"slots",legacySlots},{"innPhoto",settings.slots[3]},{"combatPhoto",settings.slots[4]},{"nightPhoto",settings.slots[5]},{"rainPhoto",settings.slots[6]},{"snowPhoto",settings.slots[7]},{"dungeonPhoto",settings.slots[8]},{"templePhoto",settings.slots[9]},{"swimmingPhoto",settings.slots[10]},{"dawnguardPhoto",settings.slots[11]},{"collegePhoto",settings.slots[12]},{"brotherhoodPhoto",settings.slots[13]},{"companionsPhoto",settings.slots[14]},{"bardsPhoto",settings.slots[15]},{"thievesPhoto",settings.slots[16]},{"bluePalacePhoto",settings.slots[17]},{"meleePhoto",settings.slots[18]},{"magicPhoto",settings.slots[19]},{"archeryPhoto",settings.slots[20]},{"unarmedPhoto",settings.slots[21]},{"sneakingPhoto",settings.slots[22]},{"smithingPhoto",settings.slots[23]},{"alchemyPhoto",settings.slots[24]},{"enchantingPhoto",settings.slots[25]},{"shopPhoto",settings.slots[26]},{ "sleepPhoto",settings.slots[27]},{"coldRegionPhoto",settings.slots[28]},{"coldWeatherPhoto",settings.slots[29]},{"combatIntervalSeconds",settings.combatIntervalSeconds},{"delaySeconds",settings.delaySeconds},{"sneakDelaySeconds",settings.sneakDelaySeconds},{"columns",settings.columns},{"ostimRecoverySeconds",settings.ostimRecoverySeconds},{"enabled",settings.enabled},{"paused",settings.paused},{"combatEnabled",settings.combatEnabled},{"hideAssignButtons",settings.hideAssignButtons}};
     std::filesystem::create_directories(path.parent_path()); auto tmp=path; tmp+=".tmp";
     {std::ofstream out(tmp,std::ios::binary); out.exceptions(std::ios::failbit|std::ios::badbit); out<<j.dump(2); out.close();}
     if(!MoveFileExW(tmp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH))

@@ -1,6 +1,7 @@
 constexpr unsigned kRandomTryOn = 36;
 constexpr unsigned kEndRandomTryOn = 37;
 constexpr unsigned kRerollTryOn = 42;
+constexpr unsigned kWearTryOn = 43;
 std::mutex randomTryOnMutex;
 std::string requestedPluginFilter;
 std::string randomTryOnOrigin;
@@ -467,6 +468,18 @@ void RenderRandomTryOn() {
     UI::EndDisabled();
     UI::SameLine();
     UI::Checkbox(EquipmentText("空きスロットを埋める", "Fill empty slots"), &fillSlots);
+    UI::SameLine();
+    UI::BeginDisabled(saveBusy || verificationTicks || tryOnCustomPending || tryOnInventoryPending ||
+        command.load() || photoRetakeActive || studioFollower || !TransmogTryOnActive(studioActorID.load()));
+    if(UI::Button(EquipmentText("セットを着用", "Wear set"))) {
+        {std::scoped_lock lock(presetsMutex);requestedAddMissing=addMissing;}
+        tryOnCustomVisible=false;
+        command=kWearTryOn;
+    }
+    UI::EndDisabled();
+    if(UI::IsItemHovered(UI::ImGuiHoveredFlags_AllowWhenDisabled))UI::SetTooltip("%s",EquipmentText(
+        "表示中の試着セットを登録せずに実際に装備します。不足品の追加は現在の設定に従います。",
+        "Equip the displayed try-on set without saving a preset. Missing items follow the current Add missing base items setting."));
     UI::BeginDisabled(saveBusy || !TransmogTryOnActive(studioActorID.load()));
     if (UI::Button(EquipmentText("試着前に戻す", "End try-on"))) command = kEndRandomTryOn;
     UI::SameLine();

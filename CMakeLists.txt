@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(OutfitGallery VERSION 2.2.8 LANGUAGES CXX)
+project(OutfitGallery VERSION 2.2.9 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)
 set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
